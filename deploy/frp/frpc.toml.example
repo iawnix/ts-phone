@@ -1,0 +1,17 @@
+serverAddr = "ALIYUN_PUBLIC_IP"
+serverPort = 6000
+auth.method = "token"
+auth.token = "REPLACE_WITH_A_SEPARATE_HIGH_ENTROPY_FRP_TOKEN"
+transport.tls.enable = true
+loginFailExit = true
+log.to = "/home/iaw/.local/state/ts-phone/frpc.log"
+log.level = "warn"
+log.maxDays = 7
+
+[[proxies]]
+name = "ts-phone-22113"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 22113
+remotePort = 22113
+transport.useEncryption = true

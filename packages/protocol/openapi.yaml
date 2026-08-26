@@ -1,0 +1,312 @@
+openapi: 3.1.0
+info:
+  title: TS Phone API
+  version: 0.4.1
+servers:
+  - url: https://tsphone.iawnix.xyz
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: health
+      security: []
+      responses:
+        "200":
+          description: Process health only
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, service, version]
+                properties:
+                  ok: { const: true }
+                  service: { const: ts-phone }
+                  version: { const: ts-phone-api/3 }
+                additionalProperties: false
+  /api/v3/version:
+    get:
+      operationId: getVersion
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v3/workspaces:
+    get:
+      operationId: listWorkspaces
+      responses:
+        "200":
+          description: Registered TSPi workspaces and aggregate live-session state
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Workspace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v3/workspaces/{workspaceId}:
+    get:
+      operationId: getWorkspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v3/workspaces/{workspaceId}/sessions:
+    get:
+      operationId: listSessions
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      responses:
+        "200":
+          description: Live and workspace-local persisted Pi sessions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/messages:
+    get:
+      operationId: getMessages
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Bounded live or read-only disk-history snapshot and matching SSE checkpoint
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MessageSnapshot" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+    post:
+      operationId: sendMessage
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientMessageId, sessionRevision, message]
+              properties:
+                clientMessageId: { $ref: "#/components/schemas/BoundedId" }
+                sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 65536
+              additionalProperties: false
+      responses:
+        "202": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+        "504":
+          description: Command outcome is ambiguous and must not be retried automatically
+  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/abort:
+    post:
+      operationId: abortGeneration
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionRevision]
+              properties:
+                sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+              additionalProperties: false
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/events:
+    get:
+      operationId: streamEvents
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Session-scoped SSE stream with 15-second heartbeats
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/approvals/{approvalId}:
+    post:
+      operationId: respondToApproval
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+        - name: approvalId
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/BoundedId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approved, sessionRevision]
+              properties:
+                approved: { type: boolean }
+                sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+              additionalProperties: false
+      responses:
+        "202": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    workspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"
+    sessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/BoundedId" }
+  schemas:
+    Envelope:
+      type: object
+      required: [apiVersion, data]
+      properties:
+        apiVersion: { const: ts-phone-api/3 }
+        data: {}
+      additionalProperties: false
+    ErrorEnvelope:
+      type: object
+      required: [apiVersion, error]
+      properties:
+        apiVersion: { const: ts-phone-api/3 }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+          additionalProperties: false
+      additionalProperties: false
+    BoundedId:
+      type: string
+      pattern: "^[A-Za-z0-9._:-]{1,160}$"
+    SessionRevision:
+      type: string
+      pattern: "^[0-9a-f-]{36}$"
+    RuntimeState:
+      enum: [offline, connecting, idle, running, recovery_required]
+    Workspace:
+      type: object
+      required: [id, name, runtimeState, isStreaming, liveSessionCount, sessionCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        runtimeState: { $ref: "#/components/schemas/RuntimeState" }
+        isStreaming: { type: boolean }
+        liveSessionCount: { type: integer, minimum: 0 }
+        sessionCount: { type: integer, minimum: 0 }
+      additionalProperties: false
+    Session:
+      type: object
+      required: [sessionId, sessionRevision, runtimeState, isStreaming, accessMode]
+      properties:
+        sessionId: { $ref: "#/components/schemas/BoundedId" }
+        sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+        sessionName: { type: string }
+        model: { type: string }
+        runtimeState: { $ref: "#/components/schemas/RuntimeState" }
+        isStreaming: { type: boolean }
+        accessMode: { enum: [controller, observer] }
+        historyAvailable:
+          type: boolean
+          description: A validated workspace-local Pi JSONL history exists
+        historyOnly:
+          type: boolean
+          description: The session is currently a read-only disk-history view
+        canPrompt:
+          type: boolean
+          description: A live Bridge currently accepts session commands
+      additionalProperties: false
+    MessageSnapshot:
+      type: object
+      required: [sessionId, sessionRevision, messages, lastEventId]
+      properties:
+        sessionId: { $ref: "#/components/schemas/BoundedId" }
+        sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+        messages:
+          type: array
+          maxItems: 500
+          items: {}
+        lastEventId:
+          type: string
+          minLength: 1
+      additionalProperties: false
+  responses:
+    Success:
+      description: Authenticated request succeeded
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Envelope" }
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Unauthorized:
+      description: Missing or invalid Bearer token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: Workspace, session, endpoint, or approval not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    SessionConflict:
+      description: Session is offline, connecting, stale, or requires resynchronization
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }

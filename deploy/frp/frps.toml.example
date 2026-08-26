@@ -1,0 +1,12 @@
+bindAddr = "0.0.0.0"
+bindPort = 6000
+proxyBindAddr = "127.0.0.1"
+auth.method = "token"
+auth.token = "REPLACE_WITH_A_SEPARATE_HIGH_ENTROPY_FRP_TOKEN"
+transport.tls.force = true
+allowPorts = [
+  { single = 22113 }
+]
+log.to = "/var/log/frp/frps.log"
+log.level = "warn"
+log.maxDays = 7

@@ -1,0 +1,17 @@
+node_modules/
+.npm-cache/
+.pub-cache/
+dist/
+.runtime/
+.gradle/
+.gradle-home/
+.dart_tool/
+.flutter-plugins*
+.packages
+build/
+coverage/
+*.iml
+.idea/
+.vscode/
+apps/mobile/android/local.properties
+apps/mobile/ios/Flutter/ephemeral/

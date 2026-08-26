@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tsphone.iawnix.xyz/schema/bridge-v2.json",
+  "title": "TS Phone local bridge record",
+  "type": "object",
+  "required": [
+    "protocolVersion",
+    "type",
+    "workspaceId",
+    "sessionId",
+    "instanceEpoch"
+  ],
+  "properties": {
+    "protocolVersion": { "const": "ts-phone-bridge/2" },
+    "type": {
+      "enum": [
+        "bridge.register",
+        "bridge.registered",
+        "bridge.heartbeat",
+        "session.snapshot",
+        "event.publish",
+        "command.prompt",
+        "command.abort",
+        "command.ack",
+        "approval.request",
+        "approval.respond"
+      ]
+    },
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "accessMode": { "enum": ["controller", "observer"] },
+    "instanceEpoch": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "sessionGeneration": { "type": "integer", "minimum": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "clientMessageId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "approvalId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "turnId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "toolCallId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "toolName": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "preview": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "message": { "type": "string", "minLength": 1, "maxLength": 65536 },
+    "approved": { "type": "boolean" },
+    "ok": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}

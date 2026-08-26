@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tsphone.iawnix.xyz/schema/events-v3.json",
+  "title": "TS Phone session event envelope",
+  "type": "object",
+  "required": [
+    "protocolVersion",
+    "id",
+    "workspaceId",
+    "sessionId",
+    "sessionRevision",
+    "instanceEpoch",
+    "sessionGeneration",
+    "type",
+    "payload",
+    "at"
+  ],
+  "properties": {
+    "protocolVersion": { "const": "ts-phone-events/3" },
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f-]{36}:[1-9][0-9]*$"
+    },
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "sessionRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f-]{36}$"
+    },
+    "instanceEpoch": { "type": ["string", "null"] },
+    "sessionGeneration": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,100}$"
+    },
+    "payload": {},
+    "at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
