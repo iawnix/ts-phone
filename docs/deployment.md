@@ -27,82 +27,132 @@ the protocol versions in this table:
 
 Do not mix the old Bridge v1 or API v2 components with this set.
 
-## 1. Validate TS Phone
+## 1. Build The TS Phone Component
 
 ~~~bash
 cd /home/iaw/Codex/Project/2026-08-14/ts-phone
 env NPM_CONFIG_CACHE=.npm-cache npm ci
+npm run test:release
 npm run typecheck
 npm test
 npm run build
 TS_PHONE_SMOKE_PORT=23113 npm run smoke
 ~~~
 
-Validate Flutter from apps/mobile:
+Validate Flutter from `apps/mobile`:
 
 ~~~bash
+cd apps/mobile
 /home/iaw/soft/flutter/bin/dart format --output=none --set-exit-if-changed lib test
 /home/iaw/soft/flutter/bin/flutter analyze
 /home/iaw/soft/flutter/bin/flutter test
 tool/build_release_android.sh
+cd ../..
+python3 deploy/build-component-release.py \
+  --output-dir dist/component \
+  --json
 ~~~
 
-## 2. Validate And Build TSPi
+The component builder repeats the server typecheck, tests, and build, verifies
+the production arm64 APK's v2 signature and certificate, and writes a
+deterministic archive plus `ts-phone-component-release.json`. Production builds
+require a clean committed checkout. `--allow-dirty` is only for local probes.
+
+## 2. Build The Complete TSPi Package
 
 Run these commands in the authored TSPi checkout, not the active installed
 release:
 
 ~~~bash
-cd /home/iaw/Codex/Project/2026-06-13/transition-state-workflow-refactor
+cd /home/iaw/Codex/Project/2026-06-13/TSPi
 npm run typecheck
 python3 scripts/check_package.py
 python3 -m pytest -q
-python3 scripts/build_release.py --output-dir dist --json
+python3 scripts/build_package.py \
+  --phone-manifest /home/iaw/Codex/Project/2026-08-14/ts-phone/dist/component/ts-phone-component-release.json \
+  --output-dir dist/package \
+  --json
 ~~~
 
-A production release build requires a clean committed checkout. The
---allow-dirty option is only for local smoke validation and must not be
-distributed.
+The suite builder creates the Agent component internally, verifies Agent, Web,
+and Phone compatibility, and produces one `tspi-package-release/1` manifest and
+one content-addressed archive. Both source commits and both component IDs are
+bound into that result.
 
-## 3. Stage TS Phone Without Activation
+## 3. Install The Package Without Service Activation
 
-The installer creates an immutable release under
-/home/iaw/soft/ts-phone/<version>/. Without --start it does not change current,
-the user unit, or the running service.
+Install the complete component set into the TSPi root, then refresh its isolated
+Agent runtime:
 
 ~~~bash
-cd /home/iaw/Codex/Project/2026-08-14/ts-phone
-bash deploy/install-local.sh
+cd /home/iaw/Codex/Project/2026-06-13/TSPi
+python3 scripts/install_package.py \
+  --manifest dist/package/tspi-package-release.json \
+  --install-root /home/iaw/TS-pi-agent \
+  --json
+
+AGENT_ROOT=/home/iaw/TS-pi-agent/.pi/packages/tspi/current/agent
+python3 "$AGENT_ROOT/scripts/install_env.py" \
+  --package-root "$AGENT_ROOT" \
+  --runtime-home /home/iaw/TS-pi-agent/.agents/runtime/transition-state-workflow \
+  --env-root /home/iaw/TS-pi-agent/.agents/envs/transition-state-workflow \
+  --conda-root /path/to/miniforge3 \
+  --with-render \
+  --json
+
+readlink -f /home/iaw/TS-pi-agent/.pi/packages/tspi/current
+/home/iaw/TS-pi-agent/TSPi --help
+/home/iaw/TS-pi-agent/TSWeb --help
+/home/iaw/TS-pi-agent/TSPhoneCtl --help
 ~~~
 
-The release can be staged while the old service is running.
+The Package install atomically selects one Agent, Web, Phone server, and APK set.
+It does not start or restart the broker, alter its token/configuration, or push
+the APK to a device. Existing TSPi and Phone processes retain the code they
+already loaded. A Web process using the stable `TSWeb` entrypoint restarts only
+after the selected Agent runtime is ready.
 
 ## 4. Coordinated Activation
 
 Wait until all active research turns finish. Do not terminate a running
 scientific turn merely to upgrade transport.
 
-1. Exit every TSPi process currently using phone mode.
-2. Install the validated TSPi 0.11.0 release with its generated manifest and
-   archive. The installer atomically changes the package current pointer.
-3. Activate and restart TS Phone 0.4.1:
+1. Confirm the selected Package and managed Agent runtime passed the checks
+   above.
+2. Preserve `/home/iaw/.config/ts-phone/server.env`, `auth.token`, and
+   `bridge.secret` outside the release.
+3. Make the user service invoke the suite-owned stable launcher. For the
+   standard installation, its effective service settings must include:
+
+~~~ini
+[Service]
+WorkingDirectory=/home/iaw/TS-pi-agent
+EnvironmentFile=/home/iaw/.config/ts-phone/server.env
+ExecStart=
+ExecStart=/home/iaw/TS-pi-agent/TSPhoneServer
+~~~
+
+4. Reload and restart the broker, then verify the exact API contract:
 
 ~~~bash
-bash deploy/install-local.sh --start
+systemctl --user daemon-reload
+systemctl --user restart ts-phone.service
 systemctl --user status ts-phone.service --no-pager
 curl --fail --silent --show-error http://127.0.0.1:22113/healthz
 ~~~
 
-4. Start the desired workspace controller from the TSPi installation:
+5. Exit and restart each phone-mode TSPi process only after its active turn has
+   finished, then start the desired workspace controller:
 
 ~~~bash
 cd /home/iaw/TS-pi-agent
 ./TSPi --workspace ts_006 --phone
 ~~~
 
-5. Run the same command in another terminal only when an observer is desired.
-6. On a typical 64-bit Android phone, install
-   `dist/ts-phone-v0.8.5-build27-arm64-v8a-release.apk` and reconnect.
+6. Run the same command in another terminal only when an observer is desired.
+7. On a typical 64-bit Android phone, install the APK at the suite manifest's
+   `components.phone.mobile_artifact.path` under
+   `.pi/packages/tspi/current/phone/`, then reconnect.
 
 The production certificate differs from earlier debug/profile builds. Android
 cannot update those test builds in place: uninstall the old app before the first
@@ -110,10 +160,12 @@ production install, then reconnect with the server URL and Bearer token. This
 clears the old app's local token and settings. Later production releases can
 update this release in place as long as the release keystore is preserved.
 
-The installer preserves the existing server.env, auth.token, and bridge.secret.
-With --start it restarts an already running service and requires the exact
-ts-phone-api/3 health response. It rolls the current link back when activation
-or health validation fails.
+The suite installer intentionally does not own service rollback because a
+service restart is an external effect. If health validation fails, stop the
+activation and select the previous complete Package; do not mix the new Agent
+with the old Phone component. `deploy/install-local.sh` and the source-tree unit
+are standalone development/legacy tools and must not establish a second
+production `current` pointer beside the suite.
 
 For boot without an interactive login, an administrator can enable lingering
 once:
@@ -125,7 +177,7 @@ loginctl enable-linger iaw
 Display the Bearer token only on the local machine:
 
 ~~~bash
-/home/iaw/.local/bin/ts-phone-ctl token
+/home/iaw/TS-pi-agent/TSPhoneCtl token
 ~~~
 
 ## 5. FRP
@@ -177,14 +229,17 @@ Use harmless read-only prompts for the first transport checks.
 
 ## Rollback
 
-Rollback to the previous compatible TS Phone set:
+Rollback to the previous complete TSPi Package:
 
 1. Exit TSPi phone sessions after any active turn finishes.
-2. Restore the previous TS Phone current link and restart the service.
-3. Keep TSPi 0.11.0 unless it was changed independently.
-4. Reinstall the retained production-signed 0.7.2+19 arm64 mobile build if
-   needed.
-5. Start phone sessions and verify API v3 plus Bridge v2 connectivity.
+2. Run `install_package.py` with the retained previous suite manifest and
+   archive.
+3. Refresh that selected Agent runtime, restart the suite-owned Phone service,
+   and verify health.
+4. Reinstall the previous manifest-bound arm64 APK if mobile compatibility
+   changed.
+5. Start phone sessions and verify the selected API and Bridge protocols.
 
-Keep at least one verified release of each component until authenticated local
-and public checks pass.
+Keep at least one verified complete Package archive and manifest until
+authenticated local and public checks pass. Component archives alone are not a
+supported production rollback selector.

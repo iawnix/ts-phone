@@ -81,6 +81,31 @@ Validate the Flutter client from apps/mobile:
 /home/iaw/soft/flutter/bin/flutter test
 ~~~
 
+## Component Release
+
+TS Phone remains an independent source repository, but production TSPi
+distribution uses it as a versioned component rather than a second installation
+authority. Build the production-signed arm64 APK first, then create the
+deterministic component archive:
+
+~~~bash
+python3 deploy/build-component-release.py \
+  --output-dir dist/component \
+  --json
+~~~
+
+The builder runs server typecheck, tests, and build; verifies the APK v2
+signature and signer certificate; and writes
+`ts-phone-component-release/1`. The manifest binds server `0.4.1`, mobile
+`0.8.5+27`, API v3, Events v3, Bridge v2, the server entry, APK, source commit,
+and deterministic archive digest.
+
+The TSPi repository consumes this manifest with `build_package.py` and
+produces the complete Agent + embedded Web + Phone TSPi Package. Its suite
+installer selects one compatible set under `.pi/packages/tspi/current` and
+installs `TSPi`, `TSWeb`, `TSPhoneCtl`, and `TSPhoneServer` launchers. It does
+not start the broker or install the APK onto a phone.
+
 The local Bearer token is created under the configured state directory. Read it
 only on this machine:
 
@@ -100,11 +125,14 @@ controller lock is held.
 
 ## Deployment
 
-Validated TS Phone releases are installed under
-/home/iaw/soft/ts-phone/<version>/ and selected through
-/home/iaw/soft/ts-phone/current. Server version 0.4.1 is compatible with TSPi
-0.11.0 and the API v3-compatible 0.8.5 mobile client. API v3 and Bridge v2
-remain intentional compatibility breaks from older releases.
+Complete deployments are selected by the TSPi Package, not by a second Phone
+`current` pointer. Server version 0.4.1 is compatible with TSPi 0.11.0 and the
+API v3-compatible 0.8.5 mobile client. API v3 and Bridge v2 remain intentional
+compatibility breaks from older releases.
 
-See docs/deployment.md before changing the running service. The installer
-preserves existing configuration and tokens and does not print secrets.
+See docs/deployment.md before changing the running service. Configuration,
+tokens, service activation, FRP, HTTPS, and device installation remain outside
+immutable Package releases. `deploy/install-local.sh` is retained for
+standalone component development and legacy deployments only; do not use its
+`/home/iaw/soft/ts-phone/current` pointer as a second production authority next
+to a suite-managed installation.

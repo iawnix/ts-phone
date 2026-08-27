@@ -1,5 +1,22 @@
 # Build Artifacts
 
+## TSPi Component Release
+
+The distributable Phone input to a complete TSPi Package is built with:
+
+~~~bash
+python3 deploy/build-component-release.py --output-dir dist/component --json
+~~~
+
+It produces one deterministic `ts-phone-component-*.tgz` plus
+`ts-phone-component-release.json`. The manifest binds the server and mobile
+versions, API/Events/Bridge protocols, built server entry, arm64 APK digest and
+signer certificate, source commit, and component archive digest. Other split
+APKs and the AAB remain standalone mobile artifacts; the suite includes only
+the production arm64 APK named by the component manifest. The source-tree
+systemd unit is not included because live service configuration belongs to the
+installation, not to an immutable component release.
+
 ## Android Release
 
 - App: TS Phone

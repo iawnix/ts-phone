@@ -15,6 +15,25 @@ Pi process and loads the package-owned ts-phone-bridge extension.
 Flutter -> HTTPS/SSE -> TS Phone broker -> Unix socket -> visible TSPi/Pi
 ~~~
 
+## Release Ownership
+
+TS Phone owns its source, server/mobile versions, protocol schemas, tests, and
+`ts-phone-component-release/1` builder. The component archive contains the
+built broker, control entrypoint, protocol documents, operational references,
+and one production-signed arm64 APK. It does not select a live TSPi release.
+
+TSPi owns the complete `tspi-package-release/1` assembly and install
+transaction. `ts_web` remains embedded in its Agent component because it reads
+the research kernel's workspace projection. The suite manifest freezes the
+Agent component, Phone component, Web contract, server entry, signed APK, and
+protocol versions into one compatible set. One suite `current` pointer backs
+all four installed launchers.
+
+Configuration, Bearer tokens, bridge secrets, Pi sessions, research
+workspaces, service units, and process state are installation-owned and remain
+outside immutable releases. Package installation selects content but never
+starts a service or installs an APK onto a device.
+
 ## Workspace And Session Ownership
 
 A workspace record owns a map keyed by sessionId. Every session record has its

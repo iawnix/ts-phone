@@ -9,8 +9,10 @@
   "scripts": {
     "build": "npm run build --workspace @iawnix/ts-phone-server",
     "dev": "npm run dev --workspace @iawnix/ts-phone-server",
+    "release:component": "python3 deploy/build-component-release.py --json",
     "smoke": "npm run build && npm run smoke --workspace @iawnix/ts-phone-server",
     "test": "npm run test --workspace @iawnix/ts-phone-server",
+    "test:release": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s deploy/tests -p 'test_*.py'",
     "typecheck": "npm run typecheck --workspace @iawnix/ts-phone-server",
     "ctl": "npm run ctl --workspace @iawnix/ts-phone-server --"
   },
