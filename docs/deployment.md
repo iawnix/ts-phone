@@ -104,6 +104,7 @@ readlink -f /home/iaw/TS-pi-agent/.pi/packages/tspi/current
 /home/iaw/TS-pi-agent/TSPi --help
 /home/iaw/TS-pi-agent/TSWeb --help
 /home/iaw/TS-pi-agent/TSPhoneCtl --help
+/home/iaw/TS-pi-agent/TSPhoneServer --help
 ~~~
 
 The Package install atomically selects one Agent, Web, Phone server, and APK set.
