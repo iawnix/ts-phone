@@ -51,6 +51,121 @@ void main() {
     expect(controller.canSend, isTrue);
   });
 
+  test('prepends earlier pages and keeps them across live snapshots', () async {
+    final api = FakeGateway()
+      ..snapshot = TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        messages: <Object?>[
+          userMessage('current-10'),
+          assistantMessage('current-11'),
+        ],
+        messageIds: const <String>['0000000a', '0000000b'],
+        hasMore: true,
+        nextBefore: '0000000a',
+        lastEventId: 'epoch:0',
+      )
+      ..earlierSnapshot = TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        messages: <Object?>[
+          userMessage('earlier-8'),
+          assistantMessage('earlier-9'),
+        ],
+        messageIds: const <String>['00000008', '00000009'],
+        lastEventId: 'epoch:0',
+      );
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.initialize();
+    expect(controller.canLoadEarlierMessages, isTrue);
+    expect(await controller.loadEarlierMessages(), isTrue);
+    expect(api.lastBefore, '0000000a');
+    expect(api.lastLimit, 200);
+    expect(controller.messages.map((message) => message.text), <String>[
+      'earlier-8',
+      'earlier-9',
+      'current-10',
+      'current-11',
+    ]);
+    expect(controller.canLoadEarlierMessages, isFalse);
+
+    api.addEvent('session.snapshot', <String, Object?>{
+      'sessionId': 'session-test',
+      'isStreaming': false,
+      'messages': <Object?>[
+        userMessage('current-10'),
+        assistantMessage('current-11'),
+        assistantMessage('current-12'),
+      ],
+      'messageIds': <String>['0000000a', '0000000b', '0000000c'],
+      'hasMore': true,
+      'nextBefore': '0000000a',
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.messages.map((message) => message.text), <String>[
+      'earlier-8',
+      'earlier-9',
+      'current-10',
+      'current-11',
+      'current-12',
+    ]);
+    expect(controller.canLoadEarlierMessages, isFalse);
+  });
+
+  test('replaces abandoned messages when the live Pi branch changes', () async {
+    final api = FakeGateway()
+      ..snapshot = TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        messages: <Object?>[
+          userMessage('root'),
+          assistantMessage('shared'),
+          assistantMessage('abandoned'),
+        ],
+        messageIds: const <String>['00000001', '00000002', '00000003'],
+        lastEventId: 'epoch:0',
+      );
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    api.addEvent('session.snapshot', <String, Object?>{
+      'sessionId': 'session-test',
+      'isStreaming': false,
+      'messages': <Object?>[
+        userMessage('root'),
+        assistantMessage('shared'),
+        assistantMessage('active branch'),
+      ],
+      'messageIds': <String>['00000001', '00000002', '00000004'],
+      'hasMore': false,
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.messages.map((message) => message.text), <String>[
+      'root',
+      'shared',
+      'active branch',
+    ]);
+  });
+
   test(
     'mirrors CLI input and sends phone prompts to the same session',
     () async {
@@ -795,6 +910,9 @@ class FakeGateway implements TsPhoneGateway {
     messages: <Object?>[userMessage('existing')],
     lastEventId: 'epoch:0',
   );
+  TsPhoneMessageSnapshot? earlierSnapshot;
+  String? lastBefore;
+  int? lastLimit;
   Future<TsPhoneMessageSnapshot>? nextSnapshot;
 
   void addEvent(
@@ -850,9 +968,17 @@ class FakeGateway implements TsPhoneGateway {
   @override
   Future<TsPhoneMessageSnapshot> getMessages(
     String workspaceId,
-    String sessionId,
-  ) {
+    String sessionId, {
+    String? before,
+    int? limit,
+  }) {
     messageSnapshotCalls += 1;
+    lastBefore = before;
+    lastLimit = limit;
+    final earlier = earlierSnapshot;
+    if (before != null && earlier != null) {
+      return Future<TsPhoneMessageSnapshot>.value(earlier);
+    }
     final pending = nextSnapshot;
     nextSnapshot = null;
     return pending ?? Future<TsPhoneMessageSnapshot>.value(snapshot);

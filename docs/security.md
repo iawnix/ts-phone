@@ -64,8 +64,10 @@ directories, malformed records, and mismatched headers. Reads use
 
 The same projection boundary is applied to Bridge and disk messages. It exposes
 only user, assistant, and tool-result display fields, drops thinking and model
-provider internals, bounds individual text, and caps each response at 500
-messages and six MiB. The Bearer token can read this projected offline history,
+provider internals, bounds individual text, and caps each response page at 500
+messages and six MiB. Pagination accepts only stable eight-character Pi entry
+IDs found exactly once in the validated file; unknown and duplicate cursors are
+rejected. The Bearer token can read this projected offline history,
 so it remains a high-value credential even when no TSPi process is running.
 
 ## Local Capabilities

@@ -3,12 +3,19 @@ import { lstat, open, readdir, realpath, type FileHandle } from "node:fs/promise
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { HttpError } from "./errors.js";
-import { boundProjectedMessages, projectMessage } from "./message-projection.js";
+import {
+  MAX_SNAPSHOT_MESSAGES,
+  boundProjectedMessageRecords,
+  projectMessage,
+  type ProjectedMessageRecord,
+} from "./message-projection.js";
+import type { MessagePage, MessagePageRequest } from "./types.js";
 
 export const WORKSPACE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 const PI_SESSION_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,158}[A-Za-z0-9])?$/;
 const MAX_SESSION_HEADER_BYTES = 1024 * 1024;
 const MAX_SESSION_FILE_BYTES = 64 * 1024 * 1024;
+const PI_MESSAGE_ID_PATTERN = /^[0-9a-f]{8}$/;
 
 export interface RegisteredWorkspace {
   id: string;
@@ -122,7 +129,8 @@ export class WorkspaceRegistry {
   async readPersistedSessionMessages(
     workspace: RegisteredWorkspace,
     session: PersistedSession,
-  ): Promise<unknown[]> {
+    request: MessagePageRequest = { limit: MAX_SNAPSHOT_MESSAGES },
+  ): Promise<MessagePage> {
     const sessionsRoot = join(workspace.root, ".pi", "sessions");
     const relation = relative(sessionsRoot, session.filePath);
     if (!relation || relation.startsWith("..") || isAbsolute(relation) || relation.includes(sep)) {
@@ -134,7 +142,14 @@ export class WorkspaceRegistry {
       handle = await openSessionFile(session.filePath);
       const input = handle.createReadStream({ autoClose: false, encoding: "utf8" });
       const lines = createInterface({ input, crlfDelay: Infinity });
-      const messages: unknown[] = [];
+      if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > MAX_SNAPSHOT_MESSAGES) {
+        throw new HttpError(400, "invalid_message_limit", "Message page limit must be between 1 and 500");
+      }
+      if (request.before !== undefined && !PI_MESSAGE_ID_PATTERN.test(request.before)) {
+        throw new HttpError(400, "invalid_message_cursor", "Message cursor is invalid");
+      }
+      const entries = new Map<string, PiSessionHistoryEntry>();
+      let leafId: string | undefined;
       let headerSeen = false;
       for await (const line of lines) {
         if (!line.trim()) continue;
@@ -147,14 +162,44 @@ export class WorkspaceRegistry {
           headerSeen = true;
           continue;
         }
-        if (record.type !== "message") continue;
-        const projected = projectMessage(record.message);
-        if (projected === undefined) continue;
-        messages.push(projected);
-        if (messages.length > 500) messages.shift();
+        const entry = parsePiSessionHistoryEntry(record);
+        if (entries.has(entry.id)) {
+          if (request.before === entry.id) {
+            throw new HttpError(
+              409,
+              "session_history_cursor_ambiguous",
+              "Message cursor occurs more than once in session history",
+            );
+          }
+          throw historyUnavailable();
+        }
+        entries.set(entry.id, entry);
+        leafId = entry.id;
       }
       if (!headerSeen) throw historyUnavailable();
-      return boundProjectedMessages(messages);
+      if ((await handle.stat()).size > MAX_SESSION_FILE_BYTES) throw historyUnavailable();
+
+      const messages = activeBranchMessages(entries, leafId);
+      let end = messages.length;
+      if (request.before !== undefined) {
+        end = messages.findIndex((record) => record.id === request.before);
+        if (end < 0) {
+          throw new HttpError(
+            409,
+            "session_history_cursor_invalid",
+            "Message cursor is not present in this session history",
+          );
+        }
+      }
+      const bounded = boundProjectedMessageRecords(messages.slice(0, end), request.limit);
+      if (end > 0 && bounded.records.length === 0) throw historyUnavailable();
+      const hasMore = bounded.omitted > 0;
+      return {
+        messages: bounded.records.map((record) => record.message),
+        messageIds: bounded.records.map((record) => record.id),
+        hasMore,
+        ...(hasMore && bounded.records[0] ? { nextBefore: bounded.records[0].id } : {}),
+      };
     } catch (error) {
       if (error instanceof HttpError) throw error;
       const code = (error as NodeJS.ErrnoException).code;
@@ -191,6 +236,12 @@ async function directoryState(path: string): Promise<DirectoryState> {
 interface PiSessionHeader {
   id: string;
   cwd: string;
+}
+
+interface PiSessionHistoryEntry {
+  id: string;
+  parentId: string | null;
+  message?: unknown;
 }
 
 async function readPiSessionHeader(path: string): Promise<PiSessionHeader | undefined> {
@@ -240,6 +291,41 @@ function parsePiSessionRecord(record: Record<string, unknown>): PiSessionHeader 
     return undefined;
   }
   return { id: record.id, cwd: resolve(record.cwd) };
+}
+
+function parsePiSessionHistoryEntry(record: Record<string, unknown>): PiSessionHistoryEntry {
+  if (typeof record.type !== "string"
+    || record.type === "session"
+    || typeof record.id !== "string"
+    || !PI_MESSAGE_ID_PATTERN.test(record.id)
+    || (record.parentId !== null
+      && (typeof record.parentId !== "string" || !PI_MESSAGE_ID_PATTERN.test(record.parentId)))) {
+    throw historyUnavailable();
+  }
+  const projected = record.type === "message" ? projectMessage(record.message) : undefined;
+  return {
+    id: record.id,
+    parentId: record.parentId,
+    ...(projected === undefined ? {} : { message: projected }),
+  };
+}
+
+function activeBranchMessages(
+  entries: ReadonlyMap<string, PiSessionHistoryEntry>,
+  leafId: string | undefined,
+): ProjectedMessageRecord[] {
+  const messages: ProjectedMessageRecord[] = [];
+  const visited = new Set<string>();
+  let current = leafId === undefined ? undefined : entries.get(leafId);
+  while (current) {
+    if (visited.has(current.id)) throw historyUnavailable();
+    visited.add(current.id);
+    if (current.message !== undefined) messages.push({ id: current.id, message: current.message });
+    if (current.parentId === null) break;
+    current = entries.get(current.parentId);
+    if (!current) throw historyUnavailable();
+  }
+  return messages.reverse();
 }
 
 function parseJsonObject(line: string): Record<string, unknown> {

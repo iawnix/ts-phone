@@ -82,6 +82,22 @@ paths:
       parameters:
         - $ref: "#/components/parameters/workspaceId"
         - $ref: "#/components/parameters/sessionId"
+        - name: before
+          in: query
+          required: false
+          description: Return the page immediately before this stable Pi message-entry id
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{8}$"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum messages in this page; the 6 MiB response bound may reduce it further
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 500
       responses:
         "200":
           description: Bounded live or read-only disk-history snapshot and matching SSE checkpoint
@@ -272,7 +288,7 @@ components:
       additionalProperties: false
     MessageSnapshot:
       type: object
-      required: [sessionId, sessionRevision, messages, lastEventId]
+      required: [sessionId, sessionRevision, messages, hasMore, lastEventId]
       properties:
         sessionId: { $ref: "#/components/schemas/BoundedId" }
         sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
@@ -280,6 +296,20 @@ components:
           type: array
           maxItems: 500
           items: {}
+        messageIds:
+          type: array
+          maxItems: 500
+          description: Stable Pi message-entry ids aligned one-to-one with messages when the Bridge supports pagination
+          items:
+            type: string
+            pattern: "^[0-9a-f]{8}$"
+        hasMore:
+          type: boolean
+          description: More projected messages exist before this page
+        nextBefore:
+          type: string
+          pattern: "^[0-9a-f]{8}$"
+          description: Cursor for the next earlier page; present exactly when hasMore is true
         lastEventId:
           type: string
           minLength: 1

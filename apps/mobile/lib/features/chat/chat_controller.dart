@@ -71,6 +71,8 @@ class ExtensionUiRequest {
 
 enum ChatActivityKind { runningTool, toolFailed }
 
+const int _historyPageSize = 200;
+
 class ChatActivity {
   const ChatActivity(this.kind, {this.toolName});
 
@@ -121,6 +123,7 @@ class ChatController extends ChangeNotifier {
   final Set<String> _handledApprovalIdentities = <String>{};
   final Set<String> _receivedPhoneMessageIdentities = <String>{};
   List<ChatMessage> _messages = const <ChatMessage>[];
+  List<String?> _messageIds = const <String?>[];
   RuntimeState _runtimeState;
   EventConnectionState _eventConnectionState = EventConnectionState.connecting;
   List<String>? _streamingTextChunks;
@@ -142,6 +145,11 @@ class ChatController extends ChangeNotifier {
   Future<void>? _snapshotSynchronization;
   bool _connectAfterCancellationScheduled = false;
   bool _snapshotSyncInProgress = false;
+  bool _loadingEarlierMessages = false;
+  bool _hasMoreHistory = false;
+  bool _loadedEarlierHistory = false;
+  String? _nextBefore;
+  List<String> _latestSnapshotMessageIds = const <String>[];
   Timer? _reconnectTimer;
   Timer? _eventErrorTimer;
   Timer? _streamRenderTimer;
@@ -167,6 +175,9 @@ class ChatController extends ChangeNotifier {
   bool get historyOnly =>
       _runtimeState == RuntimeState.offline && _historyAvailable && !_canPrompt;
   bool get canRefresh => _historyAvailable || _runtimeState.isAvailable;
+  bool get loadingEarlierMessages => _loadingEarlierMessages;
+  bool get canLoadEarlierMessages =>
+      _hasMoreHistory && _nextBefore != null && !_loadingEarlierMessages;
   bool get canSend =>
       _canPrompt &&
       _runtimeState.isAvailable &&
@@ -176,6 +187,10 @@ class ChatController extends ChangeNotifier {
   Map<String, String> get statuses => const <String, String>{};
   Map<String, List<String>> get widgets => const <String, List<String>>{};
   Stream<ExtensionUiRequest> get uiRequests => _uiRequests.stream;
+
+  String messageKeyAt(int index) =>
+      _messageIds[index] ??
+      '${_messages[index].role.name}-${_messages[index].timestamp?.microsecondsSinceEpoch ?? 0}-$index';
 
   Future<void> initialize() async {
     if (canRefresh) {
@@ -228,7 +243,8 @@ class ChatController extends ChangeNotifier {
       if (snapshot.sessionId != sessionId) {
         throw const FormatException('Snapshot belongs to another session');
       }
-      _replaceMessages(snapshot.messages);
+      final revisionChanged = snapshot.sessionRevision != _sessionRevision;
+      _applyMessageSnapshot(snapshot, reset: revisionChanged);
       _sessionRevision = snapshot.sessionRevision;
       _lastEventId = snapshot.lastEventId;
       _snapshotReady = true;
@@ -244,6 +260,51 @@ class ChatController extends ChangeNotifier {
         _notify();
         if (_eventStreamEnabled) _connectEventStream();
       }
+    }
+  }
+
+  Future<bool> loadEarlierMessages() async {
+    final before = _nextBefore;
+    if (_disposed ||
+        _loadingEarlierMessages ||
+        !_hasMoreHistory ||
+        before == null) {
+      return false;
+    }
+    _loadingEarlierMessages = true;
+    _operationProblem = null;
+    _notify();
+    try {
+      final page = await api.getMessages(
+        workspaceId,
+        sessionId,
+        before: before,
+        limit: _historyPageSize,
+      );
+      if (_disposed) return false;
+      if (page.sessionId != sessionId ||
+          page.sessionRevision != _sessionRevision) {
+        throw const FormatException(
+          'Earlier messages belong to another session revision',
+        );
+      }
+      if (page.messageIds == null) {
+        throw const FormatException(
+          'Earlier messages do not include stable message ids',
+        );
+      }
+      final parsed = _parseMessagePage(page.messages, page.messageIds);
+      _loadedEarlierHistory = true;
+      _hasMoreHistory = page.hasMore;
+      _nextBefore = page.nextBefore;
+      _prependMessagePage(parsed);
+      return true;
+    } on Object catch (error) {
+      if (!_disposed) _setError(error);
+      return false;
+    } finally {
+      _loadingEarlierMessages = false;
+      if (!_disposed) _notify();
     }
   }
 
@@ -279,17 +340,20 @@ class ChatController extends ChangeNotifier {
     final revision = _sessionRevision;
     final clientMessageId = clientMessageIdFactory();
     final messageIdentity = '$revision\u0000$clientMessageId';
-    _setMessages(<ChatMessage>[
-      ..._messages,
-      ChatMessage(
-        role: ChatRole.user,
-        text: message,
-        timestamp: DateTime.now(),
-        clientMessageId: clientMessageId,
-        origin: 'phone',
-        deliveryState: ChatDeliveryState.sending,
-      ),
-    ]);
+    _setMessages(
+      <ChatMessage>[
+        ..._messages,
+        ChatMessage(
+          role: ChatRole.user,
+          text: message,
+          timestamp: DateTime.now(),
+          clientMessageId: clientMessageId,
+          origin: 'phone',
+          deliveryState: ChatDeliveryState.sending,
+        ),
+      ],
+      <String?>[..._messageIds, null],
+    );
     _commandInFlight = true;
     _operationProblem = null;
     _notify();
@@ -498,6 +562,9 @@ class ChatController extends ChangeNotifier {
     if (!_isCurrentEventStream(generation)) return;
     _sessionRevision = revision;
     _lastEventId = null;
+    _hasMoreHistory = false;
+    _nextBefore = null;
+    _loadedEarlierHistory = false;
     _snapshotReady = false;
     _runtimeState = RuntimeState.connecting;
     _canPrompt = false;
@@ -632,7 +699,30 @@ class ChatController extends ChangeNotifier {
         }
       case 'session.snapshot':
         final messages = payload?['messages'];
-        if (messages is List) _replaceMessages(messages.cast<Object?>());
+        if (messages is List) {
+          try {
+            _applyMessageSnapshot(
+              TsPhoneMessageSnapshot(
+                sessionId: sessionId,
+                sessionRevision: _sessionRevision,
+                messages: messages.cast<Object?>(),
+                messageIds: _optionalMessageIds(
+                  payload?['messageIds'],
+                  messages.length,
+                ),
+                hasMore: payload?['hasMore'] == true,
+                nextBefore: payload?['nextBefore'] as String?,
+                lastEventId: event.id,
+              ),
+              reset: false,
+            );
+          } on Object {
+            _operationProblem = const TsPhoneProblem(
+              TsPhoneProblemKind.incompatible,
+              TsPhoneProblemCode.invalidHistoryMessage,
+            );
+          }
+        }
         if (payload?['sessionName'] is String) {
           _sessionTitle = payload!['sessionName']! as String;
         }
@@ -684,7 +774,10 @@ class ChatController extends ChangeNotifier {
             final parsed = ChatMessage.fromJson(message);
             if (parsed.role == ChatRole.assistant ||
                 parsed.role == ChatRole.tool) {
-              _setMessages(<ChatMessage>[..._messages, parsed]);
+              _setMessages(
+                <ChatMessage>[..._messages, parsed],
+                <String?>[..._messageIds, null],
+              );
             }
           } on FormatException {
             _operationProblem = const TsPhoneProblem(
@@ -876,12 +969,15 @@ class ChatController extends ChangeNotifier {
                 message.deliveryState != null,
           );
     if (pendingIndex < 0) {
-      _setMessages(<ChatMessage>[..._messages, incoming]);
+      _setMessages(
+        <ChatMessage>[..._messages, incoming],
+        <String?>[..._messageIds, null],
+      );
       return;
     }
     final updated = <ChatMessage>[..._messages];
     updated[pendingIndex] = incoming;
-    _setMessages(updated);
+    _setMessages(updated, _messageIds);
   }
 
   void _updateOutgoingDelivery(
@@ -896,28 +992,125 @@ class ChatController extends ChangeNotifier {
     if (index < 0) return;
     final updated = <ChatMessage>[..._messages];
     updated[index] = updated[index].copyWith(deliveryState: deliveryState);
-    _setMessages(updated);
+    _setMessages(updated, _messageIds);
   }
 
   void _removePendingOutgoing(String clientMessageId) {
+    final messages = <ChatMessage>[];
+    final messageIds = <String?>[];
+    for (var index = 0; index < _messages.length; index += 1) {
+      final message = _messages[index];
+      if (message.clientMessageId == clientMessageId &&
+          message.deliveryState != null) {
+        continue;
+      }
+      messages.add(message);
+      messageIds.add(_messageIds[index]);
+    }
+    _setMessages(messages, messageIds);
+  }
+
+  void _applyMessageSnapshot(
+    TsPhoneMessageSnapshot snapshot, {
+    required bool reset,
+  }) {
+    final rawIds = snapshot.messageIds;
+    if ((snapshot.hasMore &&
+            (rawIds == null ||
+                rawIds.isEmpty ||
+                snapshot.nextBefore != rawIds.first)) ||
+        (!snapshot.hasMore && snapshot.nextBefore != null)) {
+      throw const FormatException('Message pagination cursor is invalid');
+    }
+    final parsed = _parseMessagePage(snapshot.messages, rawIds);
+    final branchChanged =
+        !reset &&
+        rawIds != null &&
+        !_continuesMessageWindow(_latestSnapshotMessageIds, rawIds);
+    final replaceHistory = reset || rawIds == null || branchChanged;
+    if (replaceHistory) _loadedEarlierHistory = false;
+    if (replaceHistory || !_loadedEarlierHistory) {
+      _hasMoreHistory = snapshot.hasMore;
+      _nextBefore = snapshot.nextBefore;
+    }
+    if (replaceHistory) {
+      _setMessages(parsed.messages, parsed.messageIds);
+    } else {
+      _mergeMessagePage(parsed);
+    }
+    _latestSnapshotMessageIds = rawIds ?? const <String>[];
+  }
+
+  void _prependMessagePage(_ParsedMessagePage parsed) {
+    final existing = _messageIds.whereType<String>().toSet();
+    final messages = <ChatMessage>[];
+    final messageIds = <String?>[];
+    for (var index = 0; index < parsed.messages.length; index += 1) {
+      final id = parsed.messageIds[index];
+      if (id == null || existing.contains(id)) continue;
+      messages.add(parsed.messages[index]);
+      messageIds.add(id);
+    }
     _setMessages(
-      _messages
-          .where(
-            (message) =>
-                message.clientMessageId != clientMessageId ||
-                message.deliveryState == null,
-          )
-          .toList(growable: false),
+      <ChatMessage>[...messages, ..._messages],
+      <String?>[...messageIds, ..._messageIds],
     );
   }
 
-  void _replaceMessages(List<Object?> raw) {
-    final parsed = <ChatMessage>[];
-    for (final value in raw) {
+  void _mergeMessagePage(_ParsedMessagePage incoming) {
+    final incomingById = <String, ChatMessage>{};
+    for (var index = 0; index < incoming.messages.length; index += 1) {
+      final id = incoming.messageIds[index];
+      if (id != null) incomingById[id] = incoming.messages[index];
+    }
+    final existingIds = _messageIds.whereType<String>().toSet();
+    final overlap = existingIds.intersection(incomingById.keys.toSet());
+    final replaceStableHistory =
+        existingIds.isNotEmpty && overlap.isEmpty && !_loadedEarlierHistory;
+    final messages = <ChatMessage>[];
+    final messageIds = <String?>[];
+    final included = <String>{};
+    final pending = <ChatMessage>[];
+
+    for (var index = 0; index < _messages.length; index += 1) {
+      final id = _messageIds[index];
+      final message = _messages[index];
+      if (id == null) {
+        if (message.deliveryState != null) pending.add(message);
+        continue;
+      }
+      if (replaceStableHistory) continue;
+      messages.add(incomingById[id] ?? message);
+      messageIds.add(id);
+      included.add(id);
+    }
+    for (var index = 0; index < incoming.messages.length; index += 1) {
+      final id = incoming.messageIds[index];
+      if (id == null || included.contains(id)) continue;
+      messages.add(incoming.messages[index]);
+      messageIds.add(id);
+      included.add(id);
+    }
+    messages.addAll(pending);
+    messageIds.addAll(List<String?>.filled(pending.length, null));
+    _setMessages(messages, messageIds);
+  }
+
+  _ParsedMessagePage _parseMessagePage(
+    List<Object?> raw,
+    List<String>? rawIds,
+  ) {
+    if (rawIds != null && rawIds.length != raw.length) {
+      throw const FormatException('Message ids do not align with messages');
+    }
+    final messages = <ChatMessage>[];
+    final messageIds = <String?>[];
+    for (var index = 0; index < raw.length; index += 1) {
       try {
-        final message = ChatMessage.fromJson(value);
+        final message = ChatMessage.fromJson(raw[index]);
         if (message.text.isNotEmpty || message.tools.isNotEmpty) {
-          parsed.add(message);
+          messages.add(message);
+          messageIds.add(rawIds?[index]);
         }
       } on FormatException {
         _operationProblem = const TsPhoneProblem(
@@ -926,11 +1119,50 @@ class ChatController extends ChangeNotifier {
         );
       }
     }
-    _setMessages(parsed);
+    return _ParsedMessagePage(messages, messageIds);
   }
 
-  void _setMessages(List<ChatMessage> messages) {
+  static List<String>? _optionalMessageIds(Object? value, int messageCount) {
+    if (value == null) return null;
+    if (value is! List ||
+        value.length != messageCount ||
+        value.any((id) => id is! String)) {
+      throw const FormatException('Message ids are invalid');
+    }
+    final ids = value.cast<String>();
+    if (ids.toSet().length != ids.length ||
+        ids.any((id) => !RegExp(r'^[0-9a-f]{8}$').hasMatch(id))) {
+      throw const FormatException('Message ids are invalid or not unique');
+    }
+    return ids;
+  }
+
+  static bool _continuesMessageWindow(
+    List<String> previous,
+    List<String> incoming,
+  ) {
+    if (previous.isEmpty) return true;
+    if (incoming.isEmpty) return false;
+    final incomingIds = incoming.toSet();
+    var overlapStart = 0;
+    while (overlapStart < previous.length &&
+        !incomingIds.contains(previous[overlapStart])) {
+      overlapStart += 1;
+    }
+    final overlapLength = previous.length - overlapStart;
+    if (overlapLength == 0 || overlapLength > incoming.length) return false;
+    for (var index = 0; index < overlapLength; index += 1) {
+      if (previous[overlapStart + index] != incoming[index]) return false;
+    }
+    return true;
+  }
+
+  void _setMessages(List<ChatMessage> messages, List<String?> messageIds) {
+    if (messages.length != messageIds.length) {
+      throw StateError('Message ids must align with messages');
+    }
     _messages = List<ChatMessage>.unmodifiable(messages);
+    _messageIds = List<String?>.unmodifiable(messageIds);
     _messagesUpdates.value = _messages;
   }
 
@@ -966,4 +1198,11 @@ class ChatController extends ChangeNotifier {
     _streamingTextUpdates.dispose();
     super.dispose();
   }
+}
+
+class _ParsedMessagePage {
+  const _ParsedMessagePage(this.messages, this.messageIds);
+
+  final List<ChatMessage> messages;
+  final List<String?> messageIds;
 }

@@ -111,6 +111,58 @@ test("service restart restores disk history as a read-only session", async () =>
   }
 });
 
+test("message history pages use stable Pi entry cursors", async () => {
+  const fixture = await startFixture();
+  const sessionId = "session-paged";
+  await writePersistedHistory(
+    fixture.workspace,
+    sessionId,
+    Array.from({ length: 505 }, (_, index) => assistantMessage(`history-${index}`)),
+  );
+  await restartFixture(fixture);
+  try {
+    const latest = await api(
+      fixture,
+      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?limit=3`,
+    );
+    assert.equal(latest.status, 200);
+    const latestPayload = await latest.json() as {
+      data: MessageSnapshotResponse & { messageIds: string[]; hasMore: boolean; nextBefore?: string };
+    };
+    assert.deepEqual(latestPayload.data.messageIds, ["000001f6", "000001f7", "000001f8"]);
+    assert.equal(latestPayload.data.hasMore, true);
+    assert.equal(latestPayload.data.nextBefore, "000001f6");
+    assert.match(JSON.stringify(latestPayload.data.messages), /history-502/);
+
+    const earlier = await api(
+      fixture,
+      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?before=000001f6&limit=2`,
+    );
+    assert.equal(earlier.status, 200);
+    const earlierPayload = await earlier.json() as {
+      data: MessageSnapshotResponse & { messageIds: string[]; hasMore: boolean; nextBefore?: string };
+    };
+    assert.deepEqual(earlierPayload.data.messageIds, ["000001f4", "000001f5"]);
+    assert.equal(earlierPayload.data.nextBefore, "000001f4");
+
+    const unknown = await api(
+      fixture,
+      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?before=ffffffff`,
+    );
+    assert.equal(unknown.status, 409);
+    assert.match(await unknown.text(), /session_history_cursor_invalid/);
+
+    const malformed = await api(
+      fixture,
+      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?before=not-a-cursor`,
+    );
+    assert.equal(malformed.status, 400);
+    assert.match(await malformed.text(), /invalid_message_cursor/);
+  } finally {
+    await fixture.application.close();
+  }
+});
+
 test("a live bridge takes over the matching disk-history session", async () => {
   const fixture = await startFixture();
   const sessionId = "session-overlay";
@@ -563,7 +615,8 @@ async function writePersistedHistory(
     },
     ...messages.map((message, index) => ({
       type: "message",
-      id: `message-${index}`,
+      id: index.toString(16).padStart(8, "0"),
+      parentId: index === 0 ? null : (index - 1).toString(16).padStart(8, "0"),
       timestamp: new Date().toISOString(),
       message,
     })),

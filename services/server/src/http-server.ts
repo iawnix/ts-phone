@@ -8,6 +8,7 @@ import { assertBearerAuthorization, ensureBearerToken, ensureBridgeSecret } from
 import {
   API_VERSION,
   type ApprovalInput,
+  type MessagePageRequest,
   type PromptInput,
   type SessionCommandInput,
 } from "./types.js";
@@ -120,7 +121,7 @@ async function handleRequest(
   const sessionResource = segments[6];
   if (sessionResource === "messages" && segments.length === 7) {
     if (method === "GET") {
-      sendData(response, 200, await hub.getMessages(workspaceId, sessionId));
+      sendData(response, 200, await hub.getMessages(workspaceId, sessionId, validateMessagePageRequest(url)));
       return;
     }
     if (method === "POST") {
@@ -148,6 +149,30 @@ async function handleRequest(
     return;
   }
   throw new HttpError(404, "not_found", "API endpoint was not found");
+}
+
+function validateMessagePageRequest(url: URL): MessagePageRequest {
+  for (const key of url.searchParams.keys()) {
+    if (key !== "before" && key !== "limit") {
+      throw new HttpError(400, "invalid_message_query", "Messages only accepts before and limit query parameters");
+    }
+  }
+  if (url.searchParams.getAll("before").length > 1 || url.searchParams.getAll("limit").length > 1) {
+    throw new HttpError(400, "invalid_message_query", "Message query parameters must not be repeated");
+  }
+  const rawBefore = url.searchParams.get("before");
+  if (rawBefore !== null && !/^[0-9a-f]{8}$/.test(rawBefore)) {
+    throw new HttpError(400, "invalid_message_cursor", "Message cursor is invalid");
+  }
+  const rawLimit = url.searchParams.get("limit");
+  if (rawLimit !== null && !/^[1-9][0-9]*$/.test(rawLimit)) {
+    throw new HttpError(400, "invalid_message_limit", "Message page limit must be between 1 and 500");
+  }
+  const limit = rawLimit === null ? 500 : Number(rawLimit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+    throw new HttpError(400, "invalid_message_limit", "Message page limit must be between 1 and 500");
+  }
+  return { ...(rawBefore === null ? {} : { before: rawBefore }), limit };
 }
 
 function decodeSegments(pathname: string): string[] {

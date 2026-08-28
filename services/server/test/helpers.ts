@@ -81,6 +81,12 @@ export async function connectFakeBridge(
   };
   const publishSnapshot = (isStreaming = false) => {
     sequence += 1;
+    const firstIndex = Math.max(0, messages.length - 500);
+    const boundedMessages = messages.slice(firstIndex);
+    const messageIds = boundedMessages.map((_, index) => (
+      (firstIndex + index).toString(16).padStart(8, "0")
+    ));
+    const hasMore = firstIndex > 0;
     write({
       ...envelope(),
       type: "session.snapshot",
@@ -90,7 +96,10 @@ export async function connectFakeBridge(
         sessionName: `Fake ${sessionId}`,
         model: "test/fake-model",
         isStreaming,
-        messages,
+        messages: boundedMessages,
+        messageIds,
+        hasMore,
+        ...(hasMore ? { nextBefore: messageIds[0] } : {}),
       },
     });
   };

@@ -170,6 +170,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     if (userStopped && _isAtTail(notification.metrics)) {
       _setScrollMode(_ChatScrollMode.following);
     }
+    if ((userScrolling || userStopped) &&
+        notification.metrics.extentBefore <= 48 &&
+        _controller.canLoadEarlierMessages) {
+      unawaited(_loadEarlierMessages());
+    }
     _updateTimelineNavigationVisibility(notification.metrics);
     return false;
   }
@@ -248,6 +253,32 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         }
       }
     }
+  }
+
+  Future<void> _loadEarlierMessages() async {
+    if (!_controller.canLoadEarlierMessages) return;
+    _setScrollMode(_ChatScrollMode.reading);
+    final oldPixels = _scroll.hasClients ? _scroll.position.pixels : null;
+    final oldMaxExtent = _scroll.hasClients
+        ? _scroll.position.maxScrollExtent
+        : null;
+    final loaded = await _controller.loadEarlierMessages();
+    if (!loaded || !mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        !_scroll.hasClients ||
+        oldPixels == null ||
+        oldMaxExtent == null) {
+      return;
+    }
+    final addedExtent = _scroll.position.maxScrollExtent - oldMaxExtent;
+    _scroll.jumpTo(
+      (oldPixels + addedExtent).clamp(
+        _scroll.position.minScrollExtent,
+        _scroll.position.maxScrollExtent,
+      ),
+    );
+    _updateTimelineNavigationVisibility(_scroll.position);
   }
 
   void _onComposerChanged() {
@@ -456,11 +487,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     return AnimatedBuilder(
       animation: _controller,
       child: _MessageTimeline(
+        controller: _controller,
         messagesListenable: _controller.messagesUpdates,
         streamingTextListenable: _controller.streamingTextUpdates,
         streamUpdatesEnabledListenable: _streamUpdatesEnabled,
         scrollController: _scroll,
         onScrollNotification: _handleScrollNotification,
+        onLoadEarlier: _loadEarlierMessages,
       ),
       builder: (context, child) => _buildMessagesForState(child!),
     );
@@ -897,18 +930,22 @@ class _SessionContextLine extends StatelessWidget {
 
 class _MessageTimeline extends StatelessWidget {
   const _MessageTimeline({
+    required this.controller,
     required this.messagesListenable,
     required this.streamingTextListenable,
     required this.streamUpdatesEnabledListenable,
     required this.scrollController,
     required this.onScrollNotification,
+    required this.onLoadEarlier,
   });
 
+  final ChatController controller;
   final ValueListenable<List<ChatMessage>> messagesListenable;
   final ValueListenable<String?> streamingTextListenable;
   final ValueListenable<bool> streamUpdatesEnabledListenable;
   final ScrollController scrollController;
   final NotificationListenerCallback<ScrollNotification> onScrollNotification;
+  final Future<void> Function() onLoadEarlier;
 
   @override
   Widget build(BuildContext context) {
@@ -920,6 +957,10 @@ class _MessageTimeline extends StatelessWidget {
         updatesEnabledListenable: streamUpdatesEnabledListenable,
       ),
       builder: (context, messages, streamingMessage) {
+        final showEarlier =
+            controller.canLoadEarlierMessages ||
+            controller.loadingEarlierMessages;
+        final historyOffset = showEarlier ? 1 : 0;
         return NotificationListener<ScrollNotification>(
           onNotification: onScrollNotification,
           child: ListView.builder(
@@ -927,17 +968,69 @@ class _MessageTimeline extends StatelessWidget {
             controller: scrollController,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: messages.length + 1,
+            itemCount: messages.length + 1 + historyOffset,
             itemBuilder: (context, index) {
-              if (index == messages.length) return streamingMessage!;
+              if (showEarlier && index == 0) {
+                return AnimatedBuilder(
+                  animation: controller,
+                  builder: (context, _) => _EarlierMessagesControl(
+                    visible:
+                        controller.canLoadEarlierMessages ||
+                        controller.loadingEarlierMessages,
+                    loading: controller.loadingEarlierMessages,
+                    onPressed: onLoadEarlier,
+                  ),
+                );
+              }
+              final messageIndex = index - historyOffset;
+              if (messageIndex == messages.length) return streamingMessage!;
               return ChatMessageView(
-                key: ValueKey<String>('chat-message-$index'),
-                message: messages[index],
+                key: ValueKey<String>(
+                  'chat-message-${controller.messageKeyAt(messageIndex)}',
+                ),
+                message: messages[messageIndex],
               );
             },
           ),
         );
       },
+    );
+  }
+}
+
+class _EarlierMessagesControl extends StatelessWidget {
+  const _EarlierMessagesControl({
+    required this.visible,
+    required this.loading,
+    required this.onPressed,
+  });
+
+  final bool visible;
+  final bool loading;
+  final Future<void> Function() onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) return const SizedBox.shrink();
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: TextButton.icon(
+          key: const ValueKey<String>('load-earlier-messages'),
+          onPressed: loading ? null : onPressed,
+          icon: loading
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.history_rounded, size: 18),
+          label: Text(
+            loading
+                ? context.l10n.loadingEarlierMessages
+                : context.l10n.loadEarlierMessages,
+          ),
+        ),
+      ),
     );
   }
 }

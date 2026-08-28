@@ -39,13 +39,27 @@ export interface SessionSnapshot {
   thinkingLevel?: string;
   isStreaming: boolean;
   messages: unknown[];
+  messageIds?: string[];
+  hasMore?: boolean;
+  nextBefore?: string;
 }
 
-export interface MessageSnapshot {
+export interface MessagePage {
+  messages: unknown[];
+  messageIds?: string[];
+  hasMore: boolean;
+  nextBefore?: string;
+}
+
+export interface MessageSnapshot extends MessagePage {
   sessionId: string;
   sessionRevision: string;
-  messages: unknown[];
   lastEventId: string;
+}
+
+export interface MessagePageRequest {
+  before?: string;
+  limit: number;
 }
 
 export interface EventEnvelope {

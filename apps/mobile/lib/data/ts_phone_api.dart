@@ -174,12 +174,18 @@ class TsPhoneMessageSnapshot {
     required this.sessionRevision,
     required this.messages,
     required this.lastEventId,
+    this.messageIds,
+    this.hasMore = false,
+    this.nextBefore,
   });
 
   final String sessionId;
   final String sessionRevision;
   final List<Object?> messages;
   final String lastEventId;
+  final List<String>? messageIds;
+  final bool hasMore;
+  final String? nextBefore;
 }
 
 abstract interface class TsPhoneGateway {
@@ -188,8 +194,10 @@ abstract interface class TsPhoneGateway {
   Future<List<SessionSummary>> listSessions(String workspaceId);
   Future<TsPhoneMessageSnapshot> getMessages(
     String workspaceId,
-    String sessionId,
-  );
+    String sessionId, {
+    String? before,
+    int? limit,
+  });
   Future<void> sendMessage(
     String workspaceId,
     String sessionId,
@@ -261,28 +269,70 @@ class TsPhoneApi implements TsPhoneGateway {
   @override
   Future<TsPhoneMessageSnapshot> getMessages(
     String workspaceId,
-    String sessionId,
-  ) async {
+    String sessionId, {
+    String? before,
+    int? limit,
+  }) async {
+    if (limit != null && (limit < 1 || limit > 500)) {
+      throw ArgumentError.value(limit, 'limit', 'must be between 1 and 500');
+    }
     final data = _asMap(
-      await _request('GET', _sessionPath(workspaceId, sessionId, 'messages')),
+      await _request(
+        'GET',
+        _sessionPath(workspaceId, sessionId, 'messages'),
+        queryParameters: <String, String>{
+          'before': ?before,
+          if (limit != null) 'limit': '$limit',
+        },
+      ),
       'Messages response',
     );
     final messages = data['messages'];
+    final rawMessageIds = data['messageIds'];
+    final rawHasMore = data['hasMore'];
+    final rawNextBefore = data['nextBefore'];
     final lastEventId = data['lastEventId'];
     final responseSessionId = data['sessionId'];
     final sessionRevision = data['sessionRevision'];
     if (messages is! List ||
         lastEventId is! String ||
         lastEventId.isEmpty ||
+        responseSessionId is! String ||
         responseSessionId != sessionId ||
         sessionRevision is! String) {
       throw const FormatException('Messages response is invalid');
     }
+    List<String>? messageIds;
+    if (rawMessageIds != null) {
+      if (rawMessageIds is! List ||
+          rawMessageIds.length != messages.length ||
+          rawMessageIds.any((value) => value is! String)) {
+        throw const FormatException('Message ids are invalid');
+      }
+      messageIds = rawMessageIds.cast<String>();
+      if (messageIds.toSet().length != messageIds.length ||
+          messageIds.any((id) => !RegExp(r'^[0-9a-f]{8}$').hasMatch(id))) {
+        throw const FormatException('Message ids are invalid or not unique');
+      }
+    }
+    final hasMore = rawHasMore ?? false;
+    if (hasMore is! bool ||
+        (rawNextBefore != null && rawNextBefore is! String) ||
+        (hasMore &&
+            (messageIds == null ||
+                messageIds.isEmpty ||
+                rawNextBefore != messageIds.first)) ||
+        (!hasMore && rawNextBefore != null)) {
+      throw const FormatException('Message pagination is invalid');
+    }
     return TsPhoneMessageSnapshot(
-      sessionId: sessionId,
+      sessionId: responseSessionId,
       sessionRevision: sessionRevision,
       messages: messages.cast<Object?>(),
       lastEventId: lastEventId,
+      messageIds: messageIds,
+      hasMore: hasMore,
+      nextBefore: rawNextBefore as String?,
     );
   }
 
@@ -391,12 +441,19 @@ class TsPhoneApi implements TsPhoneGateway {
     String method,
     String path, {
     Map<String, Object?>? body,
+    Map<String, String>? queryParameters,
   }) async {
     final abort = Completer<void>();
     final request =
         http.AbortableRequest(
             method,
-            settings.endpoint(path),
+            settings
+                .endpoint(path)
+                .replace(
+                  queryParameters: queryParameters?.isEmpty == true
+                      ? null
+                      : queryParameters,
+                ),
             abortTrigger: abort.future,
           )
           ..followRedirects = false

@@ -75,6 +75,8 @@ test("registry reads bounded projected messages without exposing Pi internals", 
   for (let index = 0; index < 510; index += 1) {
     records.push({
       type: "message",
+      id: index.toString(16).padStart(8, "0"),
+      parentId: index === 0 ? null : (index - 1).toString(16).padStart(8, "0"),
       message: {
         role: "assistant",
         provider: "private-provider",
@@ -94,11 +96,105 @@ test("registry reads bounded projected messages without exposing Pi internals", 
   const session = index.sessions.get("session-history");
   assert.ok(session);
 
-  const messages = await registry.readPersistedSessionMessages(workspace, session);
-  assert.equal(messages.length, 500);
-  assert.match(JSON.stringify(messages[0]), /history-10/);
-  assert.match(JSON.stringify(messages.at(-1)), /history-509/);
-  assert.doesNotMatch(JSON.stringify(messages), /private-provider|private-reasoning|usage/);
+  const page = await registry.readPersistedSessionMessages(workspace, session);
+  assert.equal(page.messages.length, 500);
+  assert.equal(page.messageIds?.[0], "0000000a");
+  assert.equal(page.hasMore, true);
+  assert.equal(page.nextBefore, "0000000a");
+  assert.match(JSON.stringify(page.messages[0]), /history-10/);
+  assert.match(JSON.stringify(page.messages.at(-1)), /history-509/);
+  assert.doesNotMatch(JSON.stringify(page.messages), /private-provider|private-reasoning|usage/);
+
+  const earlier = await registry.readPersistedSessionMessages(workspace, session, {
+    before: page.nextBefore,
+    limit: 7,
+  });
+  assert.deepEqual(earlier.messageIds, [
+    "00000003",
+    "00000004",
+    "00000005",
+    "00000006",
+    "00000007",
+    "00000008",
+    "00000009",
+  ]);
+  assert.equal(earlier.hasMore, true);
+  assert.equal(earlier.nextBefore, "00000003");
+
+  const first = await registry.readPersistedSessionMessages(workspace, session, {
+    before: earlier.nextBefore,
+    limit: 7,
+  });
+  assert.deepEqual(first.messageIds, ["00000000", "00000001", "00000002"]);
+  assert.equal(first.hasMore, false);
+  assert.equal(first.nextBefore, undefined);
+
+  await assert.rejects(
+    () => registry.readPersistedSessionMessages(workspace, session, {
+      before: "ffffffff",
+      limit: 7,
+    }),
+    (error: unknown) => error instanceof HttpError && error.code === "session_history_cursor_invalid",
+  );
+});
+
+test("registry returns only the active Pi session branch", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ts-phone-branch-history-"));
+  const workspaceRoot = join(root, "ts_001");
+  const sessionsRoot = join(workspaceRoot, ".pi", "sessions");
+  await mkdir(sessionsRoot, { recursive: true });
+  const records = [{
+    type: "session",
+    version: 3,
+    id: "session-branch",
+    timestamp: new Date().toISOString(),
+    cwd: workspaceRoot,
+  }, {
+    type: "message",
+    id: "00000001",
+    parentId: null,
+    message: { role: "user", content: "root", timestamp: 1 },
+  }, {
+    type: "message",
+    id: "00000002",
+    parentId: "00000001",
+    message: { role: "assistant", content: [{ type: "text", text: "abandoned" }], timestamp: 2 },
+  }, {
+    type: "message",
+    id: "00000003",
+    parentId: "00000002",
+    message: { role: "user", content: "abandoned-tail", timestamp: 3 },
+  }, {
+    type: "message",
+    id: "00000004",
+    parentId: "00000001",
+    message: { role: "assistant", content: [{ type: "text", text: "active" }], timestamp: 4 },
+  }, {
+    type: "session_info",
+    id: "00000005",
+    parentId: "00000004",
+    name: "active branch",
+  }];
+  const sessionFile = join(sessionsRoot, "branch.jsonl");
+  await writeFile(sessionFile, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  const registry = new WorkspaceRegistry(root);
+  const workspace = await registry.get("ts_001");
+  const session = (await registry.listPersistedSessionIds(workspace)).sessions.get("session-branch");
+  assert.ok(session);
+
+  const page = await registry.readPersistedSessionMessages(workspace, session);
+  assert.deepEqual(page.messageIds, ["00000001", "00000004"]);
+  assert.match(JSON.stringify(page.messages), /root/);
+  assert.match(JSON.stringify(page.messages), /active/);
+  assert.doesNotMatch(JSON.stringify(page.messages), /abandoned/);
+
+  await assert.rejects(
+    () => registry.readPersistedSessionMessages(workspace, session, {
+      before: "00000002",
+      limit: 10,
+    }),
+    (error: unknown) => error instanceof HttpError && error.code === "session_history_cursor_invalid",
+  );
 });
 
 test("registry rejects malformed, symbolic-link, and oversized session histories", async () => {
@@ -140,6 +236,46 @@ test("registry rejects malformed, symbolic-link, and oversized session histories
   index = await registry.listPersistedSessionIds(workspace);
   assert.equal(index.complete, false);
   assert.equal(index.sessions.has("session-unsafe"), false);
+});
+
+test("registry rejects a duplicated message cursor", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ts-phone-duplicate-cursor-"));
+  const workspaceRoot = join(root, "ts_001");
+  const sessionsRoot = join(workspaceRoot, ".pi", "sessions");
+  await mkdir(sessionsRoot, { recursive: true });
+  const records = [{
+    type: "session",
+    version: 3,
+    id: "session-duplicate",
+    timestamp: new Date().toISOString(),
+    cwd: workspaceRoot,
+  }, {
+    type: "message",
+    id: "00000001",
+    parentId: null,
+    message: { role: "user", content: "first", timestamp: 1 },
+  }, {
+    type: "message",
+    id: "00000001",
+    parentId: "00000001",
+    message: { role: "assistant", content: [{ type: "text", text: "second" }], timestamp: 2 },
+  }];
+  await writeFile(
+    join(sessionsRoot, "duplicate.jsonl"),
+    `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+  );
+  const registry = new WorkspaceRegistry(root);
+  const workspace = await registry.get("ts_001");
+  const session = (await registry.listPersistedSessionIds(workspace)).sessions.get("session-duplicate");
+  assert.ok(session);
+
+  await assert.rejects(
+    () => registry.readPersistedSessionMessages(workspace, session, {
+      before: "00000001",
+      limit: 10,
+    }),
+    (error: unknown) => error instanceof HttpError && error.code === "session_history_cursor_ambiguous",
+  );
 });
 
 test("an incomplete index still returns its independently valid sessions", async () => {

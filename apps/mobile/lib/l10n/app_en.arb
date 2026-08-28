@@ -168,6 +168,8 @@
   "invalidMessage": "Received a message this client could not read",
   "invalidApproval": "Received an approval request this client could not read",
   "invalidHistoryMessage": "A historical message could not be read by this client.",
+  "loadEarlierMessages": "Load earlier messages",
+  "loadingEarlierMessages": "Loading earlier messages",
   "networkRetrying": "Network connection interrupted. Retrying",
   "imageAlt": "[Image: {alt}]",
   "@imageAlt": {"placeholders": {"alt": {"type": "String"}}},

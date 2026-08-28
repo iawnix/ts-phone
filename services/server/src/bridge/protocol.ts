@@ -191,6 +191,27 @@ function parseSnapshot(value: unknown): SessionSnapshot {
   const isStreaming = requiredBoolean(snapshot.isStreaming, "isStreaming");
   if (!Array.isArray(snapshot.messages)) throw new Error("snapshot.messages must be an array");
   const parsed: SessionSnapshot = { sessionId, isStreaming, messages: snapshot.messages };
+  if (snapshot.messageIds !== undefined) {
+    if (!Array.isArray(snapshot.messageIds) || snapshot.messageIds.length !== snapshot.messages.length) {
+      throw new Error("snapshot.messageIds must align with snapshot.messages");
+    }
+    const messageIds = snapshot.messageIds.map((value) => requiredMessageId(value, "messageId"));
+    if (new Set(messageIds).size !== messageIds.length) {
+      throw new Error("snapshot.messageIds must be unique");
+    }
+    parsed.messageIds = messageIds;
+  }
+  if (snapshot.hasMore !== undefined) parsed.hasMore = requiredBoolean(snapshot.hasMore, "hasMore");
+  if (snapshot.nextBefore !== undefined) {
+    parsed.nextBefore = requiredMessageId(snapshot.nextBefore, "nextBefore");
+  }
+  if (parsed.hasMore === true
+    && (!parsed.messageIds?.length || parsed.nextBefore !== parsed.messageIds[0])) {
+    throw new Error("snapshot.nextBefore must identify the first message when hasMore is true");
+  }
+  if (parsed.hasMore !== true && parsed.nextBefore !== undefined) {
+    throw new Error("snapshot.nextBefore requires hasMore=true");
+  }
   if (snapshot.sessionName !== undefined) parsed.sessionName = requiredString(snapshot.sessionName, "sessionName", 500);
   if (snapshot.model !== undefined) parsed.model = requiredString(snapshot.model, "model", 500);
   if (snapshot.thinkingLevel !== undefined) {
@@ -219,6 +240,12 @@ function requiredString(value: unknown, name: string, maxLength: number): string
 function requiredId(value: unknown, name: string): string {
   const parsed = requiredString(value, name, 160);
   if (!BRIDGE_ID_PATTERN.test(parsed)) throw new Error(`${name} contains unsupported characters`);
+  return parsed;
+}
+
+function requiredMessageId(value: unknown, name: string): string {
+  const parsed = requiredString(value, name, 8);
+  if (!/^[0-9a-f]{8}$/.test(parsed)) throw new Error(`${name} is not a Pi message entry id`);
   return parsed;
 }
 

@@ -815,6 +815,81 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'reaching the top loads earlier history without losing position',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = UiFakeGateway(
+        snapshot: TsPhoneMessageSnapshot(
+          sessionId: 'session-test',
+          sessionRevision: '11111111-1111-4111-8111-111111111111',
+          messages: List<Object?>.generate(
+            24,
+            (index) => userMessage('当前消息 ${index + 24}\n用于验证历史分页。'),
+          ),
+          messageIds: List<String>.generate(
+            24,
+            (index) => (index + 24).toRadixString(16).padLeft(8, '0'),
+          ),
+          hasMore: true,
+          nextBefore: '00000018',
+          lastEventId: 'epoch:0',
+        ),
+        earlierSnapshot: TsPhoneMessageSnapshot(
+          sessionId: 'session-test',
+          sessionRevision: '11111111-1111-4111-8111-111111111111',
+          messages: List<Object?>.generate(
+            24,
+            (index) => userMessage('更早消息 $index\n用于验证历史分页。'),
+          ),
+          messageIds: List<String>.generate(
+            24,
+            (index) => index.toRadixString(16).padLeft(8, '0'),
+          ),
+          lastEventId: 'epoch:0',
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatPage(
+            settings: _settings,
+            workspace: const WorkspaceSummary(
+              id: 'ts_001',
+              name: 'ts_001',
+              runtimeState: RuntimeState.idle,
+              isStreaming: false,
+              liveSessionCount: 1,
+              sessionCount: 1,
+            ),
+            session: controllerSession,
+            gateway: gateway,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listFinder = find.byKey(
+        const ValueKey<String>('chat-message-list'),
+      );
+      final position = tester.widget<ListView>(listFinder).controller!.position;
+      await tester.tap(find.byTooltip('回到会话开始'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.lastBefore, '00000018');
+      expect(gateway.lastLimit, 200);
+      expect(position.extentBefore, greaterThan(0));
+
+      position.jumpTo(position.minScrollExtent);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('更早消息 0'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('approval panel keeps structured context and retries in place', (
     WidgetTester tester,
   ) async {
@@ -1044,6 +1119,7 @@ class UiFakeGateway implements TsPhoneGateway {
     this.workspaces = const <WorkspaceSummary>[],
     this.sessions = const <SessionSummary>[controllerSession],
     TsPhoneMessageSnapshot? snapshot,
+    this.earlierSnapshot,
     this.listError,
   }) : snapshot =
            snapshot ??
@@ -1057,6 +1133,9 @@ class UiFakeGateway implements TsPhoneGateway {
   List<WorkspaceSummary> workspaces;
   List<SessionSummary> sessions;
   TsPhoneMessageSnapshot snapshot;
+  TsPhoneMessageSnapshot? earlierSnapshot;
+  String? lastBefore;
+  int? lastLimit;
   final Object? listError;
   final List<String> sentMessages = <String>[];
   final List<bool> approvalDecisions = <bool>[];
@@ -1239,8 +1318,16 @@ class UiFakeGateway implements TsPhoneGateway {
   @override
   Future<TsPhoneMessageSnapshot> getMessages(
     String workspaceId,
-    String sessionId,
-  ) async => snapshot;
+    String sessionId, {
+    String? before,
+    int? limit,
+  }) async {
+    lastBefore = before;
+    lastLimit = limit;
+    final earlier = earlierSnapshot;
+    if (before != null && earlier != null) return earlier;
+    return snapshot;
+  }
 
   @override
   Future<List<WorkspaceSummary>> listWorkspaces() async {

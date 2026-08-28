@@ -156,6 +156,8 @@
   "invalidMessage": "收到一个无法解析的消息",
   "invalidApproval": "收到一个无法解析的权限请求",
   "invalidHistoryMessage": "收到一个当前客户端无法解析的历史消息。",
+  "loadEarlierMessages": "加载更早消息",
+  "loadingEarlierMessages": "正在加载更早消息",
   "networkRetrying": "网络连接中断，正在重试",
   "imageAlt": "[图片：{alt}]",
   "blockedNonHttpsImage": "[已阻止非 HTTPS 图片]",

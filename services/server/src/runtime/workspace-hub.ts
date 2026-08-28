@@ -2,10 +2,12 @@ import type { Socket } from "node:net";
 import type { ServerConfig } from "../config.js";
 import { EventJournal } from "../event-journal.js";
 import { HttpError, RuntimeError } from "../errors.js";
-import { appendProjectedMessage, projectSnapshotMessages } from "../message-projection.js";
+import { appendProjectedMessage, projectSnapshotMessagePage } from "../message-projection.js";
 import { secretsEqual } from "../security.js";
 import type {
   ApprovalInput,
+  MessagePage,
+  MessagePageRequest,
   MessageSnapshot,
   PromptInput,
   RuntimeState,
@@ -141,33 +143,45 @@ export class WorkspaceHub {
     return connection;
   }
 
-  async getMessages(workspaceId: string, sessionId: string): Promise<MessageSnapshot> {
+  async getMessages(
+    workspaceId: string,
+    sessionId: string,
+    request: MessagePageRequest,
+  ): Promise<MessageSnapshot> {
     const workspace = await this.#loadWorkspace(workspaceId);
     await this.#reconcileSessions(workspace);
     const session = workspace.sessions.get(sessionId);
     if (!session) throw new HttpError(404, "session_not_found", "TSPi session was not found");
-    if (isLive(session)) {
+    if (isLive(session) && request.before === undefined) {
       if (!session.snapshot || !session.snapshotEventId) {
         throw new HttpError(409, "bridge_connecting", "TSPi bridge has not published a session snapshot yet");
       }
       return {
         sessionId,
         sessionRevision: session.journal.epoch,
-        messages: session.snapshot.messages,
+        ...messagePageFromSnapshot(session.snapshot, request.limit),
         lastEventId: session.snapshotEventId,
       };
     }
     if (!session.persisted) {
+      if (request.before !== undefined) {
+        throw new HttpError(
+          409,
+          "session_history_unavailable",
+          "Earlier session history is not available on disk",
+        );
+      }
       throw new HttpError(409, "session_offline", "Start this TSPi session with --phone before using it");
     }
-    const messages = await this.#registry.readPersistedSessionMessages(
+    const page = await this.#registry.readPersistedSessionMessages(
       workspace.workspace,
       session.persisted,
+      request,
     );
     return {
       sessionId,
       sessionRevision: session.journal.epoch,
-      messages,
+      ...page,
       lastEventId: session.journal.latestId,
     };
   }
@@ -280,10 +294,26 @@ export class WorkspaceHub {
       if (bridgeRecord.snapshot.sessionId !== session.sessionId) {
         throw new Error("Bridge snapshot sessionId did not match registration");
       }
-      const snapshot = {
+      const projected = projectSnapshotMessagePage(
+        bridgeRecord.snapshot.messages,
+        bridgeRecord.snapshot.messageIds,
+      );
+      const hasMore = Boolean(projected.messageIds?.length)
+        && (bridgeRecord.snapshot.hasMore === true || projected.omitted > 0);
+      const snapshot: SessionSnapshot = {
         ...bridgeRecord.snapshot,
-        messages: projectSnapshotMessages(bridgeRecord.snapshot.messages),
+        messages: projected.messages,
       };
+      if (projected.messageIds !== undefined) {
+        snapshot.messageIds = projected.messageIds;
+        snapshot.hasMore = hasMore;
+        if (hasMore && projected.messageIds[0]) snapshot.nextBefore = projected.messageIds[0];
+        else delete snapshot.nextBefore;
+      } else {
+        delete snapshot.messageIds;
+        delete snapshot.hasMore;
+        delete snapshot.nextBefore;
+      }
       session.snapshot = snapshot;
       session.state = snapshot.isStreaming ? "running" : "idle";
       session.snapshotEventId = session.journal.publish(
@@ -327,6 +357,9 @@ export class WorkspaceHub {
       const message = messageFromEndEvent(bridgeRecord.payload);
       if (message !== undefined) {
         session.snapshot.messages = appendProjectedMessage(session.snapshot.messages, message);
+        delete session.snapshot.messageIds;
+        delete session.snapshot.hasMore;
+        delete session.snapshot.nextBefore;
       }
     }
     const event = session.journal.publish(bridgeRecord.eventType, bridgeRecord.payload, identity);
@@ -551,6 +584,19 @@ function aggregateState(states: RuntimeState[]): RuntimeState {
 function messageFromEndEvent(payload: unknown): unknown | undefined {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
   return (payload as Record<string, unknown>).message;
+}
+
+function messagePageFromSnapshot(snapshot: SessionSnapshot, limit: number): MessagePage {
+  const messages = snapshot.messages.slice(-limit);
+  if (!snapshot.messageIds) return { messages, hasMore: false };
+  const messageIds = snapshot.messageIds.slice(-limit);
+  const hasMore = snapshot.hasMore === true || messages.length < snapshot.messages.length;
+  return {
+    messages,
+    messageIds,
+    hasMore,
+    ...(hasMore && messageIds[0] ? { nextBefore: messageIds[0] } : {}),
+  };
 }
 
 function isLive(session: SessionRecord): boolean {

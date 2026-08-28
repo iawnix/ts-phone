@@ -1,11 +1,40 @@
 export const MAX_SNAPSHOT_MESSAGES = 500;
 export const MAX_SNAPSHOT_BYTES = 6 * 1024 * 1024;
 
+export interface ProjectedMessageRecord {
+  id: string;
+  message: unknown;
+}
+
 export function projectSnapshotMessages(messages: unknown[]): unknown[] {
   return boundProjectedMessages(messages.flatMap((message) => {
     const projected = projectMessage(message);
     return projected === undefined ? [] : [projected];
   }));
+}
+
+export function projectSnapshotMessagePage(
+  messages: unknown[],
+  messageIds?: string[],
+): { messages: unknown[]; messageIds?: string[]; omitted: number } {
+  if (messageIds === undefined) {
+    const projected = messages.flatMap((message) => {
+      const value = projectMessage(message);
+      return value === undefined ? [] : [value];
+    });
+    const bounded = boundProjectedMessages(projected);
+    return { messages: bounded, omitted: projected.length - bounded.length };
+  }
+  const projected = messages.flatMap((message, index) => {
+    const value = projectMessage(message);
+    return value === undefined ? [] : [{ id: messageIds[index]!, message: value }];
+  });
+  const bounded = boundProjectedMessageRecords(projected);
+  return {
+    messages: bounded.records.map((record) => record.message),
+    messageIds: bounded.records.map((record) => record.id),
+    omitted: bounded.omitted,
+  };
 }
 
 export function appendProjectedMessage(messages: unknown[], message: unknown): unknown[] {
@@ -16,11 +45,29 @@ export function appendProjectedMessage(messages: unknown[], message: unknown): u
 }
 
 export function boundProjectedMessages(messages: unknown[]): unknown[] {
-  const bounded = messages.slice(-MAX_SNAPSHOT_MESSAGES);
-  while (bounded.length > 0 && Buffer.byteLength(JSON.stringify(bounded)) > MAX_SNAPSHOT_BYTES) {
-    bounded.shift();
+  return boundProjectedMessageRecords(messages.map((message, index) => ({
+    id: String(index),
+    message,
+  }))).records.map((record) => record.message);
+}
+
+export function boundProjectedMessageRecords(
+  records: readonly ProjectedMessageRecord[],
+  limit = MAX_SNAPSHOT_MESSAGES,
+): { records: ProjectedMessageRecord[]; omitted: number } {
+  const maximum = Math.max(0, Math.min(limit, records.length));
+  let start = records.length;
+  let serializedBytes = 2; // JSON array brackets.
+  while (start > records.length - maximum) {
+    const record = records[start - 1]!;
+    const messageBytes = Buffer.byteLength(JSON.stringify(record.message) ?? "null");
+    const nextBytes = serializedBytes + messageBytes + (start < records.length ? 1 : 0);
+    if (nextBytes > MAX_SNAPSHOT_BYTES) break;
+    serializedBytes = nextBytes;
+    start -= 1;
   }
-  return bounded;
+  const bounded = records.slice(start);
+  return { records: bounded, omitted: records.length - bounded.length };
 }
 
 // Keep this projection aligned with the TSPi ts-phone bridge. It is the

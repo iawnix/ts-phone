@@ -13,7 +13,8 @@ Mobile version 0.8.5 distinguishes live, observer, recovery, and history-only
 sessions. It prioritizes active sessions, loads offline history, keeps sending
 disabled, refreshes the snapshot after app resume, and switches to the
 Bridge-reported access mode when the same session reconnects. Long timelines
-offer direct navigation between the session start and latest message. The
+load earlier disk-backed pages on demand, preserve the visible scroll anchor,
+and offer direct navigation between the loaded history and latest message. The
 command-style conversation header, adaptive iOS-style composer, node-based
 workspace identity, compact workspace status, measured latency and last-sync
 metadata, restrained glass hierarchy,

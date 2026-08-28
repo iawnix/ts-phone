@@ -111,6 +111,48 @@ void main() {
     final snapshot = await api.getMessages('ts_001', 'session-test');
     expect(snapshot.messages, hasLength(1));
     expect(snapshot.lastEventId, 'epoch:12');
+    expect(snapshot.messageIds, isNull);
+    expect(snapshot.hasMore, isFalse);
+  });
+
+  test('requests and parses an earlier message page', () async {
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        expect(request.url.queryParameters, <String, String>{
+          'before': '0000000a',
+          'limit': '200',
+        });
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'apiVersion': 'ts-phone-api/3',
+            'data': <String, Object?>{
+              'sessionId': 'session-test',
+              'sessionRevision': '11111111-1111-4111-8111-111111111111',
+              'messages': <Object?>[
+                <String, Object?>{'role': 'user', 'content': 'earlier'},
+              ],
+              'messageIds': <String>['00000009'],
+              'hasMore': true,
+              'nextBefore': '00000009',
+              'lastEventId': 'epoch:12',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    final page = await api.getMessages(
+      'ts_001',
+      'session-test',
+      before: '0000000a',
+      limit: 200,
+    );
+    expect(page.messageIds, <String>['00000009']);
+    expect(page.hasMore, isTrue);
+    expect(page.nextBefore, '00000009');
   });
 
   test('parses optional disk-history session capabilities', () async {

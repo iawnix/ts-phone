@@ -93,7 +93,10 @@ buffer growth and can recover from the session snapshot.
 Pi session JSONL remains authoritative. At reconciliation time, validated disk
 sessions are added to the broker map even without a Bridge. An offline message
 request reads and projects that JSONL on demand; a live request uses the Bridge
-snapshot. Both paths return at most 500 projected messages and six MiB.
+snapshot. Each response page returns at most 500 projected messages and six
+MiB. Stable Pi message-entry IDs form an opaque `before` cursor, so the phone
+can prepend older disk-backed pages without loading raw JSONL or conflating
+tool results with conversation turns.
 Completed live messages advance the snapshot checkpoint before agent
 settlement, so a long tool turn does not make already completed output
 disappear.

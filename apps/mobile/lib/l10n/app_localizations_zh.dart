@@ -503,6 +503,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get invalidHistoryMessage => '收到一个当前客户端无法解析的历史消息。';
 
   @override
+  String get loadEarlierMessages => '加载更早消息';
+
+  @override
+  String get loadingEarlierMessages => '正在加载更早消息';
+
+  @override
   String get networkRetrying => '网络连接中断，正在重试';
 
   @override

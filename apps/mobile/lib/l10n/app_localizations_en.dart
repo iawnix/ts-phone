@@ -540,6 +540,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'A historical message could not be read by this client.';
 
   @override
+  String get loadEarlierMessages => 'Load earlier messages';
+
+  @override
+  String get loadingEarlierMessages => 'Loading earlier messages';
+
+  @override
   String get networkRetrying => 'Network connection interrupted. Retrying';
 
   @override

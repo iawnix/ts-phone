@@ -1034,6 +1034,18 @@ abstract class AppLocalizations {
   /// **'A historical message could not be read by this client.'**
   String get invalidHistoryMessage;
 
+  /// No description provided for @loadEarlierMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Load earlier messages'**
+  String get loadEarlierMessages;
+
+  /// No description provided for @loadingEarlierMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading earlier messages'**
+  String get loadingEarlierMessages;
+
   /// No description provided for @networkRetrying.
   ///
   /// In en, this message translates to:
