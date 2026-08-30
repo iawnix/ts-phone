@@ -598,6 +598,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get timelineConfiguration => 'Configuration';
 
   @override
+  String get timelineModelChange => 'Model changed';
+
+  @override
+  String get timelineThinkingLevelChange => 'Thinking level changed';
+
+  @override
+  String get timelineSessionInfo => 'Session information';
+
+  @override
   String get timelineContext => 'Context';
 
   @override

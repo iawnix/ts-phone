@@ -16,6 +16,8 @@ import 'package:ts_phone/models/app_theme_preference.dart';
 import 'package:ts_phone/models/app_locale_preference.dart';
 import 'package:ts_phone/models/connection_settings.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
+import 'package:ts_phone/models/chat_message.dart';
+import 'package:ts_phone/widgets/chat_message_view.dart';
 import 'package:ts_phone/widgets/markdown_message.dart';
 import 'package:ts_phone/widgets/presentation.dart';
 import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
@@ -101,6 +103,42 @@ void main() {
     expect(find.text('claim_2'), findsOneWidget);
     expect(find.byType(TsTerminalBlock), findsOneWidget);
     expect(find.text('recalculation complete'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows a complete long tool name without ellipsis', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const toolName = 'ts_workspace_decision_draft';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(
+          body: ChatMessageView(
+            message: ChatMessage(
+              role: ChatRole.assistant,
+              text: '',
+              tools: <ToolDetail>[
+                ToolDetail(title: toolName, body: '{"valid": true}'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = tester.widget<Text>(find.text(toolName));
+    expect(title.maxLines, isNull);
+    expect(title.overflow, isNull);
+    expect(find.text('就绪'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

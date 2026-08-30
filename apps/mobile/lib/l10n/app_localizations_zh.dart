@@ -561,6 +561,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get timelineConfiguration => '会话配置';
 
   @override
+  String get timelineModelChange => '模型切换';
+
+  @override
+  String get timelineThinkingLevelChange => '思考强度切换';
+
+  @override
+  String get timelineSessionInfo => '会话信息';
+
+  @override
   String get timelineContext => '上下文';
 
   @override

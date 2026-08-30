@@ -64,6 +64,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _sending = false;
   bool _aborting = false;
   bool _hasDraft = false;
+  bool _initialTimelinePositioned = false;
 
   @override
   void initState() {
@@ -149,6 +150,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         if ((target - position.pixels).abs() > 0.5) {
           _scroll.jumpTo(target);
         }
+      }
+      if (!_initialTimelinePositioned &&
+          (_controller.messages.isNotEmpty ||
+              _controller.timelineItems.isNotEmpty ||
+              _controller.hasStreamingText)) {
+        setState(() => _initialTimelinePositioned = true);
       }
       _updateTimelineNavigationVisibility(position);
     });
@@ -586,10 +593,21 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       }
       return Center(child: Text(context.l10n.noMessages));
     }
+    final positioningInitialTimeline = !_initialTimelinePositioned;
     return Stack(
+      fit: StackFit.expand,
       children: <Widget>[
-        timeline,
-        if (_showJumpToStart || _showJumpToLatest)
+        IgnorePointer(
+          ignoring: positioningInitialTimeline,
+          child: Opacity(
+            key: const ValueKey<String>('initial-timeline-positioning'),
+            opacity: positioningInitialTimeline ? 0 : 1,
+            child: timeline,
+          ),
+        ),
+        if (positioningInitialTimeline) const _SessionConnectingView(),
+        if (!positioningInitialTimeline &&
+            (_showJumpToStart || _showJumpToLatest))
           Positioned(right: 12, bottom: 12, child: _buildTimelineNavigation()),
       ],
     );
@@ -1449,7 +1467,7 @@ class _StatusBand extends StatelessWidget {
       icon: Icons.monitor_heart_outlined,
       message: values.join(' · '),
       tone: TsInfoTone.neutral,
-      maxLines: 2,
+      maxLines: null,
     );
   }
 }

@@ -198,7 +198,7 @@ class TimelineActivityView extends StatelessWidget {
     ].where((value) => value.isNotEmpty).map(_humanizeIdentifier).join(' · ');
     final primaryDetail = roleOperation.isNotEmpty
         ? roleOperation
-        : _humanizeIdentifier(activity.title);
+        : _activityTitleLabel(context, activity.title);
     final metadata = <String>[
       ...activity.nodeRefs,
       if (activity.durationMs case final duration?)
@@ -240,8 +240,6 @@ class TimelineActivityView extends StatelessWidget {
                             _activityCategoryLabel(context, activity.category),
                             if (primaryDetail.isNotEmpty) primaryDetail,
                           ].join(' · '),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.labelLarge,
                         ),
                       ),
@@ -310,3 +308,11 @@ String _humanizeIdentifier(String value) {
   if (normalized.isEmpty) return value;
   return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
 }
+
+String _activityTitleLabel(BuildContext context, String value) =>
+    switch (value) {
+      'model_change' => context.l10n.timelineModelChange,
+      'thinking_level_change' => context.l10n.timelineThinkingLevelChange,
+      'session_info' => context.l10n.timelineSessionInfo,
+      _ => _humanizeIdentifier(value),
+    };

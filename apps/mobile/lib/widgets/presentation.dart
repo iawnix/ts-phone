@@ -256,7 +256,7 @@ class TsInfoBand extends StatelessWidget {
   final String message;
   final TsInfoTone tone;
   final Widget? action;
-  final int maxLines;
+  final int? maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -307,7 +307,7 @@ class TsInfoBand extends StatelessWidget {
               child: Text(
                 message,
                 maxLines: maxLines,
-                overflow: TextOverflow.ellipsis,
+                overflow: maxLines == null ? null : TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: foreground),

@@ -961,6 +961,71 @@ void main() {
     },
   );
 
+  testWidgets('positions initial timeline before revealing history', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final response = Completer<TsPhoneTimelineSnapshot>();
+    final gateway = UiFakeGateway(
+      timelineResponder: ({before, branch}) => response.future,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: const SessionSummary(
+            sessionId: 'session-test',
+            sessionRevision: '11111111-1111-4111-8111-111111111111',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            accessMode: SessionAccessMode.controller,
+            historyAvailable: true,
+            capabilities: <String>{timelineCapability},
+          ),
+          gateway: gateway,
+        ),
+      ),
+    );
+    response.complete(_positioningTimelineSnapshot());
+    await tester.pump();
+
+    final hiddenTimeline = tester.widget<Opacity>(
+      find.byKey(const ValueKey<String>('initial-timeline-positioning')),
+    );
+    final list = tester.widget<ListView>(
+      find.byKey(const ValueKey<String>('chat-message-list')),
+    );
+    expect(hiddenTimeline.opacity, 0);
+    expect(
+      list.controller!.position.pixels,
+      list.controller!.position.maxScrollExtent,
+    );
+
+    await tester.pump();
+    expect(
+      tester
+          .widget<Opacity>(
+            find.byKey(const ValueKey<String>('initial-timeline-positioning')),
+          )
+          .opacity,
+      1,
+    );
+    expect(find.textContaining('会话配置 · 模型切换'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('approval panel keeps structured context and retries in place', (
     WidgetTester tester,
   ) async {
@@ -1537,5 +1602,46 @@ TsPhoneTimelineSnapshot _uiTimelineSnapshot({
       if (!inactive) promptCapability,
       if (!inactive) abortCapability,
     },
+  );
+}
+
+TsPhoneTimelineSnapshot _positioningTimelineSnapshot() {
+  final items = List<SessionTimelineItem>.generate(
+    40,
+    (index) => TimelineActivityItem(
+      id: (index + 1).toRadixString(16).padLeft(8, '0'),
+      activity: const TimelineActivity(
+        category: TimelineActivityCategory.configuration,
+        status: TimelineActivityStatus.recorded,
+        title: 'model_change',
+        detail: 'gpt-5.6-sol',
+      ),
+    ),
+  );
+  return TsPhoneTimelineSnapshot(
+    sessionId: 'session-test',
+    sessionRevision: '11111111-1111-4111-8111-111111111111',
+    items: items,
+    history: const TimelineHistorySummary(
+      totalItems: 40,
+      messageCount: 0,
+      activityCount: 40,
+      turnCount: 0,
+      activeBranchId: '00000040',
+      selectedBranchId: '00000040',
+      branches: <TimelineBranchSummary>[
+        TimelineBranchSummary(
+          id: '00000040',
+          active: true,
+          itemCount: 40,
+          messageCount: 0,
+          activityCount: 40,
+          turnCount: 0,
+        ),
+      ],
+    ),
+    hasMore: false,
+    lastEventId: 'epoch:0',
+    capabilities: const <String>{timelineCapability},
   );
 }

@@ -1130,6 +1130,24 @@ abstract class AppLocalizations {
   /// **'Configuration'**
   String get timelineConfiguration;
 
+  /// No description provided for @timelineModelChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Model changed'**
+  String get timelineModelChange;
+
+  /// No description provided for @timelineThinkingLevelChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking level changed'**
+  String get timelineThinkingLevelChange;
+
+  /// No description provided for @timelineSessionInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Session information'**
+  String get timelineSessionInfo;
+
   /// No description provided for @timelineContext.
   ///
   /// In en, this message translates to:

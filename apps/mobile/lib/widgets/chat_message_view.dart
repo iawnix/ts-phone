@@ -325,13 +325,16 @@ class _ToolDetailView extends StatelessWidget {
             color: stateColor,
           ),
           title: TsMonoText(
-            '$title / $stateLabel',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            title,
             style: theme.textTheme.labelMedium?.copyWith(
               color: terminal.terminalForeground,
               fontWeight: FontWeight.w600,
             ),
+          ),
+          subtitle: Text(
+            stateLabel,
+            maxLines: 1,
+            style: theme.textTheme.labelSmall?.copyWith(color: stateColor),
           ),
           childrenPadding: const EdgeInsets.fromLTRB(
             TsPhoneSpacing.medium,
