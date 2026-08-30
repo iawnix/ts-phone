@@ -509,6 +509,80 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loadingEarlierMessages => '正在加载更早消息';
 
   @override
+  String get loadAllHistory => '加载全部历史';
+
+  @override
+  String get loadingAllHistory => '正在加载全部历史';
+
+  @override
+  String timelineProgress(int loaded, int total) {
+    return '已载入 $loaded / $total 项';
+  }
+
+  @override
+  String timelineTurns(int count) {
+    return '$count 个 Turn';
+  }
+
+  @override
+  String timelineActivities(int count) {
+    return '$count 条活动';
+  }
+
+  @override
+  String get timelineBranches => '会话分支';
+
+  @override
+  String get timelineActiveBranch => '当前分支';
+
+  @override
+  String timelineBranchLabel(String shortId) {
+    return '分支 $shortId';
+  }
+
+  @override
+  String timelineTurnLabel(int number) {
+    return 'Turn $number';
+  }
+
+  @override
+  String get timelineSubagent => '子代理';
+
+  @override
+  String get timelineResearch => '研究操作';
+
+  @override
+  String get timelineReview => '独立审查';
+
+  @override
+  String get timelineWorkspace => '工作区';
+
+  @override
+  String get timelineConfiguration => '会话配置';
+
+  @override
+  String get timelineContext => '上下文';
+
+  @override
+  String get timelineSystem => '系统记录';
+
+  @override
+  String get timelineFailed => '失败';
+
+  @override
+  String timelineDuration(String seconds) {
+    return '$seconds 秒';
+  }
+
+  @override
+  String timelineTokens(int count) {
+    return '$count tokens';
+  }
+
+  @override
+  String get composerHistoricalBranch => '历史分支只读';
+
+  @override
   String get networkRetrying => '网络连接中断，正在重试';
 
   @override

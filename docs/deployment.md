@@ -12,18 +12,19 @@ The application and FRP data ports remain on loopback. The Aliyun security
 group must not expose 22113; only Nginx 443 is public. FRP's control port should
 be restricted to known clients.
 
-Server version 0.4.1 restores validated disk sessions and serves bounded
-read-only history without a live Bridge. Mobile version 0.8.5 displays that
-history, prioritizes active sessions, and switches to live capabilities when
-the same Bridge reconnects.
+Server version 0.5.0 restores validated disk sessions and serves both the
+compatible message history and a capability-advertised structured research
+timeline. Mobile version 0.9.0 displays bounded TS activities and Pi branches,
+loads histories up to 2000 items automatically, and switches to live
+capabilities when the matching Bridge reconnects.
 Mobile and server release numbers are independent; compatibility is governed by
 the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.4.1 | API v3, Events v3, Bridge v2, offline disk history |
+| TS Phone server | 0.5.0 | API v3, Events v3, Bridge v2, structured timeline |
 | TSPi package | 0.11.0 | Bridge v2 and controller/observer launch policy |
-| Mobile app | 0.8.5+27 | API v3, zh/en UI, text-only app composer |
+| Mobile app | 0.9.0+28 | API v3, zh/en UI, timeline branches and activities |
 
 Do not mix the old Bridge v1 or API v2 components with this set.
 
@@ -225,6 +226,10 @@ In the app, verify:
 8. A stale revision causes resynchronization instead of command delivery.
 9. Stop a session and verify its history remains readable but cannot send.
 10. Restart TS Phone and verify persisted sessions return before TSPi starts.
+11. Open a research session with TS activities and verify its loaded count
+    reaches the total count when the total is at most 2000.
+12. Select a historical Pi branch and verify the composer becomes read-only,
+    then return to the current branch and verify sending is restored.
 
 Use harmless read-only prompts for the first transport checks.
 

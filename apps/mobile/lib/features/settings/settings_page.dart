@@ -322,13 +322,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       _DiagnosticRow(
                         icon: Icons.phone_iphone_rounded,
                         label: l10n.client,
-                        value: '0.8.5',
+                        value: '0.9.0',
                       ),
                       const _SettingsDivider(),
                       _DiagnosticRow(
                         icon: Icons.build_outlined,
                         label: l10n.build,
-                        value: '27',
+                        value: '28',
                       ),
                     ],
                   ),

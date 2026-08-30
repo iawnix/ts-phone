@@ -20,8 +20,8 @@ installation, not to an immutable component release.
 ## Android Release
 
 - App: TS Phone
-- App version: 0.8.5
-- Build number: 27
+- App version: 0.9.0
+- Build number: 28
 - Package: xyz.iawnix.ts_phone
 - Minimum Android SDK: 24
 - Target Android SDK: 36
@@ -38,9 +38,11 @@ installation, not to an immutable component release.
   command-style session context, inline code chips, terminal blocks, on-demand
   connection diagnostics, offline read-only timelines without a redundant
   history banner, dynamic controller/observer takeover, adaptive iOS-style
-  composer, bounded synchronization, direct navigation between the start and
-  latest message, adaptive approval panels, large-text support, and the TSPi
-  character brand mark
+  composer, structured Turn/activity rows, Pi branch selection, automatic
+  complete history up to 2000 items, explicit load-all for larger sessions,
+  bounded synchronization, direct navigation between the start and latest
+  message, adaptive approval panels, large-text support, and the TSPi character
+  brand mark
 - Branding source: apps/mobile/assets/branding/ts-phone-logo-source.png
 - Derived app assets: ts-phone-icon.png, ts-phone-mark.png, and
   ts-phone-mark-monochrome.png
@@ -53,13 +55,13 @@ installation, not to an immutable component release.
 
 | Artifact | ABI / purpose | Version code | Size (bytes) | SHA-256 |
 | --- | --- | ---: | ---: | --- |
-| `ts-phone-v0.8.5-build27-arm64-v8a-release.apk` | arm64-v8a phones | 2027 | 21066319 | `70092e69c17540e483b6133c28f754e7d12ee18d6b9f57d0b83cb2114221eed0` |
-| `ts-phone-v0.8.5-build27-armeabi-v7a-release.apk` | 32-bit ARM phones | 1027 | 18757553 | `361bac28fdd595bf2dcf5ba38cfbd078cecf7f75b4b292fefe42f813cc6f4a66` |
-| `ts-phone-v0.8.5-build27-x86_64-release.apk` | x86_64 emulator/device | 4027 | 22523438 | `a05b8d178690f1d3d9607da60495b239dfc60d1b43d6cc96cbb4375595c9e1fb` |
-| `ts-phone-v0.8.5-build27-release.aab` | Store bundle | 27 | 57172759 | `4f62e9bf7a84f6191e8726b4ba3a134d601738c97ae11680c3826bec00ae60d6` |
+| `ts-phone-v0.9.0-build28-arm64-v8a-release.apk` | arm64-v8a phones | 2028 | 21198295 | `fd3f4530472839f310200df10a529ada0964a6c90a3c3eadb5d55c1e0f77f7b7` |
+| `ts-phone-v0.9.0-build28-armeabi-v7a-release.apk` | 32-bit ARM phones | 1028 | 18922297 | `16323205359fa5c15c1e85976ec35c8f689179bc03ad1ff367b53f1d63659631` |
+| `ts-phone-v0.9.0-build28-x86_64-release.apk` | x86_64 emulator/device | 4028 | 22655414 | `c6d8a7a60433eece576409d62b882634dba3436417295402a09dd5962485166b` |
+| `ts-phone-v0.9.0-build28-release.aab` | Store bundle | 28 | 57547044 | `e490f0dd5517a5db4635e00020e3215ee682dccb2ec43d692d3a400878379634` |
 
 Flutter adds an ABI-specific prefix to split APK version codes. All artifacts
-still represent app version `0.8.5+27`. The APK manifests are not debuggable.
+still represent app version `0.9.0+28`. The APK manifests are not debuggable.
 They request only `android.permission.INTERNET` and Android's package-scoped
 dynamic-receiver permission. No microphone, Bluetooth, or speech-recognition
 declaration is present.
@@ -68,11 +70,11 @@ Validation commands:
 
 ~~~bash
 apps/mobile/tool/build_release_android.sh
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/ts-phone-v0.8.5-build27-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/ts-phone-v0.8.5-build27-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/ts-phone-v0.8.5-build27-arm64-v8a-release.apk
-/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/ts-phone-v0.8.5-build27-release.aab
-sha256sum dist/ts-phone-v0.8.5-build27-*
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/ts-phone-v0.9.0-build28-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/ts-phone-v0.9.0-build28-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/ts-phone-v0.9.0-build28-arm64-v8a-release.apk
+/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/ts-phone-v0.9.0-build28-release.aab
+sha256sum dist/ts-phone-v0.9.0-build28-*
 ~~~
 
 The generated Flutter outputs and archived artifacts were compared byte for
@@ -80,7 +82,7 @@ byte. Install the `arm64-v8a` APK on typical current Android phones. A previous
 debug/profile installation must be uninstalled first because its signing
 certificate differs; uninstalling clears its local token and settings.
 
-The APK manifest reports version `0.8.5` and the expected ABI-prefixed version
+The APK manifest reports version `0.9.0` and the expected ABI-prefixed version
 code. All split APKs passed v2 signature verification. The AAB is signed by the
 same release certificate and `jarsigner -verify` exited successfully; JDK 21
 reported the expected self-signed/no-timestamp warnings and JarInputStream
@@ -88,8 +90,9 @@ consistency warnings for the Android bundle layout. Standalone `bundletool
 validate` was not run because only Gradle's non-executable bundletool library
 jar is available locally. The Gradle `bundleRelease` task completed normally.
 
-The previous production-signed `0.8.2`, `0.8.3`, and `0.8.4` artifacts remain
-in `dist/` for rollback. No debug or profile artifact was produced for `0.8.5`.
+The previous production-signed `0.8.2`, `0.8.3`, `0.8.4`, and `0.8.5`
+artifacts remain in `dist/` for rollback. No debug or profile artifact was
+produced for `0.9.0`.
 
 ## iOS
 

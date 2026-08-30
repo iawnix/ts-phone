@@ -16,6 +16,16 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     const unauthorized = await fetch(`${fixture.baseUrl}/api/v3/workspaces`);
     assert.equal(unauthorized.status, 401);
 
+    const versionResponse = await api(fixture, "/api/v3/version");
+    assert.equal(versionResponse.status, 200);
+    const version = await versionResponse.json() as {
+      data: { apiVersion: string; serviceVersion: string };
+    };
+    assert.deepEqual(version.data, {
+      apiVersion: "ts-phone-api/3",
+      serviceVersion: "0.5.0",
+    });
+
     const offline = await api(fixture, "/api/v3/workspaces");
     assert.equal(offline.status, 200);
     assert.match(await offline.text(), /offline/);
@@ -75,6 +85,15 @@ test("service restart restores disk history as a read-only session", async () =>
     assert.equal(restored.historyAvailable, true);
     assert.equal(restored.historyOnly, true);
     assert.equal(restored.canPrompt, false);
+    assert.deepEqual(restored.capabilities, [
+      "history.messages",
+      "activity.tools",
+      "history.timeline",
+      "history.pagination",
+      "history.branches",
+      "activity.subagents",
+      "activity.research",
+    ]);
 
     const snapshotResponse = await api(
       fixture,
@@ -85,6 +104,35 @@ test("service restart restores disk history as a read-only session", async () =>
     assert.match(snapshotText, /historical prompt/);
     assert.match(snapshotText, /historical reply/);
     assert.doesNotMatch(snapshotText, /private-provider|private reasoning|usage/);
+
+    const timelineResponse = await api(
+      fixture,
+      `/api/v3/workspaces/ts_001/sessions/${sessionId}/timeline?limit=1`,
+    );
+    assert.equal(timelineResponse.status, 200);
+    const timelinePayload = await timelineResponse.json() as {
+      data: {
+        schemaVersion: string;
+        items: Array<{ id: string }>;
+        history: { totalItems: number; messageCount: number; turnCount: number };
+        hasMore: boolean;
+        nextBefore?: string;
+      };
+    };
+    assert.equal(timelinePayload.data.schemaVersion, "ts-phone-timeline/1");
+    assert.equal(timelinePayload.data.items.length, 1);
+    assert.equal(timelinePayload.data.history.totalItems, 2);
+    assert.equal(timelinePayload.data.history.messageCount, 2);
+    assert.equal(timelinePayload.data.history.turnCount, 1);
+    assert.equal(timelinePayload.data.hasMore, true);
+    assert.equal(timelinePayload.data.nextBefore, timelinePayload.data.items[0]!.id);
+
+    const invalidTimelineQuery = await api(
+      fixture,
+      `/api/v3/workspaces/ts_001/sessions/${sessionId}/timeline?unknown=true`,
+    );
+    assert.equal(invalidTimelineQuery.status, 400);
+    assert.match(await invalidTimelineQuery.text(), /invalid_timeline_query/);
 
     const promptResponse = await api(
       fixture,
@@ -107,6 +155,67 @@ test("service restart restores disk history as a read-only session", async () =>
     const afterDeletePayload = await afterDelete.json() as { data: unknown[] };
     assert.deepEqual(afterDeletePayload.data, []);
   } finally {
+    await fixture.application.close();
+  }
+});
+
+test("a live timeline exposes commands only on its active branch", async () => {
+  const fixture = await startFixture();
+  try {
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
+    await waitForState(fixture, "idle");
+    const records = [{
+      type: "session",
+      version: 3,
+      id: "session-test",
+      timestamp: new Date().toISOString(),
+      cwd: fixture.workspace,
+    }, {
+      type: "message",
+      id: "00000001",
+      parentId: null,
+      message: { role: "user", content: "root", timestamp: 1 },
+    }, {
+      type: "message",
+      id: "00000002",
+      parentId: "00000001",
+      message: { role: "assistant", content: "inactive", timestamp: 2 },
+    }, {
+      type: "message",
+      id: "00000003",
+      parentId: "00000001",
+      message: { role: "assistant", content: "active", timestamp: 3 },
+    }];
+    await writeFile(
+      fixture.bridge.sessionFile,
+      `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+    );
+
+    const activeResponse = await api(
+      fixture,
+      "/api/v3/workspaces/ts_001/sessions/session-test/timeline",
+    );
+    assert.equal(activeResponse.status, 200);
+    const active = await activeResponse.json() as {
+      data: { capabilities: string[]; history: { selectedBranchId?: string } };
+    };
+    assert.equal(active.data.history.selectedBranchId, "00000003");
+    assert.equal(active.data.capabilities.includes("command.prompt"), true);
+    assert.equal(active.data.capabilities.includes("command.abort"), true);
+
+    const inactiveResponse = await api(
+      fixture,
+      "/api/v3/workspaces/ts_001/sessions/session-test/timeline?branch=00000002",
+    );
+    assert.equal(inactiveResponse.status, 200);
+    const inactive = await inactiveResponse.json() as {
+      data: { capabilities: string[]; history: { selectedBranchId?: string } };
+    };
+    assert.equal(inactive.data.history.selectedBranchId, "00000002");
+    assert.equal(inactive.data.capabilities.includes("command.prompt"), false);
+    assert.equal(inactive.data.capabilities.includes("command.abort"), false);
+  } finally {
+    await fixture.bridge?.close();
     await fixture.application.close();
   }
 });

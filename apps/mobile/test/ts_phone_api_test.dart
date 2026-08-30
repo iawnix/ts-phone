@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/models/connection_settings.dart';
+import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 
 void main() {
@@ -185,6 +186,90 @@ void main() {
     expect(session.historyAvailable, isTrue);
     expect(session.historyOnly, isTrue);
     expect(session.canPrompt, isFalse);
+  });
+
+  test('requests and parses a structured timeline page', () async {
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        expect(request.url.path, endsWith('/sessions/session-test/timeline'));
+        expect(request.url.queryParameters, <String, String>{
+          'before': '0000000a',
+          'limit': '500',
+          'branch': '0000000f',
+        });
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'apiVersion': 'ts-phone-api/3',
+            'data': <String, Object?>{
+              'schemaVersion': 'ts-phone-timeline/1',
+              'sessionId': 'session-test',
+              'sessionRevision': '11111111-1111-4111-8111-111111111111',
+              'items': <Object?>[
+                <String, Object?>{
+                  'id': '00000009',
+                  'turnId': '00000001',
+                  'kind': 'activity',
+                  'activity': <String, Object?>{
+                    'category': 'subagent',
+                    'status': 'completed',
+                    'title': 'subagent_run',
+                    'role': 'compute',
+                    'operation': 'inspect',
+                    'nodeRefs': <String>['node_1'],
+                    'durationMs': 1200,
+                    'totalTokens': 42,
+                  },
+                },
+              ],
+              'history': <String, Object?>{
+                'totalItems': 3,
+                'messageCount': 2,
+                'activityCount': 1,
+                'turnCount': 1,
+                'branchCount': 1,
+                'activeBranchId': '0000000f',
+                'selectedBranchId': '0000000f',
+                'branches': <Object?>[
+                  <String, Object?>{
+                    'id': '0000000f',
+                    'active': true,
+                    'itemCount': 3,
+                    'messageCount': 2,
+                    'activityCount': 1,
+                    'turnCount': 1,
+                  },
+                ],
+              },
+              'hasMore': true,
+              'nextBefore': '00000009',
+              'lastEventId': 'epoch:12',
+              'capabilities': <String>[
+                timelineCapability,
+                timelinePaginationCapability,
+              ],
+            },
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    final snapshot = await api.getTimeline(
+      'ts_001',
+      'session-test',
+      before: '0000000a',
+      limit: 500,
+      branch: '0000000f',
+    );
+    expect(snapshot.items.single, isA<TimelineActivityItem>());
+    final activity = (snapshot.items.single as TimelineActivityItem).activity;
+    expect(activity.role, 'compute');
+    expect(activity.totalTokens, 42);
+    expect(snapshot.history.totalItems, 3);
+    expect(snapshot.history.selectedBranchIsActive, isTrue);
+    expect(snapshot.hasMore, isTrue);
   });
 
   test('does not follow redirects carrying credentials', () async {

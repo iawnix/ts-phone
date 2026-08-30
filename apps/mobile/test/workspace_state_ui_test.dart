@@ -7,7 +7,9 @@ import 'package:ts_phone/features/chat/chat_page.dart';
 import 'package:ts_phone/features/sessions/session_list_page.dart';
 import 'package:ts_phone/features/workspaces/workspace_list_page.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
+import 'package:ts_phone/models/chat_message.dart';
 import 'package:ts_phone/models/connection_settings.dart';
+import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 import 'package:ts_phone/widgets/markdown_message.dart';
@@ -890,6 +892,75 @@ void main() {
     },
   );
 
+  testWidgets(
+    'structured timeline exposes activity progress and branch history',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = UiFakeGateway(
+        timelineResponder: ({before, branch}) async => _uiTimelineSnapshot(
+          branch: branch,
+          hasMore: before == null && branch == null,
+        ),
+      );
+      const timelineSession = SessionSummary(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        sessionName: 'Timeline session',
+        runtimeState: RuntimeState.idle,
+        isStreaming: false,
+        accessMode: SessionAccessMode.controller,
+        historyAvailable: true,
+        capabilities: <String>{timelineCapability},
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatPage(
+            settings: _settings,
+            workspace: const WorkspaceSummary(
+              id: 'ts_001',
+              name: 'ts_001',
+              runtimeState: RuntimeState.idle,
+              isStreaming: false,
+              liveSessionCount: 1,
+              sessionCount: 1,
+            ),
+            session: timelineSession,
+            gateway: gateway,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('已载入 2 / 2501 项'), findsOneWidget);
+      expect(find.textContaining('子代理 · Compute · Inspect'), findsOneWidget);
+      expect(find.text('加载全部历史'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('timeline-branch-menu')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('timeline-branch-menu')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('分支 0002').last);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
+        '历史分支只读',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('approval panel keeps structured context and retries in place', (
     WidgetTester tester,
   ) async {
@@ -1121,6 +1192,7 @@ class UiFakeGateway implements TsPhoneGateway {
     TsPhoneMessageSnapshot? snapshot,
     this.earlierSnapshot,
     this.listError,
+    this.timelineResponder,
   }) : snapshot =
            snapshot ??
            const TsPhoneMessageSnapshot(
@@ -1137,6 +1209,11 @@ class UiFakeGateway implements TsPhoneGateway {
   String? lastBefore;
   int? lastLimit;
   final Object? listError;
+  final Future<TsPhoneTimelineSnapshot> Function({
+    String? before,
+    String? branch,
+  })?
+  timelineResponder;
   final List<String> sentMessages = <String>[];
   final List<bool> approvalDecisions = <bool>[];
   final List<Object> approvalErrors = <Object>[];
@@ -1330,6 +1407,21 @@ class UiFakeGateway implements TsPhoneGateway {
   }
 
   @override
+  Future<TsPhoneTimelineSnapshot> getTimeline(
+    String workspaceId,
+    String sessionId, {
+    String? before,
+    int? limit,
+    String? branch,
+  }) {
+    final responder = timelineResponder;
+    if (responder == null) {
+      throw UnsupportedError('Timeline is not configured for this test');
+    }
+    return responder(before: before, branch: branch);
+  }
+
+  @override
   Future<List<WorkspaceSummary>> listWorkspaces() async {
     listWorkspacesCalls += 1;
     if (listError case final error?) throw error;
@@ -1376,3 +1468,74 @@ Map<String, Object?> userMessage(String text) => <String, Object?>{
   ],
   'timestamp': 1,
 };
+
+TsPhoneTimelineSnapshot _uiTimelineSnapshot({
+  String? branch,
+  required bool hasMore,
+}) {
+  final inactive = branch == '00000002';
+  return TsPhoneTimelineSnapshot(
+    sessionId: 'session-test',
+    sessionRevision: '11111111-1111-4111-8111-111111111111',
+    items: <SessionTimelineItem>[
+      TimelineMessageItem(
+        id: inactive ? '00000002' : '00000010',
+        turnId: '00000001',
+        message: ChatMessage.fromJson(
+          userMessage(inactive ? '历史分支' : '当前研究请求'),
+        ),
+      ),
+      if (!inactive)
+        const TimelineActivityItem(
+          id: '00000011',
+          turnId: '00000001',
+          activity: TimelineActivity(
+            category: TimelineActivityCategory.subagent,
+            status: TimelineActivityStatus.completed,
+            title: 'subagent_run',
+            role: 'compute',
+            operation: 'inspect',
+            nodeRefs: <String>['node_1'],
+            durationMs: 1200,
+            totalTokens: 42,
+          ),
+        ),
+    ],
+    history: TimelineHistorySummary(
+      totalItems: inactive ? 1 : 2501,
+      messageCount: inactive ? 1 : 1800,
+      activityCount: inactive ? 0 : 701,
+      turnCount: inactive ? 1 : 80,
+      activeBranchId: '00000012',
+      selectedBranchId: inactive ? '00000002' : '00000012',
+      branches: const <TimelineBranchSummary>[
+        TimelineBranchSummary(
+          id: '00000002',
+          active: false,
+          itemCount: 1,
+          messageCount: 1,
+          activityCount: 0,
+          turnCount: 1,
+        ),
+        TimelineBranchSummary(
+          id: '00000012',
+          active: true,
+          itemCount: 2501,
+          messageCount: 1800,
+          activityCount: 701,
+          turnCount: 80,
+        ),
+      ],
+    ),
+    hasMore: hasMore,
+    nextBefore: hasMore ? '00000010' : null,
+    lastEventId: 'epoch:0',
+    capabilities: <String>{
+      timelineCapability,
+      timelinePaginationCapability,
+      timelineBranchesCapability,
+      if (!inactive) promptCapability,
+      if (!inactive) abortCapability,
+    },
+  );
+}

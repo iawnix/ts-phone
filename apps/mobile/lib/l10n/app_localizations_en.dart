@@ -546,6 +546,80 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadingEarlierMessages => 'Loading earlier messages';
 
   @override
+  String get loadAllHistory => 'Load all history';
+
+  @override
+  String get loadingAllHistory => 'Loading all history';
+
+  @override
+  String timelineProgress(int loaded, int total) {
+    return '$loaded / $total items';
+  }
+
+  @override
+  String timelineTurns(int count) {
+    return '$count turns';
+  }
+
+  @override
+  String timelineActivities(int count) {
+    return '$count activities';
+  }
+
+  @override
+  String get timelineBranches => 'Session branches';
+
+  @override
+  String get timelineActiveBranch => 'Active branch';
+
+  @override
+  String timelineBranchLabel(String shortId) {
+    return 'Branch $shortId';
+  }
+
+  @override
+  String timelineTurnLabel(int number) {
+    return 'Turn $number';
+  }
+
+  @override
+  String get timelineSubagent => 'Subagent';
+
+  @override
+  String get timelineResearch => 'Research';
+
+  @override
+  String get timelineReview => 'Review';
+
+  @override
+  String get timelineWorkspace => 'Workspace';
+
+  @override
+  String get timelineConfiguration => 'Configuration';
+
+  @override
+  String get timelineContext => 'Context';
+
+  @override
+  String get timelineSystem => 'System';
+
+  @override
+  String get timelineFailed => 'Failed';
+
+  @override
+  String timelineDuration(String seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String timelineTokens(int count) {
+    return '$count tokens';
+  }
+
+  @override
+  String get composerHistoricalBranch => 'Read-only historical branch';
+
+  @override
   String get networkRetrying => 'Network connection interrupted. Retrying';
 
   @override

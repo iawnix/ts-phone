@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.4.1
+  version: 0.5.0
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -162,6 +162,50 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/SessionConflict" }
+  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/timeline:
+    get:
+      operationId: getTimeline
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+        - name: before
+          in: query
+          required: false
+          description: Return the page immediately before this stable Pi entry id
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{8}$"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum messages and projected activities in this page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 500
+        - name: branch
+          in: query
+          required: false
+          description: Select one Pi leaf entry; omitted means the active branch
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{8}$"
+      responses:
+        "200":
+          description: Safe, bounded conversation and research-activity timeline
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/TimelineSnapshot" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
   /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/events:
     get:
       operationId: streamEvents
@@ -254,6 +298,18 @@ components:
       pattern: "^[0-9a-f-]{36}$"
     RuntimeState:
       enum: [offline, connecting, idle, running, recovery_required]
+    SessionCapability:
+      enum:
+        - history.messages
+        - history.timeline
+        - history.pagination
+        - history.branches
+        - activity.tools
+        - activity.subagents
+        - activity.research
+        - command.prompt
+        - command.abort
+        - interaction.approval
     Workspace:
       type: object
       required: [id, name, runtimeState, isStreaming, liveSessionCount, sessionCount]
@@ -267,7 +323,7 @@ components:
       additionalProperties: false
     Session:
       type: object
-      required: [sessionId, sessionRevision, runtimeState, isStreaming, accessMode]
+      required: [sessionId, sessionRevision, runtimeState, isStreaming, accessMode, capabilities]
       properties:
         sessionId: { $ref: "#/components/schemas/BoundedId" }
         sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
@@ -285,6 +341,10 @@ components:
         canPrompt:
           type: boolean
           description: A live Bridge currently accepts session commands
+        capabilities:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/SessionCapability" }
       additionalProperties: false
     MessageSnapshot:
       type: object
@@ -313,6 +373,104 @@ components:
         lastEventId:
           type: string
           minLength: 1
+      additionalProperties: false
+    TimelineActivity:
+      type: object
+      required: [category, status, title]
+      properties:
+        category:
+          enum: [subagent, research, review, workspace, configuration, context, system]
+        status:
+          enum: [completed, failed, recorded]
+        title: { type: string, minLength: 1, maxLength: 160 }
+        role: { type: string, maxLength: 100 }
+        operation: { type: string, maxLength: 160 }
+        nodeRefs:
+          type: array
+          maxItems: 24
+          items: { type: string, maxLength: 160 }
+        detail: { type: string, maxLength: 500 }
+        stage: { type: string, maxLength: 160 }
+        durationMs: { type: integer, minimum: 0 }
+        totalTokens: { type: integer, minimum: 0 }
+        retrySafe: { type: boolean }
+        reference: { type: string, maxLength: 500 }
+        at: { type: string, format: date-time }
+      additionalProperties: false
+    TimelineItem:
+      oneOf:
+        - type: object
+          required: [id, kind, message]
+          properties:
+            id: { type: string, pattern: "^[0-9a-f]{8}$" }
+            turnId: { type: string, pattern: "^[0-9a-f]{8}$" }
+            kind: { const: message }
+            message: {}
+          additionalProperties: false
+        - type: object
+          required: [id, kind, activity]
+          properties:
+            id: { type: string, pattern: "^[0-9a-f]{8}$" }
+            turnId: { type: string, pattern: "^[0-9a-f]{8}$" }
+            kind: { const: activity }
+            activity: { $ref: "#/components/schemas/TimelineActivity" }
+          additionalProperties: false
+    TimelineBranch:
+      type: object
+      required: [id, active, itemCount, messageCount, activityCount, turnCount]
+      properties:
+        id: { type: string, pattern: "^[0-9a-f]{8}$" }
+        active: { type: boolean }
+        itemCount: { type: integer, minimum: 0 }
+        messageCount: { type: integer, minimum: 0 }
+        activityCount: { type: integer, minimum: 0 }
+        turnCount: { type: integer, minimum: 0 }
+        name: { type: string, maxLength: 500 }
+        updatedAt: { type: string, format: date-time }
+      additionalProperties: false
+    TimelineHistory:
+      type: object
+      required: [totalItems, messageCount, activityCount, turnCount, branchCount, branches]
+      properties:
+        totalItems: { type: integer, minimum: 0 }
+        messageCount: { type: integer, minimum: 0 }
+        activityCount: { type: integer, minimum: 0 }
+        turnCount: { type: integer, minimum: 0 }
+        branchCount: { type: integer, minimum: 0, maximum: 128 }
+        activeBranchId: { type: string, pattern: "^[0-9a-f]{8}$" }
+        selectedBranchId: { type: string, pattern: "^[0-9a-f]{8}$" }
+        branches:
+          type: array
+          maxItems: 128
+          items: { $ref: "#/components/schemas/TimelineBranch" }
+      additionalProperties: false
+    TimelineSnapshot:
+      type: object
+      required:
+        - schemaVersion
+        - sessionId
+        - sessionRevision
+        - items
+        - history
+        - hasMore
+        - lastEventId
+        - capabilities
+      properties:
+        schemaVersion: { const: ts-phone-timeline/1 }
+        sessionId: { $ref: "#/components/schemas/BoundedId" }
+        sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+        items:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/TimelineItem" }
+        history: { $ref: "#/components/schemas/TimelineHistory" }
+        hasMore: { type: boolean }
+        nextBefore: { type: string, pattern: "^[0-9a-f]{8}$" }
+        lastEventId: { type: string, minLength: 1 }
+        capabilities:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/SessionCapability" }
       additionalProperties: false
   responses:
     Success:

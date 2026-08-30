@@ -4,23 +4,26 @@ TS Phone is the Android and iOS companion for the TSPi transition-state
 research runtime. It exposes only registered TSPi workspaces through an
 authenticated HTTPS API and synchronizes each visible Pi session over SSE.
 
-Version 0.4.1 restores every validated workspace-local Pi session after a
-service restart and serves its bounded message history even when no Bridge is
-running. Disk history is read-only: prompt and abort commands still require the
-matching live Bridge and revision fence.
+Version 0.5.0 restores every validated workspace-local Pi session after a
+service restart and projects its authoritative Pi JSONL as a structured,
+paginated research timeline. Conversation messages, deterministic research
+operations, subagent runs, failures, Turn boundaries, and Pi branches share one
+read model without creating a second conversation database. Raw custom records,
+thinking, provider metadata, and unapproved fields never cross the server
+boundary.
 
-Mobile version 0.8.5 distinguishes live, observer, recovery, and history-only
-sessions. It prioritizes active sessions, loads offline history, keeps sending
-disabled, refreshes the snapshot after app resume, and switches to the
-Bridge-reported access mode when the same session reconnects. Long timelines
-load earlier disk-backed pages on demand, preserve the visible scroll anchor,
-and offer direct navigation between the loaded history and latest message. The
-command-style conversation header, adaptive iOS-style composer, node-based
-workspace identity, compact workspace status, measured latency and last-sync
-metadata, restrained glass hierarchy,
+Mobile version 0.9.0 distinguishes live, observer, recovery, history-only, and
+historical-branch views. Histories up to 2000 projected items load completely by
+default; larger sessions show loaded/total progress and support one-page or
+load-all retrieval while preserving the visible scroll anchor. The current Pi
+branch remains interactive when its Bridge is live, while earlier branches are
+explicitly read-only. Servers that do not advertise `history.timeline` continue
+to use the compatible `/messages` path. The command-style conversation header,
+adaptive iOS-style composer, node-based workspace identity, compact workspace
+status, measured latency and last-sync metadata, restrained glass hierarchy,
 terminal/code presentation, on-demand connection diagnostics, and the TSPi
-character brand mark are shared by the Chinese and English UI. API v3, Events
-v3, and Bridge v2 are unchanged.
+character brand mark remain shared by the Chinese and English UI. API v3,
+Events v3, and Bridge v2 remain wire-compatible.
 
 ## Session Model
 
@@ -97,8 +100,8 @@ python3 deploy/build-component-release.py \
 
 The builder runs server typecheck, tests, and build; verifies the APK v2
 signature and signer certificate; and writes
-`ts-phone-component-release/1`. The manifest binds server `0.4.1`, mobile
-`0.8.5+27`, API v3, Events v3, Bridge v2, the server entry, APK, source commit,
+`ts-phone-component-release/1`. The manifest binds server `0.5.0`, mobile
+`0.9.0+28`, API v3, Events v3, Bridge v2, the server entry, APK, source commit,
 and deterministic archive digest.
 
 The TSPi repository consumes this manifest with `build_package.py` and
@@ -127,8 +130,8 @@ controller lock is held.
 ## Deployment
 
 Complete deployments are selected by the TSPi Package, not by a second Phone
-`current` pointer. Server version 0.4.1 is compatible with TSPi 0.11.0 and the
-API v3-compatible 0.8.5 mobile client. API v3 and Bridge v2 remain intentional
+`current` pointer. Server version 0.5.0 is compatible with TSPi 0.11.0 and the
+API v3-compatible 0.9.0 mobile client. API v3 and Bridge v2 remain intentional
 compatibility breaks from older releases.
 
 See docs/deployment.md before changing the running service. Configuration,

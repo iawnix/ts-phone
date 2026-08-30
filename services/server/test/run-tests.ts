@@ -5,4 +5,5 @@ import "./workspace-registry.test.js";
 import "./security.test.js";
 import "./event-journal.test.js";
 import "./message-projection.test.js";
+import "./timeline-projection.test.js";
 import "./http-server.test.js";

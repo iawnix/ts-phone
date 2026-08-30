@@ -4,9 +4,308 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/features/chat/chat_controller.dart';
 import 'package:ts_phone/models/chat_message.dart';
+import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 
 void main() {
+  test(
+    'loads the complete bounded timeline and preserves research activity',
+    () async {
+      final api = FakeGateway();
+      api.timelineResponder = ({before, branch}) async {
+        if (before == null) {
+          return timelineSnapshot(
+            items: <SessionTimelineItem>[
+              TimelineActivityItem(
+                id: '00000003',
+                turnId: '00000001',
+                activity: const TimelineActivity(
+                  category: TimelineActivityCategory.subagent,
+                  status: TimelineActivityStatus.completed,
+                  title: 'subagent_run',
+                  role: 'compute',
+                ),
+              ),
+              TimelineMessageItem(
+                id: '00000004',
+                turnId: '00000001',
+                message: ChatMessage.fromJson(assistantMessage('latest')),
+              ),
+            ],
+            totalItems: 4,
+            hasMore: true,
+            nextBefore: '00000003',
+          );
+        }
+        expect(before, '00000003');
+        return timelineSnapshot(
+          items: <SessionTimelineItem>[
+            TimelineMessageItem(
+              id: '00000001',
+              turnId: '00000001',
+              message: ChatMessage.fromJson(userMessage('first turn')),
+            ),
+            TimelineMessageItem(
+              id: '00000002',
+              turnId: '00000001',
+              message: ChatMessage.fromJson(assistantMessage('earlier')),
+            ),
+          ],
+          totalItems: 4,
+        );
+      };
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        accessMode: SessionAccessMode.controller,
+        initialRuntimeState: RuntimeState.idle,
+        initialCapabilities: const <String>{timelineCapability},
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+
+      expect(api.timelineCalls, 2);
+      expect(controller.loadedTimelineItemCount, 4);
+      expect(
+        controller.timelineItems.whereType<TimelineActivityItem>(),
+        hasLength(1),
+      );
+      expect(controller.messages.map((message) => message.text), <String>[
+        'first turn',
+        'earlier',
+        'latest',
+      ]);
+      expect(controller.canLoadEarlierMessages, isFalse);
+    },
+  );
+
+  test('an inactive timeline branch is read-only', () async {
+    final api = FakeGateway();
+    api.timelineResponder = ({before, branch}) async => timelineSnapshot(
+      items: <SessionTimelineItem>[
+        TimelineMessageItem(
+          id: branch == '00000002' ? '00000002' : '00000003',
+          turnId: '00000001',
+          message: ChatMessage.fromJson(
+            assistantMessage(branch == '00000002' ? 'alternate' : 'active'),
+          ),
+        ),
+      ],
+      totalItems: 1,
+      selectedBranchId: branch ?? '00000003',
+      includeCommands: branch != '00000002',
+      branches: const <TimelineBranchSummary>[
+        TimelineBranchSummary(
+          id: '00000002',
+          active: false,
+          itemCount: 1,
+          messageCount: 1,
+          activityCount: 0,
+          turnCount: 1,
+        ),
+        TimelineBranchSummary(
+          id: '00000003',
+          active: true,
+          itemCount: 1,
+          messageCount: 1,
+          activityCount: 0,
+          turnCount: 1,
+        ),
+      ],
+    );
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+      initialCapabilities: const <String>{timelineCapability},
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    expect(controller.viewingInactiveBranch, isFalse);
+
+    await controller.selectTimelineBranch('00000002');
+
+    expect(controller.viewingInactiveBranch, isTrue);
+    expect(controller.messages.single.text, 'alternate');
+    expect(controller.canSend, isFalse);
+
+    api.addEvent('session_state', <String, Object?>{
+      'state': 'idle',
+      'canPrompt': true,
+      'capabilities': <String>[timelineCapability, promptCapability],
+    });
+    api.addEvent('input', <String, Object?>{'text': 'active prompt'});
+    api.addEvent('message_end', <String, Object?>{
+      'message': assistantMessage('active reply'),
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.messages.single.text, 'alternate');
+    expect(controller.canSend, isFalse);
+  });
+
+  test(
+    'load all history traverses every page above the automatic limit',
+    () async {
+      const totalItems = 2501;
+      final api = FakeGateway();
+      api.timelineResponder = ({before, branch}) async {
+        final end = before == null
+            ? totalItems
+            : int.parse(before, radix: 16) - 1;
+        final candidateStart = end - 499;
+        final start = candidateStart < 1 ? 1 : candidateStart;
+        final items = <SessionTimelineItem>[
+          for (var id = start; id <= end; id += 1)
+            TimelineMessageItem(
+              id: id.toRadixString(16).padLeft(8, '0'),
+              turnId: '00000001',
+              message: ChatMessage.fromJson(assistantMessage('message-$id')),
+            ),
+        ];
+        return timelineSnapshot(
+          items: items,
+          totalItems: totalItems,
+          hasMore: start > 1,
+          nextBefore: start > 1 ? items.first.id : null,
+        );
+      };
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        accessMode: SessionAccessMode.controller,
+        initialRuntimeState: RuntimeState.idle,
+        initialCapabilities: const <String>{timelineCapability},
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      expect(controller.loadedTimelineItemCount, 500);
+      expect(controller.canLoadEarlierMessages, isTrue);
+
+      await controller.loadAllHistory();
+
+      expect(api.timelineCalls, 6);
+      expect(controller.loadedTimelineItemCount, totalItems);
+      expect(controller.timelineItems.first.id, '00000001');
+      expect(controller.timelineItems.last.id, '000009c5');
+      expect(controller.canLoadEarlierMessages, isFalse);
+    },
+  );
+
+  test(
+    'load all history stops when the timeline cursor does not advance',
+    () async {
+      final api = FakeGateway();
+      api.timelineResponder = ({before, branch}) async => timelineSnapshot(
+        items: <SessionTimelineItem>[
+          TimelineMessageItem(
+            id: '0000000a',
+            turnId: '00000001',
+            message: ChatMessage.fromJson(assistantMessage('latest')),
+          ),
+        ],
+        totalItems: 2501,
+        hasMore: true,
+        nextBefore: '0000000a',
+      );
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        accessMode: SessionAccessMode.controller,
+        initialRuntimeState: RuntimeState.idle,
+        initialCapabilities: const <String>{timelineCapability},
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      await controller.loadAllHistory();
+
+      expect(api.timelineCalls, 2);
+      expect(controller.problem?.kind, TsPhoneProblemKind.incompatible);
+      expect(controller.problem?.code, TsPhoneProblemCode.incompatible);
+      expect(controller.loadingAllHistory, isFalse);
+    },
+  );
+
+  test('persisted timeline replaces equivalent transient messages', () async {
+    var persisted = false;
+    final api = FakeGateway();
+    api.timelineResponder = ({before, branch}) async => timelineSnapshot(
+      items: <SessionTimelineItem>[
+        TimelineMessageItem(
+          id: '00000001',
+          turnId: '00000001',
+          message: ChatMessage.fromJson(userMessage('existing')),
+        ),
+        if (persisted)
+          TimelineMessageItem(
+            id: '00000002',
+            turnId: '00000002',
+            message: ChatMessage.fromJson(<String, Object?>{
+              'role': 'user',
+              'content': <Object?>[
+                <String, Object?>{'type': 'text', 'text': 'CLI prompt'},
+              ],
+              'timestamp': DateTime.utc(2026, 8, 15).millisecondsSinceEpoch,
+            }),
+          ),
+        if (persisted)
+          TimelineMessageItem(
+            id: '00000003',
+            turnId: '00000002',
+            message: ChatMessage.fromJson(assistantMessage('complete reply')),
+          ),
+      ],
+      totalItems: persisted ? 3 : 1,
+    );
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+      initialCapabilities: const <String>{timelineCapability},
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    api.addEvent('input', <String, Object?>{'text': 'CLI prompt'});
+    api.addEvent('message_end', <String, Object?>{
+      'message': assistantMessage('complete reply'),
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.timelineItems, hasLength(3));
+    expect(
+      controller.timelineItems.where(
+        (item) => !RegExp(r'^[0-9a-f]{8}$').hasMatch(item.id),
+      ),
+      hasLength(2),
+    );
+
+    persisted = true;
+    await controller.refreshMessages();
+
+    expect(controller.timelineItems, hasLength(3));
+    expect(controller.loadedTimelineItemCount, 3);
+    expect(controller.messages.map((message) => message.text), <String>[
+      'existing',
+      'CLI prompt',
+      'complete reply',
+    ]);
+  });
+
   test('loads offline disk history without enabling phone commands', () async {
     final api = FakeGateway()
       ..snapshot = TsPhoneMessageSnapshot(
@@ -914,6 +1213,9 @@ class FakeGateway implements TsPhoneGateway {
   String? lastBefore;
   int? lastLimit;
   Future<TsPhoneMessageSnapshot>? nextSnapshot;
+  int timelineCalls = 0;
+  Future<TsPhoneTimelineSnapshot> Function({String? before, String? branch})?
+  timelineResponder;
 
   void addEvent(
     String type,
@@ -985,6 +1287,22 @@ class FakeGateway implements TsPhoneGateway {
   }
 
   @override
+  Future<TsPhoneTimelineSnapshot> getTimeline(
+    String workspaceId,
+    String sessionId, {
+    String? before,
+    int? limit,
+    String? branch,
+  }) {
+    timelineCalls += 1;
+    final responder = timelineResponder;
+    if (responder == null) {
+      throw UnsupportedError('Timeline is not configured for this test');
+    }
+    return responder(before: before, branch: branch);
+  }
+
+  @override
   Future<List<WorkspaceSummary>> listWorkspaces() async =>
       const <WorkspaceSummary>[];
 
@@ -1035,3 +1353,50 @@ Map<String, Object?> assistantMessage(String text) => <String, Object?>{
   ],
   'timestamp': 2,
 };
+
+TsPhoneTimelineSnapshot timelineSnapshot({
+  required List<SessionTimelineItem> items,
+  required int totalItems,
+  bool hasMore = false,
+  String? nextBefore,
+  String selectedBranchId = '00000003',
+  bool includeCommands = true,
+  List<TimelineBranchSummary>? branches,
+}) {
+  final resolvedBranches =
+      branches ??
+      const <TimelineBranchSummary>[
+        TimelineBranchSummary(
+          id: '00000003',
+          active: true,
+          itemCount: 4,
+          messageCount: 3,
+          activityCount: 1,
+          turnCount: 1,
+        ),
+      ];
+  return TsPhoneTimelineSnapshot(
+    sessionId: 'session-test',
+    sessionRevision: '11111111-1111-4111-8111-111111111111',
+    items: items,
+    history: TimelineHistorySummary(
+      totalItems: totalItems,
+      messageCount: totalItems,
+      activityCount: 0,
+      turnCount: 1,
+      activeBranchId: '00000003',
+      selectedBranchId: selectedBranchId,
+      branches: resolvedBranches,
+    ),
+    hasMore: hasMore,
+    nextBefore: nextBefore,
+    lastEventId: 'epoch:0',
+    capabilities: <String>{
+      timelineCapability,
+      timelinePaginationCapability,
+      timelineBranchesCapability,
+      if (includeCommands) promptCapability,
+      if (includeCommands) abortCapability,
+    },
+  );
+}

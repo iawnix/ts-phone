@@ -62,13 +62,21 @@ workspace root. It rejects symbolic links, files above 64 MiB, unsafe parent
 directories, malformed records, and mismatched headers. Reads use
 `O_NOFOLLOW`; raw JSONL lines are never returned.
 
-The same projection boundary is applied to Bridge and disk messages. It exposes
-only user, assistant, and tool-result display fields, drops thinking and model
-provider internals, bounds individual text, and caps each response page at 500
-messages and six MiB. Pagination accepts only stable eight-character Pi entry
-IDs found exactly once in the validated file; unknown and duplicate cursors are
-rejected. The Bearer token can read this projected offline history,
-so it remains a high-value credential even when no TSPi process is running.
+The same message projection boundary is applied to Bridge and disk messages. It
+exposes only user, assistant, and tool-result display fields and drops thinking
+and model-provider internals. Structured TS custom records pass through a
+separate allowlisted activity projector: only category, status, bounded labels,
+node references, duration/token totals, retry status, and a bounded reference
+may be returned. Raw custom payloads, action digests, provider data, prompts,
+credentials, and unknown nested fields are never serialized to the phone.
+
+Individual text and references are bounded, and every response page is capped
+at 500 items and six MiB. Pagination and branch selection accept only stable
+eight-character Pi entry IDs found exactly once in the validated graph;
+unknown, duplicate, and non-leaf branch cursors are rejected. An inactive
+branch response never advertises command capabilities. The Bearer token can
+still read projected offline history, so it remains a high-value credential
+even when no TSPi process is running.
 
 ## Local Capabilities
 

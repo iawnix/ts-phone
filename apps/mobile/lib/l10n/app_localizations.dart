@@ -1046,6 +1046,126 @@ abstract class AppLocalizations {
   /// **'Loading earlier messages'**
   String get loadingEarlierMessages;
 
+  /// No description provided for @loadAllHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Load all history'**
+  String get loadAllHistory;
+
+  /// No description provided for @loadingAllHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading all history'**
+  String get loadingAllHistory;
+
+  /// No description provided for @timelineProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{loaded} / {total} items'**
+  String timelineProgress(int loaded, int total);
+
+  /// No description provided for @timelineTurns.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} turns'**
+  String timelineTurns(int count);
+
+  /// No description provided for @timelineActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} activities'**
+  String timelineActivities(int count);
+
+  /// No description provided for @timelineBranches.
+  ///
+  /// In en, this message translates to:
+  /// **'Session branches'**
+  String get timelineBranches;
+
+  /// No description provided for @timelineActiveBranch.
+  ///
+  /// In en, this message translates to:
+  /// **'Active branch'**
+  String get timelineActiveBranch;
+
+  /// No description provided for @timelineBranchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch {shortId}'**
+  String timelineBranchLabel(String shortId);
+
+  /// No description provided for @timelineTurnLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn {number}'**
+  String timelineTurnLabel(int number);
+
+  /// No description provided for @timelineSubagent.
+  ///
+  /// In en, this message translates to:
+  /// **'Subagent'**
+  String get timelineSubagent;
+
+  /// No description provided for @timelineResearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Research'**
+  String get timelineResearch;
+
+  /// No description provided for @timelineReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get timelineReview;
+
+  /// No description provided for @timelineWorkspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get timelineWorkspace;
+
+  /// No description provided for @timelineConfiguration.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration'**
+  String get timelineConfiguration;
+
+  /// No description provided for @timelineContext.
+  ///
+  /// In en, this message translates to:
+  /// **'Context'**
+  String get timelineContext;
+
+  /// No description provided for @timelineSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get timelineSystem;
+
+  /// No description provided for @timelineFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get timelineFailed;
+
+  /// No description provided for @timelineDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String timelineDuration(String seconds);
+
+  /// No description provided for @timelineTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tokens'**
+  String timelineTokens(int count);
+
+  /// No description provided for @composerHistoricalBranch.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only historical branch'**
+  String get composerHistoricalBranch;
+
   /// No description provided for @networkRetrying.
   ///
   /// In en, this message translates to:

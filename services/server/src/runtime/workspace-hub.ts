@@ -11,9 +11,12 @@ import type {
   MessageSnapshot,
   PromptInput,
   RuntimeState,
+  SessionCapability,
   SessionCommandInput,
   SessionSnapshot,
   SessionSummary,
+  TimelinePageRequest,
+  TimelineSnapshot,
   WorkspaceSummary,
 } from "../types.js";
 import {
@@ -186,6 +189,38 @@ export class WorkspaceHub {
     };
   }
 
+  async getTimeline(
+    workspaceId: string,
+    sessionId: string,
+    request: TimelinePageRequest,
+  ): Promise<TimelineSnapshot> {
+    const workspace = await this.#loadWorkspace(workspaceId);
+    await this.#reconcileSessions(workspace);
+    const session = workspace.sessions.get(sessionId);
+    if (!session) throw new HttpError(404, "session_not_found", "TSPi session was not found");
+    if (!session.persisted) {
+      throw new HttpError(
+        409,
+        "session_timeline_unavailable",
+        "Structured timeline is available after the Pi session history is persisted",
+      );
+    }
+    const page = await this.#registry.readPersistedSessionTimeline(
+      workspace.workspace,
+      session.persisted,
+      request,
+    );
+    const selectedActive = page.history.selectedBranchId === page.history.activeBranchId;
+    return {
+      schemaVersion: "ts-phone-timeline/1",
+      sessionId,
+      sessionRevision: session.journal.epoch,
+      ...page,
+      lastEventId: session.snapshotEventId ?? session.journal.latestId,
+      capabilities: capabilitiesForSession(session, selectedActive),
+    };
+  }
+
   async prompt(workspaceId: string, sessionId: string, input: PromptInput): Promise<void> {
     const session = await this.#connectedSession(workspaceId, sessionId);
     this.#assertRevision(session, input.sessionRevision);
@@ -325,6 +360,7 @@ export class WorkspaceHub {
           historyAvailable: Boolean(session.persisted),
           historyOnly: false,
           canPrompt: true,
+          capabilities: capabilitiesForSession(session),
         },
         identity,
       ).id;
@@ -524,6 +560,7 @@ export class WorkspaceHub {
       historyAvailable,
       historyOnly: session.state === "offline" && !live && historyAvailable,
       canPrompt: live,
+      capabilities: capabilitiesForSession(session),
     };
     if (session.snapshot?.sessionName) summary.sessionName = session.snapshot.sessionName;
     if (session.snapshot?.model) summary.model = session.snapshot.model;
@@ -542,6 +579,7 @@ export class WorkspaceHub {
       historyAvailable: Boolean(session.persisted),
       historyOnly: session.state === "offline" && !isLive(session) && Boolean(session.persisted),
       canPrompt: isLive(session),
+      capabilities: capabilitiesForSession(session),
     }, connection ? {
       instanceEpoch: connection.instanceEpoch,
       sessionGeneration: connection.sessionGeneration,
@@ -601,4 +639,24 @@ function messagePageFromSnapshot(snapshot: SessionSnapshot, limit: number): Mess
 
 function isLive(session: SessionRecord): boolean {
   return Boolean(session.connection && !session.connection.closed);
+}
+
+function capabilitiesForSession(
+  session: SessionRecord,
+  activeBranch = true,
+): SessionCapability[] {
+  const capabilities: SessionCapability[] = ["history.messages", "activity.tools"];
+  if (session.persisted) {
+    capabilities.push(
+      "history.timeline",
+      "history.pagination",
+      "history.branches",
+      "activity.subagents",
+      "activity.research",
+    );
+  }
+  if (activeBranch && isLive(session)) {
+    capabilities.push("command.prompt", "command.abort", "interaction.approval");
+  }
+  return capabilities;
 }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/ts_phone_api.dart';
 import '../../models/chat_message.dart';
+import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
 
 enum EventConnectionState {
@@ -72,6 +73,8 @@ class ExtensionUiRequest {
 enum ChatActivityKind { runningTool, toolFailed }
 
 const int _historyPageSize = 200;
+const int _timelinePageSize = 500;
+const int _automaticTimelineItemLimit = 2000;
 
 class ChatActivity {
   const ChatActivity(this.kind, {this.toolName});
@@ -91,6 +94,7 @@ class ChatController extends ChangeNotifier {
     String? initialSessionTitle,
     bool initialHistoryAvailable = false,
     bool? initialCanPrompt,
+    Set<String> initialCapabilities = const <String>{},
     this.recoveredSession = false,
     this.eventErrorDelay = const Duration(seconds: 5),
     this.snapshotTimeout = const Duration(seconds: 15),
@@ -102,6 +106,7 @@ class ChatController extends ChangeNotifier {
        _runtimeState = initialRuntimeState,
        _historyAvailable = initialHistoryAvailable,
        _canPrompt = initialCanPrompt ?? initialRuntimeState.isAvailable,
+       _capabilities = Set<String>.unmodifiable(initialCapabilities),
        _sessionRevision = initialSessionRevision,
        _sessionTitle = initialSessionTitle;
 
@@ -119,11 +124,16 @@ class ChatController extends ChangeNotifier {
       StreamController<ExtensionUiRequest>.broadcast();
   final ValueNotifier<List<ChatMessage>> _messagesUpdates =
       ValueNotifier<List<ChatMessage>>(const <ChatMessage>[]);
+  final ValueNotifier<List<SessionTimelineItem>> _timelineUpdates =
+      ValueNotifier<List<SessionTimelineItem>>(const <SessionTimelineItem>[]);
   final ValueNotifier<String?> _streamingTextUpdates = ValueNotifier(null);
   final Set<String> _handledApprovalIdentities = <String>{};
   final Set<String> _receivedPhoneMessageIdentities = <String>{};
   List<ChatMessage> _messages = const <ChatMessage>[];
   List<String?> _messageIds = const <String?>[];
+  List<SessionTimelineItem> _timelineItems = const <SessionTimelineItem>[];
+  TimelineHistorySummary? _timelineHistory;
+  Set<String> _capabilities;
   RuntimeState _runtimeState;
   EventConnectionState _eventConnectionState = EventConnectionState.connecting;
   List<String>? _streamingTextChunks;
@@ -146,10 +156,14 @@ class ChatController extends ChangeNotifier {
   bool _connectAfterCancellationScheduled = false;
   bool _snapshotSyncInProgress = false;
   bool _loadingEarlierMessages = false;
+  bool _loadingAllHistory = false;
   bool _hasMoreHistory = false;
   bool _loadedEarlierHistory = false;
   String? _nextBefore;
   List<String> _latestSnapshotMessageIds = const <String>[];
+  List<String> _latestTimelineItemIds = const <String>[];
+  String? _selectedBranchId;
+  String? _currentTurnId;
   Timer? _reconnectTimer;
   Timer? _eventErrorTimer;
   Timer? _streamRenderTimer;
@@ -160,6 +174,10 @@ class ChatController extends ChangeNotifier {
   UnmodifiableListView<ChatMessage> get messages =>
       UnmodifiableListView(_messages);
   ValueListenable<List<ChatMessage>> get messagesUpdates => _messagesUpdates;
+  UnmodifiableListView<SessionTimelineItem> get timelineItems =>
+      UnmodifiableListView(_timelineItems);
+  ValueListenable<List<SessionTimelineItem>> get timelineUpdates =>
+      _timelineUpdates;
   RuntimeState get runtimeState => _runtimeState;
   EventConnectionState get eventConnectionState => _eventConnectionState;
   String? get streamingText => _streamingTextChunks?.join();
@@ -174,12 +192,28 @@ class ChatController extends ChangeNotifier {
   bool get historyAvailable => _historyAvailable;
   bool get historyOnly =>
       _runtimeState == RuntimeState.offline && _historyAvailable && !_canPrompt;
+  bool get usesStructuredTimeline =>
+      _capabilities.contains(timelineCapability) || _timelineHistory != null;
+  TimelineHistorySummary? get timelineHistory => _timelineHistory;
+  bool get viewingInactiveBranch =>
+      _timelineHistory?.selectedBranchIsActive == false;
+  int get loadedTimelineItemCount => _timelineItems
+      .where((item) => RegExp(r'^[0-9a-f]{8}$').hasMatch(item.id))
+      .length;
+  int get totalTimelineItemCount =>
+      _timelineHistory?.totalItems ?? _messages.length;
+  int get timelineTurnCount => _timelineHistory?.turnCount ?? 0;
+  int get timelineActivityCount => _timelineHistory?.activityCount ?? 0;
+  List<TimelineBranchSummary> get timelineBranches =>
+      _timelineHistory?.branches ?? const <TimelineBranchSummary>[];
   bool get canRefresh => _historyAvailable || _runtimeState.isAvailable;
   bool get loadingEarlierMessages => _loadingEarlierMessages;
+  bool get loadingAllHistory => _loadingAllHistory;
   bool get canLoadEarlierMessages =>
       _hasMoreHistory && _nextBefore != null && !_loadingEarlierMessages;
   bool get canSend =>
       _canPrompt &&
+      !viewingInactiveBranch &&
       _runtimeState.isAvailable &&
       _snapshotReady &&
       !_snapshotSyncInProgress &&
@@ -191,6 +225,8 @@ class ChatController extends ChangeNotifier {
   String messageKeyAt(int index) =>
       _messageIds[index] ??
       '${_messages[index].role.name}-${_messages[index].timestamp?.microsecondsSinceEpoch ?? 0}-$index';
+
+  String timelineKeyAt(int index) => _timelineItems[index].id;
 
   Future<void> initialize() async {
     if (canRefresh) {
@@ -233,20 +269,33 @@ class ChatController extends ChangeNotifier {
         : EventConnectionState.reconnecting;
     _notify();
     try {
-      Future<TsPhoneMessageSnapshot> loadSnapshot() async {
-        await _cancelEventSubscriptionAndWait();
-        return api.getMessages(workspaceId, sessionId);
+      await _cancelEventSubscriptionAndWait();
+      if (_capabilities.contains(timelineCapability)) {
+        final snapshot = await _awaitSnapshot(
+          api.getTimeline(workspaceId, sessionId, branch: _selectedBranchId),
+        );
+        if (_disposed) return;
+        if (snapshot.sessionId != sessionId) {
+          throw const FormatException('Timeline belongs to another session');
+        }
+        final revisionChanged = snapshot.sessionRevision != _sessionRevision;
+        _applyTimelineSnapshot(snapshot, reset: revisionChanged);
+        _sessionRevision = snapshot.sessionRevision;
+        _lastEventId = snapshot.lastEventId;
+        await _loadAutomaticTimelineHistory();
+      } else {
+        final snapshot = await _awaitSnapshot(
+          api.getMessages(workspaceId, sessionId),
+        );
+        if (_disposed) return;
+        if (snapshot.sessionId != sessionId) {
+          throw const FormatException('Snapshot belongs to another session');
+        }
+        final revisionChanged = snapshot.sessionRevision != _sessionRevision;
+        _applyMessageSnapshot(snapshot, reset: revisionChanged);
+        _sessionRevision = snapshot.sessionRevision;
+        _lastEventId = snapshot.lastEventId;
       }
-
-      final snapshot = await _awaitSnapshot(loadSnapshot());
-      if (_disposed) return;
-      if (snapshot.sessionId != sessionId) {
-        throw const FormatException('Snapshot belongs to another session');
-      }
-      final revisionChanged = snapshot.sessionRevision != _sessionRevision;
-      _applyMessageSnapshot(snapshot, reset: revisionChanged);
-      _sessionRevision = snapshot.sessionRevision;
-      _lastEventId = snapshot.lastEventId;
       _snapshotReady = true;
       _clearStreamingText();
       _activity = null;
@@ -275,36 +324,133 @@ class ChatController extends ChangeNotifier {
     _operationProblem = null;
     _notify();
     try {
-      final page = await api.getMessages(
-        workspaceId,
-        sessionId,
-        before: before,
-        limit: _historyPageSize,
-      );
-      if (_disposed) return false;
-      if (page.sessionId != sessionId ||
-          page.sessionRevision != _sessionRevision) {
-        throw const FormatException(
-          'Earlier messages belong to another session revision',
-        );
+      if (usesStructuredTimeline) {
+        return await _loadEarlierTimelinePage(before);
       }
-      if (page.messageIds == null) {
-        throw const FormatException(
-          'Earlier messages do not include stable message ids',
-        );
-      }
-      final parsed = _parseMessagePage(page.messages, page.messageIds);
-      _loadedEarlierHistory = true;
-      _hasMoreHistory = page.hasMore;
-      _nextBefore = page.nextBefore;
-      _prependMessagePage(parsed);
-      return true;
+      return await _loadEarlierMessagePage(before);
     } on Object catch (error) {
       if (!_disposed) _setError(error);
       return false;
     } finally {
       _loadingEarlierMessages = false;
       if (!_disposed) _notify();
+    }
+  }
+
+  Future<void> loadAllHistory() async {
+    if (_disposed || _loadingAllHistory || !canLoadEarlierMessages) return;
+    _loadingAllHistory = true;
+    _operationProblem = null;
+    _notify();
+    try {
+      while (!_disposed && _hasMoreHistory && _nextBefore != null) {
+        final loaded = usesStructuredTimeline
+            ? await _loadEarlierTimelinePage(_nextBefore!)
+            : await _loadEarlierMessagePage(_nextBefore!);
+        if (!loaded) break;
+        _notify();
+      }
+    } on Object catch (error) {
+      if (!_disposed) _setError(error);
+    } finally {
+      _loadingAllHistory = false;
+      if (!_disposed) _notify();
+    }
+  }
+
+  Future<void> selectTimelineBranch(String branchId) async {
+    if (_disposed ||
+        _snapshotSyncInProgress ||
+        _loadingEarlierMessages ||
+        branchId == _timelineHistory?.selectedBranchId ||
+        !timelineBranches.any((branch) => branch.id == branchId)) {
+      return;
+    }
+    _selectedBranchId = branchId;
+    _loadedEarlierHistory = false;
+    _hasMoreHistory = false;
+    _nextBefore = null;
+    _latestTimelineItemIds = const <String>[];
+    await refreshMessages();
+  }
+
+  Future<void> _loadAutomaticTimelineHistory() async {
+    final history = _timelineHistory;
+    if (history == null || history.totalItems > _automaticTimelineItemLimit) {
+      return;
+    }
+    while (!_disposed && _hasMoreHistory && _nextBefore != null) {
+      if (!await _loadEarlierTimelinePage(_nextBefore!)) break;
+    }
+  }
+
+  Future<bool> _loadEarlierTimelinePage(String before) async {
+    final page = await api.getTimeline(
+      workspaceId,
+      sessionId,
+      before: before,
+      limit: _timelinePageSize,
+      branch: _selectedBranchId,
+    );
+    if (_disposed) return false;
+    if (page.sessionId != sessionId ||
+        page.sessionRevision != _sessionRevision ||
+        page.history.selectedBranchId != _timelineHistory?.selectedBranchId) {
+      throw const FormatException(
+        'Earlier timeline belongs to another session branch',
+      );
+    }
+    _validateEarlierPageCursor(
+      requestedBefore: before,
+      hasMore: page.hasMore,
+      nextBefore: page.nextBefore,
+      resource: 'Timeline',
+    );
+    _loadedEarlierHistory = true;
+    _hasMoreHistory = page.hasMore;
+    _nextBefore = page.nextBefore;
+    _prependTimelinePage(page.items);
+    return true;
+  }
+
+  Future<bool> _loadEarlierMessagePage(String before) async {
+    final page = await api.getMessages(
+      workspaceId,
+      sessionId,
+      before: before,
+      limit: _historyPageSize,
+    );
+    if (_disposed) return false;
+    if (page.sessionId != sessionId ||
+        page.sessionRevision != _sessionRevision ||
+        page.messageIds == null) {
+      throw const FormatException(
+        'Earlier messages belong to another session revision',
+      );
+    }
+    _validateEarlierPageCursor(
+      requestedBefore: before,
+      hasMore: page.hasMore,
+      nextBefore: page.nextBefore,
+      resource: 'Message',
+    );
+    final parsed = _parseMessagePage(page.messages, page.messageIds);
+    _loadedEarlierHistory = true;
+    _hasMoreHistory = page.hasMore;
+    _nextBefore = page.nextBefore;
+    _prependMessagePage(parsed);
+    return true;
+  }
+
+  static void _validateEarlierPageCursor({
+    required String requestedBefore,
+    required bool hasMore,
+    required String? nextBefore,
+    required String resource,
+  }) {
+    if ((hasMore && (nextBefore == null || nextBefore == requestedBefore)) ||
+        (!hasMore && nextBefore != null)) {
+      throw FormatException('$resource pagination did not advance');
     }
   }
 
@@ -340,19 +486,16 @@ class ChatController extends ChangeNotifier {
     final revision = _sessionRevision;
     final clientMessageId = clientMessageIdFactory();
     final messageIdentity = '$revision\u0000$clientMessageId';
-    _setMessages(
-      <ChatMessage>[
-        ..._messages,
-        ChatMessage(
-          role: ChatRole.user,
-          text: message,
-          timestamp: DateTime.now(),
-          clientMessageId: clientMessageId,
-          origin: 'phone',
-          deliveryState: ChatDeliveryState.sending,
-        ),
-      ],
-      <String?>[..._messageIds, null],
+    _appendLiveMessage(
+      ChatMessage(
+        role: ChatRole.user,
+        text: message,
+        timestamp: DateTime.now(),
+        clientMessageId: clientMessageId,
+        origin: 'phone',
+        deliveryState: ChatDeliveryState.sending,
+      ),
+      localId: 'phone-$clientMessageId',
     );
     _commandInFlight = true;
     _operationProblem = null;
@@ -565,6 +708,9 @@ class ChatController extends ChangeNotifier {
     _hasMoreHistory = false;
     _nextBefore = null;
     _loadedEarlierHistory = false;
+    _timelineHistory = null;
+    _selectedBranchId = null;
+    _latestTimelineItemIds = const <String>[];
     _snapshotReady = false;
     _runtimeState = RuntimeState.connecting;
     _canPrompt = false;
@@ -666,6 +812,7 @@ class ChatController extends ChangeNotifier {
 
   void _handleEvent(TsPhoneEvent event) {
     final payload = _asMap(event.payload);
+    if (viewingInactiveBranch && _isLiveContentEvent(event.type)) return;
     var deferStreamRender = false;
     var flushStreamRender = false;
     var notifyController = true;
@@ -683,6 +830,7 @@ class ChatController extends ChangeNotifier {
         if (payload?['historyAvailable'] is bool) {
           _historyAvailable = payload!['historyAvailable']! as bool;
         }
+        _updateCapabilities(payload?['capabilities']);
         _updateAccessMode(payload?['accessMode']);
         _canPrompt = payload?['canPrompt'] is bool
             ? payload!['canPrompt']! as bool
@@ -699,7 +847,7 @@ class ChatController extends ChangeNotifier {
         }
       case 'session.snapshot':
         final messages = payload?['messages'];
-        if (messages is List) {
+        if (messages is List && !usesStructuredTimeline) {
           try {
             _applyMessageSnapshot(
               TsPhoneMessageSnapshot(
@@ -732,12 +880,14 @@ class ChatController extends ChangeNotifier {
         if (payload?['historyAvailable'] is bool) {
           _historyAvailable = payload!['historyAvailable']! as bool;
         }
+        _updateCapabilities(payload?['capabilities']);
         _operationProblem = null;
         _updateAccessMode(payload?['accessMode']);
         _canPrompt = payload?['canPrompt'] is bool
             ? payload!['canPrompt']! as bool
             : true;
         _snapshotReady = true;
+        if (usesStructuredTimeline) unawaited(refreshMessages());
       case 'input':
         final text = payload?['text'];
         if (text is String && text.isNotEmpty) {
@@ -749,6 +899,7 @@ class ChatController extends ChangeNotifier {
         _runtimeState = RuntimeState.idle;
         _clearStreamingText();
         _activity = null;
+        if (usesStructuredTimeline) unawaited(refreshMessages());
       case 'message_start':
         final message = _asMap(payload?['message']);
         if (message?['role'] == 'assistant') _startStreamingText();
@@ -774,10 +925,7 @@ class ChatController extends ChangeNotifier {
             final parsed = ChatMessage.fromJson(message);
             if (parsed.role == ChatRole.assistant ||
                 parsed.role == ChatRole.tool) {
-              _setMessages(
-                <ChatMessage>[..._messages, parsed],
-                <String?>[..._messageIds, null],
-              );
+              _appendLiveMessage(parsed);
             }
           } on FormatException {
             _operationProblem = const TsPhoneProblem(
@@ -810,6 +958,17 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  static bool _isLiveContentEvent(String type) => switch (type) {
+    'input' ||
+    'message_start' ||
+    'message_update' ||
+    'message_end' ||
+    'tool_execution_start' ||
+    'tool_execution_end' ||
+    'approval.request' => true,
+    _ => false,
+  };
+
   void _scheduleStreamRender() {
     if (_streamRenderTimer != null || _disposed) return;
     _streamRenderTimer = Timer(streamRenderInterval, () {
@@ -828,6 +987,18 @@ class ChatController extends ChangeNotifier {
         TsPhoneProblemCode.incompatible,
       );
     }
+  }
+
+  void _updateCapabilities(Object? value) {
+    if (value == null) return;
+    if (value is! List || value.any((item) => item is! String)) {
+      _operationProblem = const TsPhoneProblem(
+        TsPhoneProblemKind.incompatible,
+        TsPhoneProblemCode.incompatible,
+      );
+      return;
+    }
+    _capabilities = Set<String>.unmodifiable(value.cast<String>());
   }
 
   void _startStreamingText() {
@@ -961,6 +1132,30 @@ class ChatController extends ChangeNotifier {
       clientMessageId: clientMessageId,
       origin: origin,
     );
+    if (usesStructuredTimeline) {
+      final pendingIndex = clientMessageId == null
+          ? -1
+          : _timelineItems.indexWhere(
+              (item) =>
+                  item is TimelineMessageItem &&
+                  item.message.clientMessageId == clientMessageId &&
+                  item.message.deliveryState != null,
+            );
+      if (pendingIndex < 0) {
+        _appendLiveMessage(
+          incoming,
+          localId: clientMessageId == null
+              ? 'live-${event.id}'
+              : 'phone-$clientMessageId',
+        );
+      } else {
+        final updated = <SessionTimelineItem>[..._timelineItems];
+        final pending = updated[pendingIndex] as TimelineMessageItem;
+        updated[pendingIndex] = pending.copyWith(message: incoming);
+        _setTimelineItems(updated);
+      }
+      return;
+    }
     final pendingIndex = clientMessageId == null
         ? -1
         : _messages.indexWhere(
@@ -984,6 +1179,22 @@ class ChatController extends ChangeNotifier {
     String clientMessageId,
     ChatDeliveryState deliveryState,
   ) {
+    if (usesStructuredTimeline) {
+      final index = _timelineItems.indexWhere(
+        (item) =>
+            item is TimelineMessageItem &&
+            item.message.clientMessageId == clientMessageId &&
+            item.message.deliveryState != null,
+      );
+      if (index < 0) return;
+      final updated = <SessionTimelineItem>[..._timelineItems];
+      final item = updated[index] as TimelineMessageItem;
+      updated[index] = item.copyWith(
+        message: item.message.copyWith(deliveryState: deliveryState),
+      );
+      _setTimelineItems(updated);
+      return;
+    }
     final index = _messages.indexWhere(
       (message) =>
           message.clientMessageId == clientMessageId &&
@@ -996,6 +1207,19 @@ class ChatController extends ChangeNotifier {
   }
 
   void _removePendingOutgoing(String clientMessageId) {
+    if (usesStructuredTimeline) {
+      _setTimelineItems(
+        _timelineItems
+            .where(
+              (item) =>
+                  item is! TimelineMessageItem ||
+                  item.message.clientMessageId != clientMessageId ||
+                  item.message.deliveryState == null,
+            )
+            .toList(growable: false),
+      );
+      return;
+    }
     final messages = <ChatMessage>[];
     final messageIds = <String?>[];
     for (var index = 0; index < _messages.length; index += 1) {
@@ -1006,6 +1230,175 @@ class ChatController extends ChangeNotifier {
       }
       messages.add(message);
       messageIds.add(_messageIds[index]);
+    }
+    _setMessages(messages, messageIds);
+  }
+
+  void _appendLiveMessage(ChatMessage message, {String? localId}) {
+    if (!usesStructuredTimeline) {
+      _setMessages(
+        <ChatMessage>[..._messages, message],
+        <String?>[..._messageIds, null],
+      );
+      return;
+    }
+    final id =
+        localId ??
+        'live-${_lastEventId ?? DateTime.now().microsecondsSinceEpoch}';
+    if (message.role == ChatRole.user) _currentTurnId = id;
+    _setTimelineItems(<SessionTimelineItem>[
+      ..._timelineItems,
+      TimelineMessageItem(id: id, turnId: _currentTurnId, message: message),
+    ]);
+  }
+
+  void _applyTimelineSnapshot(
+    TsPhoneTimelineSnapshot snapshot, {
+    required bool reset,
+  }) {
+    final previousBranch = _timelineHistory?.selectedBranchId;
+    final incomingIds = snapshot.items.map((item) => item.id).toList();
+    final branchChanged =
+        previousBranch != null &&
+        previousBranch != snapshot.history.selectedBranchId;
+    final windowChanged =
+        _latestTimelineItemIds.isNotEmpty &&
+        !_continuesMessageWindow(_latestTimelineItemIds, incomingIds);
+    final replaceHistory =
+        reset || _timelineHistory == null || branchChanged || windowChanged;
+
+    _timelineHistory = snapshot.history;
+    _selectedBranchId = snapshot.history.selectedBranchIsActive
+        ? null
+        : snapshot.history.selectedBranchId;
+    _capabilities = snapshot.capabilities;
+    _canPrompt = snapshot.capabilities.contains(promptCapability);
+    if (replaceHistory) _loadedEarlierHistory = false;
+    if (replaceHistory || !_loadedEarlierHistory) {
+      _hasMoreHistory = snapshot.hasMore;
+      _nextBefore = snapshot.nextBefore;
+    }
+    if (replaceHistory) {
+      _setTimelineItems(snapshot.items);
+    } else {
+      _mergeTimelinePage(snapshot.items);
+    }
+    _latestTimelineItemIds = incomingIds;
+  }
+
+  void _prependTimelinePage(List<SessionTimelineItem> incoming) {
+    final existing = _timelineItems.map((item) => item.id).toSet();
+    _setTimelineItems(<SessionTimelineItem>[
+      ...incoming.where((item) => !existing.contains(item.id)),
+      ..._timelineItems,
+    ]);
+  }
+
+  void _mergeTimelinePage(List<SessionTimelineItem> incoming) {
+    final incomingById = <String, SessionTimelineItem>{
+      for (final item in incoming) item.id: item,
+    };
+    final incomingMessages = incoming.whereType<TimelineMessageItem>().toList(
+      growable: false,
+    );
+    final incomingClientIds = incoming
+        .whereType<TimelineMessageItem>()
+        .map((item) => item.message.clientMessageId)
+        .whereType<String>()
+        .toSet();
+    final reconciledIncomingMessages = <int>{};
+    final included = <String>{};
+    final merged = <SessionTimelineItem>[];
+    for (final item in _timelineItems) {
+      final stable = RegExp(r'^[0-9a-f]{8}$').hasMatch(item.id);
+      if (!stable) {
+        if (item is TimelineMessageItem) {
+          if (item.message.clientMessageId != null &&
+              incomingClientIds.contains(item.message.clientMessageId)) {
+            continue;
+          }
+          if (item.message.deliveryState == null) {
+            final match = _matchingPersistedMessage(
+              item.message,
+              incomingMessages,
+              reconciledIncomingMessages,
+            );
+            if (match >= 0) {
+              reconciledIncomingMessages.add(match);
+              continue;
+            }
+          }
+        }
+        merged.add(item);
+        continue;
+      }
+      merged.add(incomingById[item.id] ?? item);
+      included.add(item.id);
+    }
+    for (final item in incoming) {
+      if (included.add(item.id)) merged.add(item);
+    }
+    _setTimelineItems(merged);
+  }
+
+  static int _matchingPersistedMessage(
+    ChatMessage transient,
+    List<TimelineMessageItem> incoming,
+    Set<int> consumed,
+  ) {
+    for (var index = 0; index < incoming.length; index += 1) {
+      if (!consumed.contains(index) &&
+          _sameTimelineMessage(transient, incoming[index].message)) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  static bool _sameTimelineMessage(ChatMessage left, ChatMessage right) {
+    if (left.role != right.role ||
+        left.text != right.text ||
+        left.tools.length != right.tools.length) {
+      return false;
+    }
+    final leftClientId = left.clientMessageId;
+    final rightClientId = right.clientMessageId;
+    if (leftClientId != null || rightClientId != null) {
+      return leftClientId != null && leftClientId == rightClientId;
+    }
+    final leftAt = left.timestamp;
+    final rightAt = right.timestamp;
+    if (leftAt == null || rightAt == null) return false;
+    if ((leftAt.difference(rightAt).inMilliseconds).abs() > 120000) {
+      return false;
+    }
+    for (var index = 0; index < left.tools.length; index += 1) {
+      final leftTool = left.tools[index];
+      final rightTool = right.tools[index];
+      if (leftTool.title != rightTool.title ||
+          leftTool.body != rightTool.body ||
+          leftTool.isError != rightTool.isError) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _setTimelineItems(List<SessionTimelineItem> items) {
+    _timelineItems = List<SessionTimelineItem>.unmodifiable(items);
+    _timelineUpdates.value = _timelineItems;
+    _currentTurnId = null;
+    for (final item in _timelineItems) {
+      if (item.turnId != null) _currentTurnId = item.turnId;
+    }
+    final messages = <ChatMessage>[];
+    final messageIds = <String?>[];
+    for (final item in _timelineItems.whereType<TimelineMessageItem>()) {
+      if (item.message.text.isEmpty && item.message.tools.isEmpty) continue;
+      messages.add(item.message);
+      messageIds.add(
+        RegExp(r'^[0-9a-f]{8}$').hasMatch(item.id) ? item.id : null,
+      );
     }
     _setMessages(messages, messageIds);
   }
@@ -1195,6 +1588,7 @@ class ChatController extends ChangeNotifier {
     api.close();
     unawaited(_uiRequests.close());
     _messagesUpdates.dispose();
+    _timelineUpdates.dispose();
     _streamingTextUpdates.dispose();
     super.dispose();
   }

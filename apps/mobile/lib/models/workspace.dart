@@ -84,6 +84,7 @@ class SessionSummary {
     this.historyAvailable = false,
     this.historyOnly = false,
     this.canPrompt = true,
+    this.capabilities = const <String>{},
   }) : assert(!historyOnly || historyAvailable);
 
   factory SessionSummary.fromJson(Map<String, Object?> json) {
@@ -93,12 +94,16 @@ class SessionSummary {
     final historyAvailable = json['historyAvailable'];
     final historyOnly = json['historyOnly'];
     final canPrompt = json['canPrompt'];
+    final rawCapabilities = json['capabilities'];
     if (sessionId is! String ||
         sessionRevision is! String ||
         isStreaming is! bool ||
         (historyAvailable != null && historyAvailable is! bool) ||
         (historyOnly != null && historyOnly is! bool) ||
-        (canPrompt != null && canPrompt is! bool)) {
+        (canPrompt != null && canPrompt is! bool) ||
+        (rawCapabilities != null &&
+            (rawCapabilities is! List ||
+                rawCapabilities.any((value) => value is! String)))) {
       throw const FormatException('Session response is invalid');
     }
     final runtimeState = RuntimeState.parse(json['runtimeState']);
@@ -106,6 +111,9 @@ class SessionSummary {
     final promptAvailable = canPrompt is bool
         ? canPrompt
         : runtimeState.isAvailable;
+    final parsedCapabilities = rawCapabilities == null
+        ? const <String>{}
+        : Set<String>.unmodifiable((rawCapabilities as List).cast<String>());
     return SessionSummary(
       sessionId: sessionId,
       sessionRevision: sessionRevision,
@@ -121,6 +129,7 @@ class SessionSummary {
               hasHistory &&
               !promptAvailable),
       canPrompt: promptAvailable,
+      capabilities: parsedCapabilities,
     );
   }
 
@@ -134,6 +143,9 @@ class SessionSummary {
   final bool historyAvailable;
   final bool historyOnly;
   final bool canPrompt;
+  final Set<String> capabilities;
+
+  bool hasCapability(String capability) => capabilities.contains(capability);
 
   String get shortId =>
       sessionId.substring(0, sessionId.length < 8 ? sessionId.length : 8);

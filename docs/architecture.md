@@ -91,12 +91,24 @@ events after Last-Event-ID. Slow clients are disconnected before unbounded
 buffer growth and can recover from the session snapshot.
 
 Pi session JSONL remains authoritative. At reconciliation time, validated disk
-sessions are added to the broker map even without a Bridge. An offline message
-request reads and projects that JSONL on demand; a live request uses the Bridge
-snapshot. Each response page returns at most 500 projected messages and six
-MiB. Stable Pi message-entry IDs form an opaque `before` cursor, so the phone
-can prepend older disk-backed pages without loading raw JSONL or conflating
-tool results with conversation turns.
+sessions are added to the broker map even without a Bridge. The compatible
+`/messages` endpoint returns conversation-only pages. A capability-advertised
+`/timeline` endpoint projects the same validated branch into messages plus
+bounded research activities, Turn ownership, branch summaries, and aggregate
+counts. Neither endpoint creates or updates a second conversation store.
+
+Each response page returns at most 500 projected items and six MiB. Stable Pi
+entry IDs form an opaque `before` cursor, so the phone can prepend older pages
+without receiving raw JSONL. Histories with at most 2000 timeline items load
+automatically; larger histories expose progress and explicit one-page or
+load-all actions. The threshold is client policy, while pagination and byte
+limits remain server-enforced mechanism.
+
+The last appended Pi leaf is the active branch. Other leaves remain selectable
+for audit, but a timeline response for an inactive branch omits prompt and abort
+capabilities. The Flutter client consequently treats that view as read-only.
+Live event messages are temporary UI entries; once equivalent stable JSONL
+entries appear, the client reconciles them one-for-one instead of showing both.
 Completed live messages advance the snapshot checkpoint before agent
 settlement, so a long tool turn does not make already completed output
 disappear.

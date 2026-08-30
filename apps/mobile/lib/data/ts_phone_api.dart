@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 
 import '../models/connection_settings.dart';
+import '../models/session_timeline.dart';
 import '../models/workspace.dart';
 import 'sse_parser.dart';
 
@@ -188,6 +189,28 @@ class TsPhoneMessageSnapshot {
   final String? nextBefore;
 }
 
+class TsPhoneTimelineSnapshot {
+  const TsPhoneTimelineSnapshot({
+    required this.sessionId,
+    required this.sessionRevision,
+    required this.items,
+    required this.history,
+    required this.hasMore,
+    required this.lastEventId,
+    required this.capabilities,
+    this.nextBefore,
+  });
+
+  final String sessionId;
+  final String sessionRevision;
+  final List<SessionTimelineItem> items;
+  final TimelineHistorySummary history;
+  final bool hasMore;
+  final String? nextBefore;
+  final String lastEventId;
+  final Set<String> capabilities;
+}
+
 abstract interface class TsPhoneGateway {
   Future<Map<String, Object?>> version();
   Future<List<WorkspaceSummary>> listWorkspaces();
@@ -197,6 +220,13 @@ abstract interface class TsPhoneGateway {
     String sessionId, {
     String? before,
     int? limit,
+  });
+  Future<TsPhoneTimelineSnapshot> getTimeline(
+    String workspaceId,
+    String sessionId, {
+    String? before,
+    int? limit,
+    String? branch,
   });
   Future<void> sendMessage(
     String workspaceId,
@@ -333,6 +363,71 @@ class TsPhoneApi implements TsPhoneGateway {
       messageIds: messageIds,
       hasMore: hasMore,
       nextBefore: rawNextBefore as String?,
+    );
+  }
+
+  @override
+  Future<TsPhoneTimelineSnapshot> getTimeline(
+    String workspaceId,
+    String sessionId, {
+    String? before,
+    int? limit,
+    String? branch,
+  }) async {
+    if (limit != null && (limit < 1 || limit > 500)) {
+      throw ArgumentError.value(limit, 'limit', 'must be between 1 and 500');
+    }
+    final data = _asMap(
+      await _request(
+        'GET',
+        _sessionPath(workspaceId, sessionId, 'timeline'),
+        queryParameters: <String, String>{
+          'before': ?before,
+          if (limit != null) 'limit': '$limit',
+          'branch': ?branch,
+        },
+      ),
+      'Timeline response',
+    );
+    if (data['schemaVersion'] != 'ts-phone-timeline/1' ||
+        data['sessionId'] != sessionId ||
+        data['sessionRevision'] is! String ||
+        data['lastEventId'] is! String ||
+        (data['lastEventId']! as String).isEmpty ||
+        data['items'] is! List ||
+        data['hasMore'] is! bool ||
+        data['capabilities'] is! List ||
+        (data['capabilities']! as List).any((value) => value is! String)) {
+      throw const FormatException('Timeline response is invalid');
+    }
+    final items = (data['items']! as List)
+        .map(SessionTimelineItem.fromJson)
+        .toList(growable: false);
+    if (items.map((item) => item.id).toSet().length != items.length) {
+      throw const FormatException('Timeline item ids are not unique');
+    }
+    final hasMore = data['hasMore']! as bool;
+    final nextBefore = data['nextBefore'];
+    if ((nextBefore != null && nextBefore is! String) ||
+        (hasMore && (items.isEmpty || nextBefore != items.first.id)) ||
+        (!hasMore && nextBefore != null)) {
+      throw const FormatException('Timeline pagination is invalid');
+    }
+    final history = TimelineHistorySummary.fromJson(data['history']);
+    if (history.totalItems < items.length) {
+      throw const FormatException('Timeline history totals are invalid');
+    }
+    return TsPhoneTimelineSnapshot(
+      sessionId: sessionId,
+      sessionRevision: data['sessionRevision']! as String,
+      items: List<SessionTimelineItem>.unmodifiable(items),
+      history: history,
+      hasMore: hasMore,
+      nextBefore: nextBefore as String?,
+      lastEventId: data['lastEventId']! as String,
+      capabilities: Set<String>.unmodifiable(
+        (data['capabilities']! as List).cast<String>(),
+      ),
     );
   }
 

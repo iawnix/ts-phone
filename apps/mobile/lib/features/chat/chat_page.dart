@@ -10,6 +10,7 @@ import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/chat_message.dart';
 import '../../models/connection_settings.dart';
+import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
@@ -17,6 +18,7 @@ import '../../widgets/chat_message_view.dart';
 import '../../widgets/presentation.dart';
 import 'approval_panel.dart';
 import 'chat_controller.dart';
+import 'timeline_widgets.dart';
 
 enum _ChatScrollMode { following, reading }
 
@@ -77,6 +79,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       accessMode: widget.session.accessMode,
       initialHistoryAvailable: widget.session.historyAvailable,
       initialCanPrompt: widget.session.canPrompt,
+      initialCapabilities: widget.session.capabilities,
       recoveredSession: widget.recoveredSession,
     )..addListener(_onControllerUpdate);
     _controller.streamingTextUpdates.addListener(_onStreamingTextUpdate);
@@ -279,6 +282,40 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       ),
     );
     _updateTimelineNavigationVisibility(_scroll.position);
+  }
+
+  Future<void> _loadAllHistory() async {
+    if (!_controller.canLoadEarlierMessages || _controller.loadingAllHistory) {
+      return;
+    }
+    _setScrollMode(_ChatScrollMode.reading);
+    final oldPixels = _scroll.hasClients ? _scroll.position.pixels : null;
+    final oldMaxExtent = _scroll.hasClients
+        ? _scroll.position.maxScrollExtent
+        : null;
+    await _controller.loadAllHistory();
+    if (!mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        !_scroll.hasClients ||
+        oldPixels == null ||
+        oldMaxExtent == null) {
+      return;
+    }
+    final addedExtent = _scroll.position.maxScrollExtent - oldMaxExtent;
+    _scroll.jumpTo(
+      (oldPixels + addedExtent).clamp(
+        _scroll.position.minScrollExtent,
+        _scroll.position.maxScrollExtent,
+      ),
+    );
+  }
+
+  Future<void> _selectTimelineBranch(String branchId) async {
+    ActionFeedback.selection();
+    await _controller.selectTimelineBranch(branchId);
+    if (!mounted) return;
+    _resumeTailFollow();
   }
 
   void _onComposerChanged() {
@@ -494,6 +531,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         scrollController: _scroll,
         onScrollNotification: _handleScrollNotification,
         onLoadEarlier: _loadEarlierMessages,
+        onLoadAll: _loadAllHistory,
+        onSelectBranch: _selectTimelineBranch,
       ),
       builder: (context, child) => _buildMessagesForState(child!),
     );
@@ -501,8 +540,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Widget _buildMessagesForState(Widget timeline) {
     final messages = _controller.messages;
+    final hasTimelineItems =
+        _controller.usesStructuredTimeline &&
+        _controller.timelineItems.isNotEmpty;
     final hasStreaming = _controller.hasStreamingText;
-    if (messages.isEmpty && !hasStreaming) {
+    if (messages.isEmpty && !hasTimelineItems && !hasStreaming) {
       if (_controller.problem case final problem?) {
         return _ConnectionProblemView(
           message: problem.localizedMessage(context.l10n),
@@ -755,7 +797,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Widget? _priorityBanner() {
-    if (_controller.messages.isEmpty && !_controller.hasStreamingText) {
+    if (_controller.messages.isEmpty &&
+        _controller.timelineItems.isEmpty &&
+        !_controller.hasStreamingText) {
       return null;
     }
     if (_controller.problem case final problem?) {
@@ -787,6 +831,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
     if (_controller.runtimeState == RuntimeState.recoveryRequired) {
       return l10n.composerRecovery;
+    }
+    if (_controller.viewingInactiveBranch) {
+      return l10n.composerHistoricalBranch;
     }
     if (_controller.eventConnectionState != EventConnectionState.connected) {
       return l10n.composerReconnecting;
@@ -937,6 +984,8 @@ class _MessageTimeline extends StatelessWidget {
     required this.scrollController,
     required this.onScrollNotification,
     required this.onLoadEarlier,
+    required this.onLoadAll,
+    required this.onSelectBranch,
   });
 
   final ChatController controller;
@@ -946,56 +995,139 @@ class _MessageTimeline extends StatelessWidget {
   final ScrollController scrollController;
   final NotificationListenerCallback<ScrollNotification> onScrollNotification;
   final Future<void> Function() onLoadEarlier;
+  final Future<void> Function() onLoadAll;
+  final Future<void> Function(String branchId) onSelectBranch;
 
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => controller.usesStructuredTimeline
+          ? _buildStructuredTimeline(context)
+          : _buildMessageTimeline(context),
+    );
+  }
+
+  Widget _buildMessageTimeline(BuildContext context) {
     return ValueListenableBuilder<List<ChatMessage>>(
       valueListenable: messagesListenable,
-      child: StreamingChatMessageView(
-        key: const ValueKey<String>('streaming-message'),
-        textListenable: streamingTextListenable,
-        updatesEnabledListenable: streamUpdatesEnabledListenable,
-      ),
-      builder: (context, messages, streamingMessage) {
+      builder: (context, messages, _) {
         final showEarlier =
             controller.canLoadEarlierMessages ||
             controller.loadingEarlierMessages;
         final historyOffset = showEarlier ? 1 : 0;
-        return NotificationListener<ScrollNotification>(
-          onNotification: onScrollNotification,
-          child: ListView.builder(
-            key: const ValueKey<String>('chat-message-list'),
-            controller: scrollController,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: messages.length + 1 + historyOffset,
-            itemBuilder: (context, index) {
-              if (showEarlier && index == 0) {
-                return AnimatedBuilder(
-                  animation: controller,
-                  builder: (context, _) => _EarlierMessagesControl(
-                    visible:
-                        controller.canLoadEarlierMessages ||
-                        controller.loadingEarlierMessages,
-                    loading: controller.loadingEarlierMessages,
-                    onPressed: onLoadEarlier,
-                  ),
-                );
-              }
-              final messageIndex = index - historyOffset;
-              if (messageIndex == messages.length) return streamingMessage!;
-              return ChatMessageView(
-                key: ValueKey<String>(
-                  'chat-message-${controller.messageKeyAt(messageIndex)}',
-                ),
-                message: messages[messageIndex],
+        return _list(
+          itemCount: messages.length + 1 + historyOffset,
+          itemBuilder: (context, index) {
+            if (showEarlier && index == 0) {
+              return _EarlierMessagesControl(
+                visible:
+                    controller.canLoadEarlierMessages ||
+                    controller.loadingEarlierMessages,
+                loading: controller.loadingEarlierMessages,
+                onPressed: onLoadEarlier,
               );
-            },
-          ),
+            }
+            final messageIndex = index - historyOffset;
+            if (messageIndex == messages.length) return _streamingMessage();
+            return ChatMessageView(
+              key: ValueKey<String>(
+                'chat-message-${controller.messageKeyAt(messageIndex)}',
+              ),
+              message: messages[messageIndex],
+            );
+          },
         );
       },
     );
   }
+
+  Widget _buildStructuredTimeline(BuildContext context) {
+    return ValueListenableBuilder<List<SessionTimelineItem>>(
+      valueListenable: controller.timelineUpdates,
+      builder: (context, items, _) {
+        final turnNumbers = <String, int>{};
+        for (final item in items) {
+          final turnId = item.turnId;
+          if (turnId != null) turnNumbers.putIfAbsent(turnId, () => 0);
+        }
+        final firstTurnNumber =
+            (controller.timelineTurnCount - turnNumbers.length + 1).clamp(
+              1,
+              controller.timelineTurnCount == 0
+                  ? 1
+                  : controller.timelineTurnCount,
+            );
+        var nextTurnNumber = firstTurnNumber;
+        for (final turnId in turnNumbers.keys) {
+          turnNumbers[turnId] = nextTurnNumber;
+          nextTurnNumber += 1;
+        }
+        return _list(
+          itemCount: items.length + 2,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return TimelineHistoryControl(
+                controller: controller,
+                onLoadEarlier: onLoadEarlier,
+                onLoadAll: onLoadAll,
+                onSelectBranch: onSelectBranch,
+              );
+            }
+            final itemIndex = index - 1;
+            if (itemIndex == items.length) return _streamingMessage();
+            final item = items[itemIndex];
+            final previousTurnId = itemIndex == 0
+                ? null
+                : items[itemIndex - 1].turnId;
+            final showTurn =
+                item.turnId != null && item.turnId != previousTurnId;
+            return Column(
+              key: ValueKey<String>('timeline-${item.id}'),
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (showTurn)
+                  TimelineTurnDivider(
+                    number: turnNumbers[item.turnId] ?? firstTurnNumber,
+                  ),
+                switch (item) {
+                  TimelineMessageItem(:final message) => ChatMessageView(
+                    message: message,
+                  ),
+                  TimelineActivityItem(:final activity) => TimelineActivityView(
+                    activity: activity,
+                  ),
+                },
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _list({
+    required int itemCount,
+    required NullableIndexedWidgetBuilder itemBuilder,
+  }) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: onScrollNotification,
+      child: ListView.builder(
+        key: const ValueKey<String>('chat-message-list'),
+        controller: scrollController,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: itemCount,
+        itemBuilder: itemBuilder,
+      ),
+    );
+  }
+
+  Widget _streamingMessage() => StreamingChatMessageView(
+    key: const ValueKey<String>('streaming-message'),
+    textListenable: streamingTextListenable,
+    updatesEnabledListenable: streamUpdatesEnabledListenable,
+  );
 }
 
 class _EarlierMessagesControl extends StatelessWidget {

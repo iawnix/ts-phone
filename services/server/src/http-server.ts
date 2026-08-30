@@ -7,10 +7,12 @@ import { WorkspaceHub } from "./runtime/workspace-hub.js";
 import { assertBearerAuthorization, ensureBearerToken, ensureBridgeSecret } from "./security.js";
 import {
   API_VERSION,
+  SERVICE_VERSION,
   type ApprovalInput,
   type MessagePageRequest,
   type PromptInput,
   type SessionCommandInput,
+  type TimelinePageRequest,
 } from "./types.js";
 
 const MAX_SSE_BUFFERED_BYTES = 16 * 1024 * 1024;
@@ -92,7 +94,7 @@ async function handleRequest(
   }
   assertBearerAuthorization(request.headers.authorization, token);
   if (method === "GET" && url.pathname === "/api/v3/version") {
-    sendData(response, 200, { apiVersion: API_VERSION, serviceVersion: "0.4.1" });
+    sendData(response, 200, { apiVersion: API_VERSION, serviceVersion: SERVICE_VERSION });
     return;
   }
   if (method === "GET" && url.pathname === "/api/v3/workspaces") {
@@ -130,6 +132,14 @@ async function handleRequest(
       sendData(response, 202, { accepted: true, clientMessageId: input.clientMessageId });
       return;
     }
+  }
+  if (sessionResource === "timeline" && segments.length === 7 && method === "GET") {
+    sendData(response, 200, await hub.getTimeline(
+      workspaceId,
+      sessionId,
+      validateTimelinePageRequest(url),
+    ));
+    return;
   }
   if (sessionResource === "abort" && segments.length === 7 && method === "POST") {
     const input = validateSessionCommand(await readJsonBody(request, config.maxBodyBytes));
@@ -173,6 +183,44 @@ function validateMessagePageRequest(url: URL): MessagePageRequest {
     throw new HttpError(400, "invalid_message_limit", "Message page limit must be between 1 and 500");
   }
   return { ...(rawBefore === null ? {} : { before: rawBefore }), limit };
+}
+
+function validateTimelinePageRequest(url: URL): TimelinePageRequest {
+  for (const key of url.searchParams.keys()) {
+    if (key !== "before" && key !== "limit" && key !== "branch") {
+      throw new HttpError(
+        400,
+        "invalid_timeline_query",
+        "Timeline only accepts before, limit, and branch query parameters",
+      );
+    }
+  }
+  for (const key of ["before", "limit", "branch"]) {
+    if (url.searchParams.getAll(key).length > 1) {
+      throw new HttpError(400, "invalid_timeline_query", "Timeline query parameters must not be repeated");
+    }
+  }
+  const rawBefore = url.searchParams.get("before");
+  const rawBranch = url.searchParams.get("branch");
+  if (rawBefore !== null && !/^[0-9a-f]{8}$/.test(rawBefore)) {
+    throw new HttpError(400, "invalid_timeline_cursor", "Timeline cursor is invalid");
+  }
+  if (rawBranch !== null && !/^[0-9a-f]{8}$/.test(rawBranch)) {
+    throw new HttpError(400, "invalid_timeline_branch", "Timeline branch is invalid");
+  }
+  const rawLimit = url.searchParams.get("limit");
+  if (rawLimit !== null && !/^[1-9][0-9]*$/.test(rawLimit)) {
+    throw new HttpError(400, "invalid_timeline_limit", "Timeline page limit must be between 1 and 500");
+  }
+  const limit = rawLimit === null ? 500 : Number(rawLimit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+    throw new HttpError(400, "invalid_timeline_limit", "Timeline page limit must be between 1 and 500");
+  }
+  return {
+    ...(rawBefore === null ? {} : { before: rawBefore }),
+    ...(rawBranch === null ? {} : { branch: rawBranch }),
+    limit,
+  };
 }
 
 function decodeSegments(pathname: string): string[] {

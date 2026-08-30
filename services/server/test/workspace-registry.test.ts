@@ -197,6 +197,136 @@ test("registry returns only the active Pi session branch", async () => {
   );
 });
 
+test("registry projects a paged research timeline and explicit Pi branches", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ts-phone-timeline-"));
+  const workspaceRoot = join(root, "ts_001");
+  const sessionsRoot = join(workspaceRoot, ".pi", "sessions");
+  await mkdir(sessionsRoot, { recursive: true });
+  const records = [{
+    type: "session",
+    version: 3,
+    id: "session-timeline",
+    timestamp: "2026-08-30T00:00:00.000Z",
+    cwd: workspaceRoot,
+  }, {
+    type: "message",
+    id: "00000001",
+    parentId: null,
+    message: { role: "user", content: "inspect reaction", timestamp: 1 },
+  }, {
+    type: "message",
+    id: "00000002",
+    parentId: "00000001",
+    message: {
+      role: "assistant",
+      provider: "must-not-leak",
+      content: [{ type: "text", text: "abandoned branch" }],
+      timestamp: 2,
+    },
+  }, {
+    type: "custom",
+    customType: "ts-workspace-subagent-run",
+    id: "00000003",
+    parentId: "00000001",
+    timestamp: "2026-08-30T00:01:00.000Z",
+    data: {
+      run_id: "sub_1",
+      role: "compute",
+      operation: "inspect",
+      node_refs: ["node_1"],
+      duration_ms: 1200,
+      usage: { total: 42, private: "must-not-leak" },
+      schema_valid: true,
+      run_ref: "nodes/node_1/attempts/calc_1/runs/sub_1",
+      action_digest: "must-not-leak",
+    },
+  }, {
+    type: "message",
+    id: "00000004",
+    parentId: "00000003",
+    message: { role: "assistant", content: [{ type: "text", text: "active reply" }], timestamp: 4 },
+  }];
+  const sessionFile = join(sessionsRoot, "timeline.jsonl");
+  await writeFile(sessionFile, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  const registry = new WorkspaceRegistry(root);
+  const workspace = await registry.get("ts_001");
+  const session = (await registry.listPersistedSessionIds(workspace)).sessions.get("session-timeline");
+  assert.ok(session);
+
+  const latest = await registry.readPersistedSessionTimeline(workspace, session, { limit: 2 });
+  assert.deepEqual(latest.items.map((item) => item.id), ["00000003", "00000004"]);
+  assert.equal(latest.hasMore, true);
+  assert.equal(latest.nextBefore, "00000003");
+  assert.deepEqual(latest.history, {
+    totalItems: 3,
+    messageCount: 2,
+    activityCount: 1,
+    turnCount: 1,
+    branchCount: 2,
+    activeBranchId: "00000004",
+    selectedBranchId: "00000004",
+    branches: [{
+      id: "00000002",
+      active: false,
+      itemCount: 2,
+      messageCount: 2,
+      activityCount: 0,
+      turnCount: 1,
+    }, {
+      id: "00000004",
+      active: true,
+      itemCount: 3,
+      messageCount: 2,
+      activityCount: 1,
+      turnCount: 1,
+    }],
+  });
+  assert.deepEqual(latest.items[0], {
+    id: "00000003",
+    turnId: "00000001",
+    kind: "activity",
+    activity: {
+      category: "subagent",
+      status: "completed",
+      title: "subagent_run",
+      role: "compute",
+      operation: "inspect",
+      nodeRefs: ["node_1"],
+      durationMs: 1200,
+      totalTokens: 42,
+      reference: "nodes/node_1/attempts/calc_1/runs/sub_1",
+      at: "2026-08-30T00:01:00.000Z",
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(latest), /must-not-leak|action_digest|private/);
+
+  const earlier = await registry.readPersistedSessionTimeline(workspace, session, {
+    before: latest.nextBefore,
+    limit: 2,
+  });
+  assert.deepEqual(earlier.items.map((item) => item.id), ["00000001"]);
+  assert.equal(earlier.hasMore, false);
+
+  const alternate = await registry.readPersistedSessionTimeline(workspace, session, {
+    branch: "00000002",
+    limit: 10,
+  });
+  assert.deepEqual(alternate.items.map((item) => item.id), ["00000001", "00000002"]);
+  assert.equal(alternate.history.selectedBranchId, "00000002");
+  assert.match(JSON.stringify(alternate.items), /abandoned branch/);
+  assert.doesNotMatch(JSON.stringify(alternate.items), /must-not-leak/);
+
+  await assert.rejects(
+    () => registry.readPersistedSessionTimeline(workspace, session, {
+      branch: "ffffffff",
+      limit: 10,
+    }),
+    (error: unknown) => (
+      error instanceof HttpError && error.code === "session_timeline_branch_invalid"
+    ),
+  );
+});
+
 test("registry rejects malformed, symbolic-link, and oversized session histories", async () => {
   const root = await mkdtemp(join(tmpdir(), "ts-phone-unsafe-history-"));
   const workspaceRoot = join(root, "ts_001");

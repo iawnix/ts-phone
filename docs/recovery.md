@@ -25,9 +25,16 @@ the app returns to the foreground; while they remain open, pull to refresh or
 use the refresh action.
 
 Offline history can be read and manually refreshed, but it cannot accept a
-prompt, abort request, or approval response. A matching Bridge reconnect resets
-the session revision and replaces the disk-only capability state with its live
-controller or observer state.
+prompt, abort request, or approval response. Timeline histories up to 2000
+items are restored automatically. For larger sessions, use the visible page or
+load-all controls; the loaded/total counter distinguishes a partial client view
+from missing server history. A matching Bridge reconnect resets the session
+revision and replaces the disk-only capability state with its live controller
+or observer state.
+
+Pi branches are recovered from the JSONL parent graph. The current leaf can be
+interactive only with a live Bridge. Selecting another leaf intentionally makes
+the composer read-only; switch back to the active branch before sending.
 
 Reconciliation never deletes files and never removes a live bridge. If any
 session history is malformed or unreadable, cleanup stops and retains existing
