@@ -127,19 +127,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lastSync => 'Last sync';
 
   @override
-  String get runDiagnostics => 'Run connection diagnostics';
+  String get runDiagnostics => 'Check Phone service';
 
   @override
-  String get diagnosticsRunning => 'Running connection diagnostics';
+  String get diagnosticsRunning => 'Checking';
 
   @override
   String get diagnosticConfigured => 'Configured';
 
   @override
-  String get diagnosticVerified => 'Verified';
+  String get diagnosticVerified => 'Healthy';
 
   @override
-  String get diagnosticFailed => 'Failed';
+  String get diagnosticFailed => 'Issue';
 
   @override
   String get diagnosticNotChecked => 'Not checked';
@@ -317,6 +317,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String sessionToken(String shortId) {
     return 'session $shortId';
   }
+
+  @override
+  String get sessionRuntimeTapHint => 'View model and context details';
+
+  @override
+  String get sessionRuntimeDetails => 'Model and context';
+
+  @override
+  String get sessionRuntimeLastKnown =>
+      'TSPi is offline. These are the last known runtime values.';
+
+  @override
+  String get sessionModel => 'Model';
+
+  @override
+  String get sessionProvider => 'Provider';
+
+  @override
+  String get sessionContextWindow => 'Context';
+
+  @override
+  String get sessionContextRemaining => 'Remaining';
+
+  @override
+  String get sessionContextSource => 'Measurement';
+
+  @override
+  String get sessionContextEstimate => 'Pi estimate';
+
+  @override
+  String get sessionContextUnavailable => 'Not available';
+
+  @override
+  String get sessionRuntimeUpdated => 'Updated';
 
   @override
   String get messagesSynced => 'Messages synchronized';

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -76,6 +77,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       sessionId: widget.session.sessionId,
       initialSessionRevision: widget.session.sessionRevision,
       initialSessionTitle: widget.session.sessionName,
+      initialSessionRuntime: widget.session.runtime,
       initialRuntimeState: widget.session.runtimeState,
       accessMode: widget.session.accessMode,
       initialHistoryAvailable: widget.session.historyAvailable,
@@ -405,6 +407,25 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       );
   }
 
+  void _showSessionRuntimeDetails() {
+    final runtime = _controller.sessionRuntime;
+    if (runtime == null) return;
+    ActionFeedback.selection();
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _SessionRuntimeDetailsSheet(
+        runtime: runtime,
+        workspaceName: widget.workspace.name,
+        accessMode: _controller.accessMode,
+        runtimeState: _controller.runtimeState,
+        sessionShortId: widget.session.shortId,
+      ),
+    );
+  }
+
   void _queueUiRequest(ExtensionUiRequest request) {
     _pendingUiRequests.add(request);
     unawaited(_drainUiRequests());
@@ -482,6 +503,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             historyOnly: _controller.historyOnly,
             connectionState: _controller.eventConnectionState,
             sessionShortId: widget.session.shortId,
+            runtime: _controller.sessionRuntime,
+            onRuntimeTap: _showSessionRuntimeDetails,
           ),
           actions: <Widget>[
             Padding(
@@ -869,6 +892,8 @@ class _ChatNavigationTitle extends StatelessWidget {
     required this.historyOnly,
     required this.connectionState,
     required this.sessionShortId,
+    required this.runtime,
+    required this.onRuntimeTap,
   });
 
   final String title;
@@ -878,6 +903,8 @@ class _ChatNavigationTitle extends StatelessWidget {
   final bool historyOnly;
   final EventConnectionState connectionState;
   final String sessionShortId;
+  final SessionRuntimeSnapshot? runtime;
+  final VoidCallback onRuntimeTap;
 
   @override
   Widget build(BuildContext context) {
@@ -904,6 +931,8 @@ class _ChatNavigationTitle extends StatelessWidget {
           historyOnly: historyOnly,
           connectionState: connectionState,
           sessionShortId: sessionShortId,
+          runtime: runtime,
+          onRuntimeTap: onRuntimeTap,
         ),
       ],
     );
@@ -918,6 +947,8 @@ class _SessionContextLine extends StatelessWidget {
     required this.historyOnly,
     required this.connectionState,
     required this.sessionShortId,
+    required this.runtime,
+    required this.onRuntimeTap,
   });
 
   final String workspaceName;
@@ -926,6 +957,8 @@ class _SessionContextLine extends StatelessWidget {
   final bool historyOnly;
   final EventConnectionState connectionState;
   final String sessionShortId;
+  final SessionRuntimeSnapshot? runtime;
+  final VoidCallback onRuntimeTap;
 
   @override
   Widget build(BuildContext context) {
@@ -958,39 +991,271 @@ class _SessionContextLine extends StatelessWidget {
     final stateLabel = historyOnly
         ? l10n.historySession
         : runtimeState.localizedCompactLabel(l10n);
-    final contextLabel =
-        '${stateLabel.toUpperCase()} · ${l10n.sessionToken(sessionShortId)}';
+    final contextLabel = runtime == null
+        ? '${stateLabel.toUpperCase()} · ${l10n.sessionToken(sessionShortId)}'
+        : _compactRuntimeLabel(runtime!);
     final tooltip = <String>[
       workspaceName,
       if (!historyOnly) accessMode.localizedLabel(l10n),
       connectionMessage,
+      if (runtime != null) runtime!.model.id,
     ].join(' · ');
-    return Tooltip(
-      message: tooltip,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          TsStatusDot(
-            color: connectionColor,
-            size: 7,
-            pulsing: connectionState == EventConnectionState.connected,
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        TsStatusDot(
+          color: connectionColor,
+          size: 7,
+          pulsing: connectionState == EventConnectionState.connected,
+        ),
+        const SizedBox(width: 5),
+        Flexible(
+          child: TsMonoText(
+            contextLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(width: 5),
-          Flexible(
-            child: TsMonoText(
-              contextLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall?.copyWith(
+        ),
+      ],
+    );
+    return Tooltip(
+      message: runtime == null
+          ? tooltip
+          : '$tooltip · ${l10n.sessionRuntimeTapHint}',
+      child: runtime == null
+          ? content
+          : Semantics(
+              button: true,
+              label: l10n.sessionRuntimeTapHint,
+              child: InkWell(
+                key: const ValueKey<String>('session-runtime-summary'),
+                onTap: onRuntimeTap,
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 3,
+                    vertical: 2,
+                  ),
+                  child: content,
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _SessionRuntimeDetailsSheet extends StatelessWidget {
+  const _SessionRuntimeDetailsSheet({
+    required this.runtime,
+    required this.workspaceName,
+    required this.accessMode,
+    required this.runtimeState,
+    required this.sessionShortId,
+  });
+
+  final SessionRuntimeSnapshot runtime;
+  final String workspaceName;
+  final SessionAccessMode accessMode;
+  final RuntimeState runtimeState;
+  final String sessionShortId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final usage = runtime.context;
+    final number = NumberFormat.decimalPattern(
+      Localizations.localeOf(context).toLanguageTag(),
+    );
+    final used = usage?.usedTokens;
+    final contextValue = usage == null
+        ? l10n.sessionContextUnavailable
+        : '${used == null ? '—' : number.format(used)} / ${number.format(usage.limitTokens)}';
+    final remaining = usage?.remainingTokens;
+    final remainingPercent = usage?.percent == null
+        ? null
+        : (100 - usage!.percent!).clamp(0, 100).round();
+    final remainingValue = remaining == null || remainingPercent == null
+        ? l10n.sessionContextUnavailable
+        : '${number.format(remaining)} · $remainingPercent%';
+    final updated = runtime.updatedAt.toLocal();
+    final updatedValue = [
+      MaterialLocalizations.of(context).formatMediumDate(updated),
+      MaterialLocalizations.of(
+        context,
+      ).formatTimeOfDay(TimeOfDay.fromDateTime(updated)),
+    ].join(' · ');
+    final lastKnown =
+        runtimeState == RuntimeState.offline ||
+        runtimeState == RuntimeState.recoveryRequired;
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        TsPhoneSpacing.xLarge,
+        0,
+        TsPhoneSpacing.xLarge,
+        TsPhoneSpacing.xLarge + MediaQuery.viewPaddingOf(context).bottom,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(Icons.memory_rounded, color: theme.colorScheme.primary),
+              const SizedBox(width: TsPhoneSpacing.medium),
+              Expanded(
+                child: Text(
+                  l10n.sessionRuntimeDetails,
+                  style: theme.textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+          if (lastKnown) ...<Widget>[
+            const SizedBox(height: TsPhoneSpacing.medium),
+            Text(
+              l10n.sessionRuntimeLastKnown,
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+          ],
+          const SizedBox(height: TsPhoneSpacing.large),
+          _RuntimeDetailRow(
+            icon: Icons.smart_toy_outlined,
+            label: l10n.sessionModel,
+            value: runtime.model.id,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.route_outlined,
+            label: l10n.sessionProvider,
+            value: runtime.model.provider,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.data_usage_rounded,
+            label: l10n.sessionContextWindow,
+            value: contextValue,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.battery_5_bar_rounded,
+            label: l10n.sessionContextRemaining,
+            value: remainingValue,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.calculate_outlined,
+            label: l10n.sessionContextSource,
+            value: l10n.sessionContextEstimate,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.schedule_rounded,
+            label: l10n.sessionRuntimeUpdated,
+            value: updatedValue,
+          ),
+          const Divider(height: TsPhoneSpacing.xLarge),
+          _RuntimeDetailRow(
+            icon: Icons.folder_outlined,
+            label: l10n.approvalWorkspace,
+            value: workspaceName,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.tag_rounded,
+            label: l10n.approvalSession,
+            value: l10n.sessionToken(sessionShortId),
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.shield_outlined,
+            label: l10n.auth,
+            value: accessMode.localizedLabel(l10n),
           ),
         ],
       ),
     );
   }
+}
+
+class _RuntimeDetailRow extends StatelessWidget {
+  const _RuntimeDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stacked = MediaQuery.textScalerOf(context).scale(14) > 19;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: TsPhoneSpacing.small),
+      child: Row(
+        crossAxisAlignment: stacked
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Padding(
+            padding: EdgeInsets.only(top: stacked ? 2 : 0),
+            child: Icon(
+              icon,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: TsPhoneSpacing.medium),
+          Expanded(
+            child: stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(label, style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: TsPhoneSpacing.xSmall),
+                      TsMonoText(value, style: theme.textTheme.bodySmall),
+                    ],
+                  )
+                : Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(label, style: theme.textTheme.bodyMedium),
+                      ),
+                      const SizedBox(width: TsPhoneSpacing.medium),
+                      Flexible(
+                        child: TsMonoText(
+                          value,
+                          textAlign: TextAlign.end,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _compactRuntimeLabel(SessionRuntimeSnapshot runtime) {
+  final usage = runtime.context;
+  if (usage == null) return runtime.model.id;
+  final used = usage.usedTokens;
+  return '${runtime.model.id} · ${used == null ? '—' : _compactTokenCount(used)} / ${_compactTokenCount(usage.limitTokens)}';
+}
+
+String _compactTokenCount(int value) {
+  if (value < 1000) return '$value';
+  final thousands = value / 1000;
+  final digits = thousands < 10 && thousands != thousands.roundToDouble()
+      ? 1
+      : 0;
+  return '${thousands.toStringAsFixed(digits)}k';
 }
 
 class _MessageTimeline extends StatelessWidget {

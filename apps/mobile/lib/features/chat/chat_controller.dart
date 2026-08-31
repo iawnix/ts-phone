@@ -92,6 +92,7 @@ class ChatController extends ChangeNotifier {
     required RuntimeState initialRuntimeState,
     required this.accessMode,
     String? initialSessionTitle,
+    SessionRuntimeSnapshot? initialSessionRuntime,
     bool initialHistoryAvailable = false,
     bool? initialCanPrompt,
     Set<String> initialCapabilities = const <String>{},
@@ -108,7 +109,8 @@ class ChatController extends ChangeNotifier {
        _canPrompt = initialCanPrompt ?? initialRuntimeState.isAvailable,
        _capabilities = Set<String>.unmodifiable(initialCapabilities),
        _sessionRevision = initialSessionRevision,
-       _sessionTitle = initialSessionTitle;
+       _sessionTitle = initialSessionTitle,
+       _sessionRuntime = initialSessionRuntime;
 
   final TsPhoneGateway api;
   final String workspaceId;
@@ -144,6 +146,7 @@ class ChatController extends ChangeNotifier {
   String? _lastEventId;
   String _sessionRevision;
   String? _sessionTitle;
+  SessionRuntimeSnapshot? _sessionRuntime;
   bool _historyAvailable;
   bool _canPrompt;
   bool _commandInFlight = false;
@@ -187,6 +190,7 @@ class ChatController extends ChangeNotifier {
   TsPhoneProblem? get problem => _operationProblem ?? _eventProblem;
   bool get isSynchronizing => _snapshotSyncInProgress;
   String? get sessionTitle => _sessionTitle;
+  SessionRuntimeSnapshot? get sessionRuntime => _sessionRuntime;
   String get sessionRevision => _sessionRevision;
   bool get commandInFlight => _commandInFlight;
   bool get historyAvailable => _historyAvailable;
@@ -827,6 +831,7 @@ class ChatController extends ChangeNotifier {
         if (payload?['sessionName'] is String) {
           _sessionTitle = payload!['sessionName']! as String;
         }
+        _updateSessionRuntime(payload?['runtime']);
         if (payload?['historyAvailable'] is bool) {
           _historyAvailable = payload!['historyAvailable']! as bool;
         }
@@ -882,6 +887,7 @@ class ChatController extends ChangeNotifier {
         }
         _updateCapabilities(payload?['capabilities']);
         _operationProblem = null;
+        _updateSessionRuntime(payload?['runtime']);
         _updateAccessMode(payload?['accessMode']);
         _canPrompt = payload?['canPrompt'] is bool
             ? payload!['canPrompt']! as bool
@@ -955,6 +961,23 @@ class ChatController extends ChangeNotifier {
     } else if (notifyController) {
       _cancelStreamRender();
       _notify();
+    }
+  }
+
+  void _updateSessionRuntime(Object? value) {
+    if (value == null) return;
+    try {
+      if (value is! Map) {
+        throw const FormatException('Session runtime event is invalid');
+      }
+      _sessionRuntime = SessionRuntimeSnapshot.fromJson(
+        Map<String, Object?>.from(value),
+      );
+    } on FormatException {
+      _operationProblem = const TsPhoneProblem(
+        TsPhoneProblemKind.incompatible,
+        TsPhoneProblemCode.invalidHistoryMessage,
+      );
     }
   }
 

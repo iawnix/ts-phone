@@ -329,13 +329,13 @@ abstract class AppLocalizations {
   /// No description provided for @runDiagnostics.
   ///
   /// In en, this message translates to:
-  /// **'Run connection diagnostics'**
+  /// **'Check Phone service'**
   String get runDiagnostics;
 
   /// No description provided for @diagnosticsRunning.
   ///
   /// In en, this message translates to:
-  /// **'Running connection diagnostics'**
+  /// **'Checking'**
   String get diagnosticsRunning;
 
   /// No description provided for @diagnosticConfigured.
@@ -347,13 +347,13 @@ abstract class AppLocalizations {
   /// No description provided for @diagnosticVerified.
   ///
   /// In en, this message translates to:
-  /// **'Verified'**
+  /// **'Healthy'**
   String get diagnosticVerified;
 
   /// No description provided for @diagnosticFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed'**
+  /// **'Issue'**
   String get diagnosticFailed;
 
   /// No description provided for @diagnosticNotChecked.
@@ -637,6 +637,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'session {shortId}'**
   String sessionToken(String shortId);
+
+  /// No description provided for @sessionRuntimeTapHint.
+  ///
+  /// In en, this message translates to:
+  /// **'View model and context details'**
+  String get sessionRuntimeTapHint;
+
+  /// No description provided for @sessionRuntimeDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Model and context'**
+  String get sessionRuntimeDetails;
+
+  /// No description provided for @sessionRuntimeLastKnown.
+  ///
+  /// In en, this message translates to:
+  /// **'TSPi is offline. These are the last known runtime values.'**
+  String get sessionRuntimeLastKnown;
+
+  /// No description provided for @sessionModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get sessionModel;
+
+  /// No description provided for @sessionProvider.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider'**
+  String get sessionProvider;
+
+  /// No description provided for @sessionContextWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Context'**
+  String get sessionContextWindow;
+
+  /// No description provided for @sessionContextRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaining'**
+  String get sessionContextRemaining;
+
+  /// No description provided for @sessionContextSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Measurement'**
+  String get sessionContextSource;
+
+  /// No description provided for @sessionContextEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pi estimate'**
+  String get sessionContextEstimate;
+
+  /// No description provided for @sessionContextUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available'**
+  String get sessionContextUnavailable;
+
+  /// No description provided for @sessionRuntimeUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get sessionRuntimeUpdated;
 
   /// No description provided for @messagesSynced.
   ///

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.5.0
+  version: 0.5.1
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -329,6 +329,7 @@ components:
         sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
         sessionName: { type: string }
         model: { type: string }
+        runtime: { $ref: "#/components/schemas/SessionRuntime" }
         runtimeState: { $ref: "#/components/schemas/RuntimeState" }
         isStreaming: { type: boolean }
         accessMode: { enum: [controller, observer] }
@@ -345,6 +346,31 @@ components:
           type: array
           uniqueItems: true
           items: { $ref: "#/components/schemas/SessionCapability" }
+      additionalProperties: false
+    SessionRuntime:
+      type: object
+      required: [schemaVersion, model, updatedAt]
+      properties:
+        schemaVersion: { const: ts-phone-session-runtime/1 }
+        model:
+          type: object
+          required: [provider, id]
+          properties:
+            provider: { type: string, minLength: 1, maxLength: 160 }
+            id: { type: string, minLength: 1, maxLength: 240 }
+          additionalProperties: false
+        context:
+          type: object
+          required: [usedTokens, limitTokens, measurement]
+          properties:
+            usedTokens:
+              oneOf:
+                - { type: integer, minimum: 0 }
+                - { type: "null" }
+            limitTokens: { type: integer, minimum: 1 }
+            measurement: { const: pi_estimate }
+          additionalProperties: false
+        updatedAt: { type: string, format: date-time }
       additionalProperties: false
     MessageSnapshot:
       type: object

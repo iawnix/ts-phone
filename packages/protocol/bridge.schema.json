@@ -66,7 +66,64 @@
     "expiresAt": { "type": "string", "format": "date-time" },
     "message": { "type": "string", "minLength": 1, "maxLength": 65536 },
     "approved": { "type": "boolean" },
-    "ok": { "type": "boolean" }
+    "ok": { "type": "boolean" },
+    "snapshot": { "$ref": "#/$defs/sessionSnapshot" }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "sessionRuntime": {
+      "type": "object",
+      "required": ["schemaVersion", "model", "updatedAt"],
+      "properties": {
+        "schemaVersion": { "const": "ts-phone-session-runtime/1" },
+        "model": {
+          "type": "object",
+          "required": ["provider", "id"],
+          "properties": {
+            "provider": { "type": "string", "minLength": 1, "maxLength": 160 },
+            "id": { "type": "string", "minLength": 1, "maxLength": 240 }
+          },
+          "additionalProperties": false
+        },
+        "context": {
+          "type": "object",
+          "required": ["usedTokens", "limitTokens", "measurement"],
+          "properties": {
+            "usedTokens": {
+              "oneOf": [
+                { "type": "integer", "minimum": 0 },
+                { "type": "null" }
+              ]
+            },
+            "limitTokens": { "type": "integer", "minimum": 1 },
+            "measurement": { "const": "pi_estimate" }
+          },
+          "additionalProperties": false
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "sessionSnapshot": {
+      "type": "object",
+      "required": ["sessionId", "isStreaming", "messages"],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,160}$" },
+        "sessionName": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "runtime": { "$ref": "#/$defs/sessionRuntime" },
+        "thinkingLevel": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "isStreaming": { "type": "boolean" },
+        "messages": { "type": "array", "maxItems": 500 },
+        "messageIds": {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "type": "string", "pattern": "^[0-9a-f]{8}$" }
+        },
+        "hasMore": { "type": "boolean" },
+        "nextBefore": { "type": "string", "pattern": "^[0-9a-f]{8}$" }
+      },
+      "additionalProperties": false
+    }
+  }
 }

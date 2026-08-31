@@ -173,6 +173,19 @@ void main() {
                 'historyAvailable': true,
                 'historyOnly': true,
                 'canPrompt': false,
+                'runtime': <String, Object?>{
+                  'schemaVersion': 'ts-phone-session-runtime/1',
+                  'model': <String, Object?>{
+                    'provider': 'cpa',
+                    'id': 'gpt-5.6-sol',
+                  },
+                  'context': <String, Object?>{
+                    'usedTokens': 78214,
+                    'limitTokens': 128000,
+                    'measurement': 'pi_estimate',
+                  },
+                  'updatedAt': '2026-08-31T06:32:18.000Z',
+                },
               },
             ],
           }),
@@ -186,6 +199,9 @@ void main() {
     expect(session.historyAvailable, isTrue);
     expect(session.historyOnly, isTrue);
     expect(session.canPrompt, isFalse);
+    expect(session.runtime?.model.id, 'gpt-5.6-sol');
+    expect(session.runtime?.context?.usedTokens, 78214);
+    expect(session.runtime?.context?.limitTokens, 128000);
   });
 
   test('requests and parses a structured timeline page', () async {

@@ -125,19 +125,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lastSync => '上次同步';
 
   @override
-  String get runDiagnostics => '运行连接诊断';
+  String get runDiagnostics => '检测 Phone 服务';
 
   @override
-  String get diagnosticsRunning => '正在诊断连接';
+  String get diagnosticsRunning => '检测中';
 
   @override
   String get diagnosticConfigured => '已配置';
 
   @override
-  String get diagnosticVerified => '已验证';
+  String get diagnosticVerified => '正常';
 
   @override
-  String get diagnosticFailed => '失败';
+  String get diagnosticFailed => '异常';
 
   @override
   String get diagnosticNotChecked => '未检测';
@@ -295,6 +295,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String sessionToken(String shortId) {
     return 'session $shortId';
   }
+
+  @override
+  String get sessionRuntimeTapHint => '查看模型与上下文详情';
+
+  @override
+  String get sessionRuntimeDetails => '模型与上下文';
+
+  @override
+  String get sessionRuntimeLastKnown => 'TSPi 当前离线，以下为最后一次运行时快照。';
+
+  @override
+  String get sessionModel => '模型';
+
+  @override
+  String get sessionProvider => 'Provider';
+
+  @override
+  String get sessionContextWindow => '上下文';
+
+  @override
+  String get sessionContextRemaining => '剩余';
+
+  @override
+  String get sessionContextSource => '测量方式';
+
+  @override
+  String get sessionContextEstimate => 'Pi 估算';
+
+  @override
+  String get sessionContextUnavailable => '暂无数据';
+
+  @override
+  String get sessionRuntimeUpdated => '更新时间';
 
   @override
   String get messagesSynced => '消息已同步';

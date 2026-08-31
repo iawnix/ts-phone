@@ -12,19 +12,19 @@ The application and FRP data ports remain on loopback. The Aliyun security
 group must not expose 22113; only Nginx 443 is public. FRP's control port should
 be restricted to known clients.
 
-Server version 0.5.0 restores validated disk sessions and serves both the
-compatible message history and a capability-advertised structured research
-timeline. Mobile version 0.9.1 displays bounded TS activities and Pi branches,
-loads histories up to 2000 items automatically, and switches to live
-capabilities when the matching Bridge reconnects.
+Server version 0.5.1 restores validated disk sessions, serves both compatible
+message history and a capability-advertised structured research timeline, and
+validates bounded Root Agent runtime snapshots. Mobile version 0.9.2 displays
+bounded TS activities, Pi branches, the active model, and Pi-estimated context
+usage, and switches to live capabilities when the matching Bridge reconnects.
 Mobile and server release numbers are independent; compatibility is governed by
 the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.5.0 | API v3, Events v3, Bridge v2, structured timeline |
-| TSPi package | 0.11.0 | Bridge v2 and controller/observer launch policy |
-| Mobile app | 0.9.1+29 | API v3, zh/en UI, timeline branches and activities |
+| TS Phone server | 0.5.1 | API v3, Events v3, Bridge v2, structured timeline and runtime snapshot |
+| TSPi package | 0.11.1 | Bridge v2, runtime metadata, and controller/observer launch policy |
+| Mobile app | 0.9.2+30 | API v3, zh/en UI, model/context details, timeline branches and activities |
 
 Do not mix the old Bridge v1 or API v2 components with this set.
 

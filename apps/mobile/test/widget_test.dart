@@ -406,51 +406,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('settings wrap the endpoint and center connection diagnostics', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 760);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final settings = ConnectionSettings(
-      serverUrl: 'https://transition-state-research-phone-bridge.example.test',
-      token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-    );
+  testWidgets(
+    'settings wrap the endpoint and use a full-width diagnostics row',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final settings = ConnectionSettings(
+        serverUrl:
+            'https://transition-state-research-phone-bridge.example.test',
+        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: TsPhoneTheme.light(),
-        home: SettingsPage(
-          connectionSettings: settings,
-          themePreference: AppThemePreference.system,
-          localePreference: AppLocalePreference.en,
-          onThemeChanged: (_) async {},
-          onLocaleChanged: (_) async {},
-          onEditConnection: () {},
-          onClose: () {},
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          theme: TsPhoneTheme.light(),
+          home: SettingsPage(
+            connectionSettings: settings,
+            themePreference: AppThemePreference.system,
+            localePreference: AppLocalePreference.en,
+            onThemeChanged: (_) async {},
+            onLocaleChanged: (_) async {},
+            onEditConnection: () {},
+            onClose: () {},
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
 
-    final endpoint = find.byWidgetPredicate(
-      (widget) => widget is SelectableText && widget.data == settings.serverUrl,
-    );
-    expect(endpoint, findsOneWidget);
-    expect(tester.getSize(endpoint).height, greaterThan(20));
-    final diagnosticsButton = tester.getRect(
-      find.byKey(const ValueKey<String>('run-connection-diagnostics')),
-    );
-    expect(diagnosticsButton.width, lessThanOrEqualTo(240));
-    expect(diagnosticsButton.center.dx, closeTo(160, 0.5));
-    expect(tester.takeException(), isNull);
-  });
+      final endpoint = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText && widget.data == settings.serverUrl,
+      );
+      expect(endpoint, findsOneWidget);
+      expect(tester.getSize(endpoint).height, greaterThan(20));
+      final diagnosticsRow = tester.getRect(
+        find.byKey(const ValueKey<String>('run-connection-diagnostics')),
+      );
+      expect(diagnosticsRow.width, greaterThan(260));
+      expect(diagnosticsRow.center.dx, closeTo(160, 0.5));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('connection diagnostics report verified server facts', (
     WidgetTester tester,
@@ -459,12 +462,10 @@ void main() {
       serverUrl: 'https://tsphone.iawnix.xyz',
       token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
     );
+    final response = Completer<http.Response>();
     final client = MockClient((request) async {
       expect(request.headers['Authorization'], startsWith('Bearer '));
-      return http.Response(
-        '{"apiVersion":"ts-phone-api/3","data":{"apiVersion":"ts-phone-api/3","serviceVersion":"0.4.1"}}',
-        200,
-      );
+      return response.future;
     });
 
     await tester.pumpWidget(
@@ -492,15 +493,83 @@ void main() {
     await tester.ensureVisible(diagnostics);
     await tester.pumpAndSettle();
     await tester.tap(diagnostics);
+    await tester.pump();
+
+    expect(find.text('Checking'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('diagnostics-running')),
+      findsOneWidget,
+    );
+
+    response.complete(
+      http.Response(
+        '{"apiVersion":"ts-phone-api/3","data":{"apiVersion":"ts-phone-api/3","serviceVersion":"0.4.1"}}',
+        200,
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Verified'), findsOneWidget);
+    expect(
+      find.descendant(of: diagnostics, matching: find.text('Healthy')),
+      findsOneWidget,
+    );
     expect(find.text('ts-phone-api/3'), findsOneWidget);
     expect(find.text('Ping'), findsNothing);
     expect(find.text('Runtime'), findsNothing);
     expect(find.text('Node ID'), findsNothing);
     expect(find.text('Server 0.4.1'), findsNothing);
     expect(find.text('Not exposed'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('connection diagnostics expose a failed action state', (
+    WidgetTester tester,
+  ) async {
+    final settings = ConnectionSettings(
+      serverUrl: 'https://tsphone.iawnix.xyz',
+      token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+    );
+    final client = MockClient(
+      (_) async => http.Response(
+        '{"apiVersion":"ts-phone-api/3","error":{"code":"unauthorized","message":"no"}}',
+        401,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: SettingsPage(
+          connectionSettings: settings,
+          themePreference: AppThemePreference.system,
+          localePreference: AppLocalePreference.en,
+          onThemeChanged: (_) async {},
+          onLocaleChanged: (_) async {},
+          onEditConnection: () {},
+          onClose: () {},
+          gatewayBuilder: (settings) => TsPhoneApi(settings, client: client),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final diagnostics = find.byKey(
+      const ValueKey<String>('run-connection-diagnostics'),
+    );
+    await tester.ensureVisible(diagnostics);
+    await tester.tap(diagnostics);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: diagnostics, matching: find.text('Issue')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Authentication failed. Check the access token'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

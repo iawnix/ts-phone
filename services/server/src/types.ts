@@ -1,6 +1,6 @@
 export const API_VERSION = "ts-phone-api/3" as const;
 export const EVENT_VERSION = "ts-phone-events/3" as const;
-export const SERVICE_VERSION = "0.5.0" as const;
+export const SERVICE_VERSION = "0.5.1" as const;
 
 export type RuntimeState =
   | "offline"
@@ -37,6 +37,7 @@ export interface SessionSummary {
   sessionRevision: string;
   sessionName?: string;
   model?: string;
+  runtime?: SessionRuntimeSnapshot;
   runtimeState: RuntimeState;
   isStreaming: boolean;
   accessMode: SessionAccessMode;
@@ -46,10 +47,25 @@ export interface SessionSummary {
   capabilities: SessionCapability[];
 }
 
+export interface SessionRuntimeSnapshot {
+  schemaVersion: "ts-phone-session-runtime/1";
+  model: {
+    provider: string;
+    id: string;
+  };
+  context?: {
+    usedTokens: number | null;
+    limitTokens: number;
+    measurement: "pi_estimate";
+  };
+  updatedAt: string;
+}
+
 export interface SessionSnapshot {
   sessionId: string;
   sessionName?: string;
   model?: string;
+  runtime?: SessionRuntimeSnapshot;
   thinkingLevel?: string;
   isStreaming: boolean;
   messages: unknown[];

@@ -264,32 +264,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         value: protocolValue,
                       ),
                       _SettingsDivider(),
-                      Padding(
-                        padding: const EdgeInsets.all(TsPhoneSpacing.medium),
-                        child: TsCenteredAction(
-                          child: OutlinedButton.icon(
-                            key: const ValueKey<String>(
-                              'run-connection-diagnostics',
-                            ),
-                            onPressed: connection == null || _diagnosing
-                                ? null
-                                : _runDiagnostics,
-                            icon: _diagnosing
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.monitor_heart_outlined),
-                            label: Text(
-                              _diagnosing
-                                  ? l10n.diagnosticsRunning
-                                  : l10n.runDiagnostics,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
+                      _DiagnosticsActionRow(
+                        enabled: connection != null,
+                        diagnosing: _diagnosing,
+                        diagnostics: diagnostics,
+                        onTap: _runDiagnostics,
                       ),
                       if (diagnostics?.problem case final problem?) ...<Widget>[
                         _SettingsDivider(),
@@ -331,13 +310,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       _DiagnosticRow(
                         icon: Icons.phone_iphone_rounded,
                         label: l10n.client,
-                        value: '0.9.1',
+                        value: '0.9.2',
                       ),
                       const _SettingsDivider(),
                       _DiagnosticRow(
                         icon: Icons.build_outlined,
                         label: l10n.build,
-                        value: '28',
+                        value: '30',
                       ),
                     ],
                   ),
@@ -460,6 +439,132 @@ class _DiagnosticRow extends StatelessWidget {
                   Flexible(child: valueWidget),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _DiagnosticsActionRow extends StatelessWidget {
+  const _DiagnosticsActionRow({
+    required this.enabled,
+    required this.diagnosing,
+    required this.diagnostics,
+    required this.onTap,
+  });
+
+  final bool enabled;
+  final bool diagnosing;
+  final _ConnectionDiagnostics? diagnostics;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final status = TsPhoneStatusTheme.resolve(context);
+    final problem = diagnostics?.problem;
+    final (label, color, icon) = diagnosing
+        ? (l10n.diagnosticsRunning, theme.colorScheme.primary, null)
+        : !enabled
+        ? (
+            l10n.notConfigured,
+            theme.colorScheme.outline,
+            Icons.remove_circle_outline_rounded,
+          )
+        : problem != null
+        ? (l10n.diagnosticFailed, status.error, Icons.error_outline_rounded)
+        : diagnostics != null
+        ? (
+            l10n.diagnosticVerified,
+            status.connected,
+            Icons.check_circle_outline_rounded,
+          )
+        : (
+            l10n.diagnosticNotChecked,
+            theme.colorScheme.onSurfaceVariant,
+            Icons.help_outline_rounded,
+          );
+    return Semantics(
+      button: true,
+      enabled: enabled && !diagnosing,
+      child: InkWell(
+        key: const ValueKey<String>('run-connection-diagnostics'),
+        onTap: enabled && !diagnosing ? onTap : null,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TsPhoneSpacing.large,
+              vertical: TsPhoneSpacing.small,
+            ),
+            child: Row(
+              children: <Widget>[
+                TsSettingsIcon(
+                  icon: Icons.monitor_heart_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
+                Expanded(
+                  child: Text(
+                    l10n.runDiagnostics,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+                const SizedBox(width: TsPhoneSpacing.small),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  child: diagnosing
+                      ? Row(
+                          key: const ValueKey<String>('diagnostics-running'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: color,
+                              ),
+                            ),
+                            const SizedBox(width: TsPhoneSpacing.xSmall),
+                            Text(
+                              label,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          key: ValueKey<String>('diagnostics-$label'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(icon, size: 17, color: color),
+                            const SizedBox(width: TsPhoneSpacing.xSmall),
+                            Text(
+                              label,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (enabled) ...<Widget>[
+                              const SizedBox(width: TsPhoneSpacing.xSmall),
+                              Icon(
+                                Icons.refresh_rounded,
+                                size: 18,
+                                color: theme.colorScheme.outline,
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

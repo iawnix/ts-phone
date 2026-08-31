@@ -1190,7 +1190,54 @@ void main() {
     expect(controller.streamingTextUpdates.value, isNull);
     expect(controller.messages.last.text, 'complete full response');
   });
+
+  test('updates model context from live session runtime events', () async {
+    final api = FakeGateway();
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    api.addEvent('session_state', <String, Object?>{
+      'state': 'idle',
+      'runtime': sessionRuntimeJson(modelId: 'gpt-5.6-sol', usedTokens: 78214),
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.sessionRuntime?.model.id, 'gpt-5.6-sol');
+    expect(controller.sessionRuntime?.context?.usedTokens, 78214);
+
+    api.addEvent('session.snapshot', <String, Object?>{
+      'isStreaming': false,
+      'messages': <Object?>[],
+      'runtime': sessionRuntimeJson(modelId: 'gpt-5.6-sol', usedTokens: null),
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.sessionRuntime?.context?.usedTokens, isNull);
+    expect(controller.sessionRuntime?.context?.limitTokens, 128000);
+  });
 }
+
+Map<String, Object?> sessionRuntimeJson({
+  required String modelId,
+  required int? usedTokens,
+}) => <String, Object?>{
+  'schemaVersion': 'ts-phone-session-runtime/1',
+  'model': <String, Object?>{'provider': 'cpa', 'id': modelId},
+  'context': <String, Object?>{
+    'usedTokens': usedTokens,
+    'limitTokens': 128000,
+    'measurement': 'pi_estimate',
+  },
+  'updatedAt': '2026-08-31T06:32:18.000Z',
+};
 
 class FakeGateway implements TsPhoneGateway {
   final StreamController<TsPhoneEvent> _events =

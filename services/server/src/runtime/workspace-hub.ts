@@ -13,6 +13,7 @@ import type {
   RuntimeState,
   SessionCapability,
   SessionCommandInput,
+  SessionRuntimeSnapshot,
   SessionSnapshot,
   SessionSummary,
   TimelinePageRequest,
@@ -45,6 +46,7 @@ interface SessionRecord {
   persisted?: PersistedSession;
   connection?: BridgeConnection;
   snapshot?: SessionSnapshot;
+  runtime?: SessionRuntimeSnapshot;
   snapshotEventId?: string;
   messageCommands: Map<string, Promise<void>>;
 }
@@ -350,6 +352,8 @@ export class WorkspaceHub {
         delete snapshot.nextBefore;
       }
       session.snapshot = snapshot;
+      if (snapshot.runtime) session.runtime = snapshot.runtime;
+      else delete session.runtime;
       session.state = snapshot.isStreaming ? "running" : "idle";
       session.snapshotEventId = session.journal.publish(
         "session.snapshot",
@@ -564,6 +568,10 @@ export class WorkspaceHub {
     };
     if (session.snapshot?.sessionName) summary.sessionName = session.snapshot.sessionName;
     if (session.snapshot?.model) summary.model = session.snapshot.model;
+    else if (session.runtime) {
+      summary.model = `${session.runtime.model.provider}/${session.runtime.model.id}`;
+    }
+    if (session.runtime) summary.runtime = session.runtime;
     return summary;
   }
 
@@ -574,6 +582,7 @@ export class WorkspaceHub {
       sessionId: session.sessionId,
       sessionName: session.snapshot?.sessionName,
       model: session.snapshot?.model,
+      runtime: session.runtime,
       isStreaming: session.state === "running",
       accessMode: session.accessMode,
       historyAvailable: Boolean(session.persisted),

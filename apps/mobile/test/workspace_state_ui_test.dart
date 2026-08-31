@@ -89,6 +89,131 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('chat header opens authoritative model and context details', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = UiFakeGateway();
+    final session = SessionSummary(
+      sessionId: 'session-test',
+      sessionRevision: '11111111-1111-4111-8111-111111111111',
+      sessionName: '测试会话',
+      runtimeState: RuntimeState.idle,
+      isStreaming: false,
+      accessMode: SessionAccessMode.controller,
+      runtime: SessionRuntimeSnapshot(
+        model: const SessionRuntimeModel(provider: 'cpa', id: 'gpt-5.6-sol'),
+        context: const SessionContextUsage(
+          usedTokens: 78214,
+          limitTokens: 128000,
+        ),
+        updatedAt: DateTime.utc(2026, 8, 31, 6, 32, 18),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: session,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('gpt-5.6-sol · 78k / 128k'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('session-runtime-summary')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('模型与上下文'), findsOneWidget);
+    expect(find.text('gpt-5.6-sol'), findsOneWidget);
+    expect(find.text('78,214 / 128,000'), findsOneWidget);
+    expect(find.text('49,786 · 39%'), findsOneWidget);
+    expect(find.text('Pi 估算'), findsOneWidget);
+    expect(find.textContaining('https://'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long models and unknown post-compaction usage fit narrow UI', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final gateway = UiFakeGateway();
+    final session = SessionSummary(
+      sessionId: 'session-test',
+      sessionRevision: '11111111-1111-4111-8111-111111111111',
+      sessionName: 'Long model session',
+      runtimeState: RuntimeState.idle,
+      isStreaming: false,
+      accessMode: SessionAccessMode.controller,
+      runtime: SessionRuntimeSnapshot(
+        model: const SessionRuntimeModel(
+          provider: 'openai-compatible-provider',
+          id: 'a-very-long-frontier-reasoning-model-name-for-layout-testing',
+        ),
+        context: const SessionContextUsage(
+          usedTokens: null,
+          limitTokens: 128000,
+        ),
+        updatedAt: DateTime.utc(2026, 8, 31, 6, 33, 18),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.dark(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: session,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('— / 128k'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('session-runtime-summary')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Not available'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('disconnect preserves messages and the unsent draft', (
     WidgetTester tester,
   ) async {

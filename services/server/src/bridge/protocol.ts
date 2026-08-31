@@ -1,4 +1,9 @@
-import type { RuntimeState, SessionAccessMode, SessionSnapshot } from "../types.js";
+import type {
+  RuntimeState,
+  SessionAccessMode,
+  SessionRuntimeSnapshot,
+  SessionSnapshot,
+} from "../types.js";
 
 export const BRIDGE_PROTOCOL_VERSION = "ts-phone-bridge/2" as const;
 export const BRIDGE_WORKSPACE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
@@ -214,8 +219,44 @@ function parseSnapshot(value: unknown): SessionSnapshot {
   }
   if (snapshot.sessionName !== undefined) parsed.sessionName = requiredString(snapshot.sessionName, "sessionName", 500);
   if (snapshot.model !== undefined) parsed.model = requiredString(snapshot.model, "model", 500);
+  if (snapshot.runtime !== undefined) parsed.runtime = parseSessionRuntime(snapshot.runtime);
   if (snapshot.thinkingLevel !== undefined) {
     parsed.thinkingLevel = requiredString(snapshot.thinkingLevel, "thinkingLevel", 100);
+  }
+  return parsed;
+}
+
+function parseSessionRuntime(value: unknown): SessionRuntimeSnapshot {
+  const runtime = asObject(value, "snapshot.runtime");
+  assertOnlyKeys(runtime, ["schemaVersion", "model", "context", "updatedAt"], "snapshot.runtime");
+  if (runtime.schemaVersion !== "ts-phone-session-runtime/1") {
+    throw new Error("Unsupported session runtime schema");
+  }
+  const rawModel = asObject(runtime.model, "snapshot.runtime.model");
+  assertOnlyKeys(rawModel, ["provider", "id"], "snapshot.runtime.model");
+  const parsed: SessionRuntimeSnapshot = {
+    schemaVersion: "ts-phone-session-runtime/1",
+    model: {
+      provider: requiredString(rawModel.provider, "runtime.model.provider", 160),
+      id: requiredString(rawModel.id, "runtime.model.id", 240),
+    },
+    updatedAt: requiredDate(runtime.updatedAt, "runtime.updatedAt"),
+  };
+  if (runtime.context !== undefined) {
+    const rawContext = asObject(runtime.context, "snapshot.runtime.context");
+    assertOnlyKeys(
+      rawContext,
+      ["usedTokens", "limitTokens", "measurement"],
+      "snapshot.runtime.context",
+    );
+    if (rawContext.measurement !== "pi_estimate") {
+      throw new Error("runtime.context.measurement is unsupported");
+    }
+    parsed.context = {
+      usedTokens: nullableNonNegativeInteger(rawContext.usedTokens, "runtime.context.usedTokens"),
+      limitTokens: positiveInteger(rawContext.limitTokens, "runtime.context.limitTokens"),
+      measurement: "pi_estimate",
+    };
   }
   return parsed;
 }
@@ -228,6 +269,15 @@ export function isRuntimeState(value: unknown): value is RuntimeState {
 function asObject(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${name} must be an object`);
   return value as Record<string, unknown>;
+}
+
+function assertOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  name: string,
+): void {
+  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unexpected.length > 0) throw new Error(`${name} contains unsupported fields`);
 }
 
 function requiredString(value: unknown, name: string, maxLength: number): string {
@@ -257,6 +307,14 @@ function requiredEventType(value: unknown): string {
 
 function positiveInteger(value: unknown, name: string): number {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) throw new Error(`${name} must be a positive integer`);
+  return value as number;
+}
+
+function nullableNonNegativeInteger(value: unknown, name: string): number | null {
+  if (value === null) return null;
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new Error(`${name} must be null or a non-negative integer`);
+  }
   return value as number;
 }
 

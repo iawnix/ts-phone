@@ -23,7 +23,7 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     };
     assert.deepEqual(version.data, {
       apiVersion: "ts-phone-api/3",
-      serviceVersion: "0.5.0",
+      serviceVersion: "0.5.1",
     });
 
     const offline = await api(fixture, "/api/v3/workspaces");
@@ -35,6 +35,24 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
 
     fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
     await waitForState(fixture, "idle");
+    const sessions = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const sessionsPayload = await sessions.json() as {
+      data: Array<SessionListItem & {
+        runtime?: {
+          model: { provider: string; id: string };
+          context?: { usedTokens: number | null; limitTokens: number };
+        };
+      }>;
+    };
+    assert.equal(sessionsPayload.data[0]?.runtime?.model.id, "fake-model");
+    assert.equal(sessionsPayload.data[0]?.runtime?.context?.usedTokens, 78_214);
+    assert.equal(sessionsPayload.data[0]?.runtime?.context?.limitTokens, 128_000);
+    fixture.bridge.publishSnapshot(false, false);
+    await waitFor(async () => {
+      const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+      const payload = await response.json() as { data: Array<{ runtime?: unknown }> };
+      return payload.data[0]?.runtime === undefined;
+    }, true);
     const accepted = await sendPrompt(fixture, "message-1", "hello");
     assert.equal(accepted.status, 202);
     const duplicate = await sendPrompt(fixture, "message-1", "hello");
@@ -407,7 +425,12 @@ test("session snapshot events publish the same bounded history as the API", asyn
       .filter((event) => event.type === "session.snapshot")
       .at(-1);
     const messages = (latest?.payload as { messages: unknown[] }).messages;
+    const runtime = (latest?.payload as {
+      runtime?: { model: { id: string }; context?: { usedTokens: number | null } };
+    }).runtime;
     assert.equal(messages.length, 500);
+    assert.equal(runtime?.model.id, "fake-model");
+    assert.equal(runtime?.context?.usedTokens, 78_214);
     assert.match(JSON.stringify(messages[0]), /bridge-snapshot-10/);
     assert.match(JSON.stringify(messages.at(-1)), /bridge-snapshot-509/);
   } finally {
@@ -511,6 +534,12 @@ test("disconnecting during a running turn requires recovery", async () => {
     await waitForState(fixture, "running");
     await fixture.bridge.close();
     await waitForState(fixture, "recovery_required");
+    const sessions = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const payload = await sessions.json() as {
+      data: Array<{ runtime?: { model: { id: string }; updatedAt: string } }>;
+    };
+    assert.equal(payload.data[0]?.runtime?.model.id, "fake-model");
+    assert.equal(payload.data[0]?.runtime?.updatedAt, "2026-08-31T06:32:18.000Z");
   } finally {
     await fixture.application.close();
   }

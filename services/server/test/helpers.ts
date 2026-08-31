@@ -10,7 +10,7 @@ export interface FakeBridge {
   messages: unknown[];
   receivedCommands: Array<Record<string, unknown>>;
   publish(eventType: string, payload: unknown): void;
-  publishSnapshot(isStreaming?: boolean): void;
+  publishSnapshot(isStreaming?: boolean, includeRuntime?: boolean): void;
   requestApproval(input: {
     approvalId: string;
     turnId: string;
@@ -79,7 +79,7 @@ export async function connectFakeBridge(
     sequence += 1;
     write({ ...envelope(), type: "event.publish", sequence, eventType, payload });
   };
-  const publishSnapshot = (isStreaming = false) => {
+  const publishSnapshot = (isStreaming = false, includeRuntime = true) => {
     sequence += 1;
     const firstIndex = Math.max(0, messages.length - 500);
     const boundedMessages = messages.slice(firstIndex);
@@ -95,6 +95,18 @@ export async function connectFakeBridge(
         sessionId,
         sessionName: `Fake ${sessionId}`,
         model: "test/fake-model",
+        ...(includeRuntime ? {
+          runtime: {
+            schemaVersion: "ts-phone-session-runtime/1",
+            model: { provider: "test", id: "fake-model" },
+            context: {
+              usedTokens: 78_214,
+              limitTokens: 128_000,
+              measurement: "pi_estimate",
+            },
+            updatedAt: "2026-08-31T06:32:18.000Z",
+          },
+        } : {}),
         isStreaming,
         messages: boundedMessages,
         messageIds,

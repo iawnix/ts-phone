@@ -257,7 +257,7 @@ class _SessionTile extends StatelessWidget {
       session.historyOnly
           ? l10n.historySession
           : session.accessMode.localizedLabel(l10n),
-      if (session.model != null) session.model!,
+      if (session.displayModel != null) session.displayModel!,
     ].join(' · ');
     return TsStatusListTile(
       statusColor: stateColor,
