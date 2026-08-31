@@ -332,41 +332,34 @@ class _WorkspaceTile extends StatelessWidget {
       statusColor: stateColor,
       icon: folderIcon,
       iconColor: colors.primary,
-      showStatusIndicator: true,
       title: workspace.name,
       titleMonospace: workspace.name == workspace.id,
+      titleTrailing: TsInlineStatus(
+        label: stateLabel,
+        color: stateColor,
+        pulsing:
+            workspace.runtimeState == RuntimeState.running ||
+            workspace.runtimeState == RuntimeState.connecting,
+      ),
       subtitle: workspace.runtimeState.localizedLabel(l10n),
-      details: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      details: Wrap(
+        spacing: TsPhoneSpacing.medium,
+        runSpacing: 5,
         children: <Widget>[
-          Wrap(
-            spacing: 6,
-            runSpacing: 5,
-            children: <Widget>[
-              TsStatusBadge(label: stateLabel, color: stateColor),
-              if (workspace.liveSessionCount > 0)
-                TsStatusBadge(
-                  label: l10n.statusLive(workspace.liveSessionCount),
-                  color: colors.primary,
-                ),
-            ],
+          if (workspace.liveSessionCount > 0)
+            TsMetadataItem(
+              icon: Icons.sensors_rounded,
+              text: l10n.statusLive(workspace.liveSessionCount),
+            ),
+          TsMetadataItem(
+            icon: Icons.speed_rounded,
+            text: latencyLabel,
+            tooltip: l10n.latency,
           ),
-          const SizedBox(height: 7),
-          Wrap(
-            spacing: TsPhoneSpacing.medium,
-            runSpacing: 5,
-            children: <Widget>[
-              TsMetadataItem(
-                icon: Icons.speed_rounded,
-                text: latencyLabel,
-                tooltip: l10n.latency,
-              ),
-              TsMetadataItem(
-                icon: Icons.sync_rounded,
-                text: syncLabel,
-                tooltip: l10n.lastSync,
-              ),
-            ],
+          TsMetadataItem(
+            icon: Icons.sync_rounded,
+            text: syncLabel,
+            tooltip: l10n.lastSync,
           ),
         ],
       ),

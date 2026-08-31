@@ -228,7 +228,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         title: Text(l10n.tsPhoneService),
                         subtitle: TsMonoText(
                           authority,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
@@ -237,30 +237,9 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ).colorScheme.onSurfaceVariant,
                               ),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            IconButton(
-                              onPressed: connection == null || _diagnosing
-                                  ? null
-                                  : _runDiagnostics,
-                              tooltip: _diagnosing
-                                  ? l10n.diagnosticsRunning
-                                  : l10n.runDiagnostics,
-                              icon: _diagnosing
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.monitor_heart_outlined),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: Theme.of(context).colorScheme.outline,
-                            ),
-                          ],
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: Theme.of(context).colorScheme.outline,
                         ),
                       ),
                       _SettingsDivider(),
@@ -268,6 +247,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         icon: Icons.link_rounded,
                         label: l10n.endpoint,
                         value: connection?.serverUrl ?? l10n.notConfigured,
+                        stacked: true,
+                        selectable: connection != null,
                       ),
                       _SettingsDivider(),
                       _DiagnosticRow(
@@ -281,6 +262,34 @@ class _SettingsPageState extends State<SettingsPage> {
                         icon: Icons.lan_outlined,
                         label: l10n.protocol,
                         value: protocolValue,
+                      ),
+                      _SettingsDivider(),
+                      Padding(
+                        padding: const EdgeInsets.all(TsPhoneSpacing.medium),
+                        child: TsCenteredAction(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey<String>(
+                              'run-connection-diagnostics',
+                            ),
+                            onPressed: connection == null || _diagnosing
+                                ? null
+                                : _runDiagnostics,
+                            icon: _diagnosing
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.monitor_heart_outlined),
+                            label: Text(
+                              _diagnosing
+                                  ? l10n.diagnosticsRunning
+                                  : l10n.runDiagnostics,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
                       ),
                       if (diagnostics?.problem case final problem?) ...<Widget>[
                         _SettingsDivider(),
@@ -322,7 +331,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       _DiagnosticRow(
                         icon: Icons.phone_iphone_rounded,
                         label: l10n.client,
-                        value: '0.9.0',
+                        value: '0.9.1',
                       ),
                       const _SettingsDivider(),
                       _DiagnosticRow(
@@ -369,43 +378,88 @@ class _DiagnosticRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.valueColor,
+    this.stacked = false,
+    this.selectable = false,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final Color? valueColor;
+  final bool stacked;
+  final bool selectable;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final useStacked =
+        stacked || MediaQuery.textScalerOf(context).scale(13) > 18;
+    final valueStyle = theme.textTheme.bodySmall?.copyWith(
+      color: valueColor ?? theme.colorScheme.onSurfaceVariant,
+      fontFamily: 'monospace',
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0,
+    );
+    final valueWidget = selectable
+        ? SelectableText(
+            value,
+            textAlign: useStacked ? TextAlign.start : TextAlign.end,
+            style: valueStyle,
+          )
+        : TsMonoText(
+            value,
+            maxLines: useStacked ? null : 2,
+            overflow: useStacked ? null : TextOverflow.ellipsis,
+            textAlign: useStacked ? TextAlign.start : TextAlign.end,
+            style: valueStyle,
+          );
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 44),
+      constraints: BoxConstraints(minHeight: useStacked ? 64 : 44),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: TsPhoneSpacing.large,
           vertical: TsPhoneSpacing.small,
         ),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, size: 17, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: TsPhoneSpacing.medium),
-            Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-            const SizedBox(width: TsPhoneSpacing.medium),
-            Flexible(
-              child: TsMonoText(
-                value,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: valueColor ?? theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
+        child: useStacked
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      icon,
+                      size: 17,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: TsPhoneSpacing.medium),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(label, style: theme.textTheme.bodyMedium),
+                        const SizedBox(height: TsPhoneSpacing.xSmall),
+                        valueWidget,
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                children: <Widget>[
+                  Icon(
+                    icon,
+                    size: 17,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: TsPhoneSpacing.medium),
+                  Expanded(
+                    child: Text(label, style: theme.textTheme.bodyMedium),
+                  ),
+                  const SizedBox(width: TsPhoneSpacing.medium),
+                  Flexible(child: valueWidget),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -438,6 +492,7 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
           height: 44,
           child: CupertinoSlidingSegmentedControl<T>(
             groupValue: groupValue,
+            proportionalWidth: false,
             backgroundColor: colors.surfaceContainerHigh.withValues(
               alpha: 0.68,
             ),
@@ -445,7 +500,13 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
             padding: const EdgeInsets.all(3),
             children: <T, Widget>{
               for (final entry in choices.entries)
-                entry.key: Text(entry.value, maxLines: 1),
+                entry.key: Center(
+                  child: Text(
+                    entry.value,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
             },
             onValueChanged: onValueChanged,
           ),
@@ -483,10 +544,24 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
                   ),
                   child: Row(
                     children: <Widget>[
-                      Expanded(child: Text(entries[index].value)),
-                      const SizedBox(width: TsPhoneSpacing.medium),
-                      if (entries[index].key == groupValue)
-                        Icon(Icons.check_rounded, color: colors.primary),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Text(
+                          entries[index].value,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 24,
+                        child: entries[index].key == groupValue
+                            ? Icon(
+                                Icons.check_rounded,
+                                size: 20,
+                                color: colors.primary,
+                              )
+                            : null,
+                      ),
                     ],
                   ),
                 ),

@@ -334,6 +334,7 @@ class TsStatusListTile extends StatelessWidget {
     this.showStatusIndicator = false,
     this.details,
     this.titleMonospace = false,
+    this.titleTrailing,
   });
 
   final Color statusColor;
@@ -346,6 +347,7 @@ class TsStatusListTile extends StatelessWidget {
   final bool showStatusIndicator;
   final Widget? details;
   final bool titleMonospace;
+  final Widget? titleTrailing;
 
   @override
   Widget build(BuildContext context) {
@@ -411,20 +413,11 @@ class TsStatusListTile extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          if (titleMonospace)
-                            TsMonoText(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            )
-                          else
-                            Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
+                          _StatusListTileTitle(
+                            title: title,
+                            monospace: titleMonospace,
+                            trailing: titleTrailing,
+                          ),
                           const SizedBox(height: TsPhoneSpacing.xSmall),
                           details ??
                               Text(
@@ -455,6 +448,58 @@ class TsStatusListTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StatusListTileTitle extends StatelessWidget {
+  const _StatusListTileTitle({
+    required this.title,
+    required this.monospace,
+    required this.trailing,
+  });
+
+  final String title;
+  final bool monospace;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleWidget = monospace
+        ? TsMonoText(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall,
+          )
+        : Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall,
+          );
+    final trailingWidget = trailing;
+    if (trailingWidget == null) return titleWidget;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useWrap = MediaQuery.textScalerOf(context).scale(15) > 21;
+        if (useWrap) {
+          return Wrap(
+            spacing: TsPhoneSpacing.small,
+            runSpacing: TsPhoneSpacing.xSmall,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[titleWidget, trailingWidget],
+          );
+        }
+        return Row(
+          children: <Widget>[
+            Expanded(child: titleWidget),
+            const SizedBox(width: TsPhoneSpacing.small),
+            trailingWidget,
+          ],
+        );
+      },
     );
   }
 }
@@ -743,6 +788,73 @@ class TsStatusBadge extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class TsInlineStatus extends StatelessWidget {
+  const TsInlineStatus({
+    super.key,
+    required this.label,
+    required this.color,
+    this.pulsing = false,
+  });
+
+  final String label;
+  final Color color;
+  final bool pulsing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        TsStatusDot(color: color, size: 6, pulsing: pulsing),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0,
+            height: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class TsCenteredAction extends StatelessWidget {
+  const TsCenteredAction({
+    super.key,
+    required this.child,
+    this.minWidth = 160,
+    this.maxWidth = 240,
+  });
+
+  final Widget child;
+  final double minWidth;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final useAvailableWidth =
+            MediaQuery.textScalerOf(context).scale(17) > 24 ||
+            availableWidth < minWidth;
+        final targetWidth = useAvailableWidth || availableWidth < maxWidth
+            ? availableWidth
+            : maxWidth;
+        return Center(
+          child: SizedBox(width: targetWidth, child: child),
+        );
+      },
     );
   }
 }

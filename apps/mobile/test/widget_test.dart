@@ -39,6 +39,11 @@ void main() {
     expect(find.text('访问令牌'), findsOneWidget);
     expect(find.text('连接'), findsOneWidget);
     expect(find.byType(TsPhoneBrandMark), findsOneWidget);
+    final connectButton = tester.getRect(
+      find.byKey(const ValueKey<String>('connect-action')),
+    );
+    expect(connectButton.width, lessThanOrEqualTo(240));
+    expect(connectButton.center.dx, closeTo(180, 0.5));
     expect(tester.takeException(), isNull);
   });
 
@@ -395,6 +400,55 @@ void main() {
       ),
       findsNWidgets(2),
     );
+    for (final label in <String>['跟随系统', '浅色', '深色', '中文', 'English']) {
+      expect(tester.widget<Text>(find.text(label)).textAlign, TextAlign.center);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings wrap the endpoint and center connection diagnostics', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settings = ConnectionSettings(
+      serverUrl: 'https://transition-state-research-phone-bridge.example.test',
+      token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: SettingsPage(
+          connectionSettings: settings,
+          themePreference: AppThemePreference.system,
+          localePreference: AppLocalePreference.en,
+          onThemeChanged: (_) async {},
+          onLocaleChanged: (_) async {},
+          onEditConnection: () {},
+          onClose: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    final endpoint = find.byWidgetPredicate(
+      (widget) => widget is SelectableText && widget.data == settings.serverUrl,
+    );
+    expect(endpoint, findsOneWidget);
+    expect(tester.getSize(endpoint).height, greaterThan(20));
+    final diagnosticsButton = tester.getRect(
+      find.byKey(const ValueKey<String>('run-connection-diagnostics')),
+    );
+    expect(diagnosticsButton.width, lessThanOrEqualTo(240));
+    expect(diagnosticsButton.center.dx, closeTo(160, 0.5));
     expect(tester.takeException(), isNull);
   });
 
@@ -432,7 +486,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Run connection diagnostics'));
+    final diagnostics = find.byKey(
+      const ValueKey<String>('run-connection-diagnostics'),
+    );
+    await tester.ensureVisible(diagnostics);
+    await tester.pumpAndSettle();
+    await tester.tap(diagnostics);
     await tester.pumpAndSettle();
 
     expect(find.text('Verified'), findsOneWidget);

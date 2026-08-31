@@ -266,7 +266,18 @@ void main() {
         find.byType(TsStatusListTile),
       );
       expect(tiles, hasLength(2));
-      expect(tiles.every((tile) => tile.showStatusIndicator), isTrue);
+      expect(tiles.every((tile) => !tile.showStatusIndicator), isTrue);
+      expect(
+        tiles.every((tile) => tile.titleTrailing is TsInlineStatus),
+        isTrue,
+      );
+      expect(find.byType(TsStatusBadge), findsNothing);
+      expect(
+        (tester.getCenter(find.text('ts_001')).dy -
+                tester.getCenter(find.text('OFFLINE')).dy)
+            .abs(),
+        lessThan(4),
+      );
       expect(
         find.descendant(
           of: find.byType(TsStatusListTile),

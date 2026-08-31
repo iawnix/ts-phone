@@ -256,25 +256,29 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             ),
                           ],
                           const SizedBox(height: TsPhoneSpacing.large),
-                          FilledButton.icon(
-                            onPressed: _connecting ? null : _connect,
-                            icon: AnimatedSwitcher(
-                              duration: TsPhoneMotion.quick,
-                              child: _connecting
-                                  ? const SizedBox.square(
-                                      key: ValueKey<String>('connecting'),
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                          TsCenteredAction(
+                            child: FilledButton.icon(
+                              key: const ValueKey<String>('connect-action'),
+                              onPressed: _connecting ? null : _connect,
+                              icon: AnimatedSwitcher(
+                                duration: TsPhoneMotion.quick,
+                                child: _connecting
+                                    ? const SizedBox.square(
+                                        key: ValueKey<String>('connecting'),
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.link,
+                                        key: ValueKey<String>('connect'),
                                       ),
-                                    )
-                                  : const Icon(
-                                      Icons.link,
-                                      key: ValueKey<String>('connect'),
-                                    ),
-                            ),
-                            label: Text(
-                              _connecting ? l10n.connecting : l10n.connect,
+                              ),
+                              label: Text(
+                                _connecting ? l10n.connecting : l10n.connect,
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           ),
                         ],
