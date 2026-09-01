@@ -34,10 +34,6 @@ Do not mix the old Bridge v1 or API v2 components with this set.
 cd /home/iaw/Codex/Project/2026-08-14/ts-phone
 env NPM_CONFIG_CACHE=.npm-cache npm ci
 npm run test:release
-npm run typecheck
-npm test
-npm run build
-TS_PHONE_SMOKE_PORT=23113 npm run smoke
 ~~~
 
 Validate Flutter from `apps/mobile`:
@@ -54,8 +50,8 @@ python3 deploy/build-component-release.py \
   --json
 ~~~
 
-The component builder repeats the server typecheck, tests, and build, verifies
-the production arm64 APK's v2 signature and certificate, and writes a
+The component builder owns the server typecheck, tests, and production build,
+then verifies the production arm64 APK's v2 signature and certificate and writes a
 deterministic archive plus `ts-phone-component-release.json`. Production builds
 require a clean committed checkout. `--allow-dirty` is only for local probes.
 
@@ -66,9 +62,11 @@ release:
 
 ~~~bash
 cd /home/iaw/Codex/Project/2026-06-13/TSPi
+python3 scripts/test_source.py \
+  --conda-root /home/iaw/soft/conda/2026.03.05 \
+  --with-render \
+  -- -q
 npm run typecheck
-python3 scripts/check_package.py
-python3 -m pytest -q
 python3 scripts/build_package.py \
   --phone-manifest /home/iaw/Codex/Project/2026-08-14/ts-phone/dist/component/ts-phone-component-release.json \
   --output-dir dist/package \
@@ -82,22 +80,15 @@ bound into that result.
 
 ## 3. Install The Package Without Service Activation
 
-Install the complete component set into the TSPi root, then refresh its isolated
-Agent runtime:
+Install the complete component set into the TSPi root. Runtime preparation and
+the scientific capability probe complete before the release is selected:
 
 ~~~bash
 cd /home/iaw/Codex/Project/2026-06-13/TSPi
 python3 scripts/install_package.py \
   --manifest dist/package/tspi-package-release.json \
   --install-root /home/iaw/TS-pi-agent \
-  --json
-
-AGENT_ROOT=/home/iaw/TS-pi-agent/.pi/packages/tspi/current/agent
-python3 "$AGENT_ROOT/scripts/install_env.py" \
-  --package-root "$AGENT_ROOT" \
-  --runtime-home /home/iaw/TS-pi-agent/.agents/runtime/transition-state-workflow \
-  --env-root /home/iaw/TS-pi-agent/.agents/envs/transition-state-workflow \
-  --conda-root /path/to/miniforge3 \
+  --conda-root /home/iaw/soft/conda/2026.03.05 \
   --with-render \
   --json
 
