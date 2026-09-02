@@ -281,7 +281,7 @@ class TimelineActivityView extends StatelessWidget {
 }
 
 IconData _activityIcon(TimelineActivityCategory category) => switch (category) {
-  TimelineActivityCategory.subagent => Icons.hub_outlined,
+  TimelineActivityCategory.subagent => Icons.call_split_rounded,
   TimelineActivityCategory.research => Icons.science_outlined,
   TimelineActivityCategory.review => Icons.fact_check_outlined,
   TimelineActivityCategory.workspace => Icons.folder_open_outlined,
