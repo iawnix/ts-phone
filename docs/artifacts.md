@@ -20,8 +20,8 @@ installation, not to an immutable component release.
 ## Android Release
 
 - App: TS Phone
-- App version: 0.9.3
-- Build number: 31
+- App version: 0.10.0
+- Build number: 32
 - Package: xyz.iawnix.ts_phone
 - Minimum Android SDK: 24
 - Target Android SDK: 36
@@ -32,18 +32,18 @@ installation, not to an immutable component release.
 - Languages: English and Chinese; system, English, or Chinese preference
 - Input: text-only application composer with editable local drafts and explicit
   send; system-keyboard dictation remains available as ordinary text input
-- UI: iOS gray and professional dark surfaces, blue-green state badges,
+- UI: semantic light and dark surfaces, compact inline state indicators,
   folder-based workspace identity, inline non-repeating workspace status,
   measured latency/last-sync metadata, active-first session ordering,
   command-style session context, inline code chips, terminal blocks, on-demand
   full-width stateful connection diagnostics, wrapped selectable endpoint
-  details, authoritative model/context summaries and detail sheets, offline
-  read-only timelines without a redundant history banner, dynamic
-  controller/observer takeover, adaptive iOS-style composer, structured
-  Turn/activity rows, Pi branch selection, automatic complete history up to
+  details, an on-demand authoritative session detail sheet, offline read-only
+  timelines without a redundant history banner, dynamic controller/observer
+  takeover, a stable composer with one live-run stop action, structured
+  Turn/activity rails, Pi branch selection, automatic complete history up to
   2000 items, explicit load-all for larger sessions, bounded synchronization,
-  direct navigation between the start and latest message, adaptive approval
-  panels, large-text support, and the TSPi character brand mark
+  direct navigation between the start and latest message, Reduce Motion,
+  large-text support, and the TSPi character brand mark
 - Branding source: apps/mobile/assets/branding/ts-phone-logo-source.png
 - Derived app assets: ts-phone-icon.png, ts-phone-mark.png, and
   ts-phone-mark-monochrome.png
@@ -56,13 +56,13 @@ installation, not to an immutable component release.
 
 | Artifact | ABI / purpose | Version code | Size (bytes) | SHA-256 |
 | --- | --- | ---: | ---: | --- |
-| `ts-phone-v0.9.3-build31-arm64-v8a-release.apk` | arm64-v8a phones | 2031 | 21395987 | `6f9810d971c5d683a725fed9b01972a5e610e716f3106343ced43760ec14f488` |
-| `ts-phone-v0.9.3-build31-armeabi-v7a-release.apk` | 32-bit ARM phones | 1031 | 19152757 | `b1bb4badedc3ae370ddf36c3d5df996d34a5d85e28f0dcc126973fd794842041` |
-| `ts-phone-v0.9.3-build31-x86_64-release.apk` | x86_64 emulator/device | 4031 | 22853110 | `763ca4450d8c2f15a216fc0523b58caec2da14c8f3619c88c2bdbac4d4dbf09d` |
-| `ts-phone-v0.9.3-build31-release.aab` | Store bundle | 31 | 58174130 | `682735d5e8be3ac81cb3ba7bbf1440cbd1d0fdc435b52f0bf70eadca3c29d990` |
+| `ts-phone-v0.10.0-build32-arm64-v8a-release.apk` | arm64-v8a phones | 2032 | 21396279 | `8ac965d8b6c65fbedcc52aacd14e9e7d740c51ba6f5b0bd0a3b8c6149ee24a5f` |
+| `ts-phone-v0.10.0-build32-armeabi-v7a-release.apk` | 32-bit ARM phones | 1032 | 19153049 | `745b5ff8d69d8780b72ebda6a8987afba7e5908221a8702a455a182f2142f7db` |
+| `ts-phone-v0.10.0-build32-x86_64-release.apk` | x86_64 emulator/device | 4032 | 22853398 | `97bc46cc90eb21314f4b0e1beb9535ff6251d16c28297ada741a8d39c774de40` |
+| `ts-phone-v0.10.0-build32-release.aab` | Store bundle | 32 | 58207626 | `1d999c65218d255f9b6d69327a72d5962502c753cc34941066354db37b487454` |
 
 Flutter adds an ABI-specific prefix to split APK version codes. All artifacts
-still represent app version `0.9.3+31`. The APK manifests are not debuggable.
+still represent app version `0.10.0+32`. The APK manifests are not debuggable.
 They request only `android.permission.INTERNET` and Android's package-scoped
 dynamic-receiver permission. No microphone, Bluetooth, or speech-recognition
 declaration is present.
@@ -71,11 +71,11 @@ Validation commands:
 
 ~~~bash
 apps/mobile/tool/build_release_android.sh
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/ts-phone-v0.9.3-build31-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/ts-phone-v0.9.3-build31-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/ts-phone-v0.9.3-build31-arm64-v8a-release.apk
-/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/ts-phone-v0.9.3-build31-release.aab
-sha256sum dist/ts-phone-v0.9.3-build31-*
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/ts-phone-v0.10.0-build32-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/ts-phone-v0.10.0-build32-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/ts-phone-v0.10.0-build32-arm64-v8a-release.apk
+/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/ts-phone-v0.10.0-build32-release.aab
+sha256sum dist/ts-phone-v0.10.0-build32-*
 ~~~
 
 The generated Flutter outputs and archived artifacts were compared byte for
@@ -83,7 +83,7 @@ byte. Install the `arm64-v8a` APK on typical current Android phones. A previous
 debug/profile installation must be uninstalled first because its signing
 certificate differs; uninstalling clears its local token and settings.
 
-The APK manifest reports version `0.9.3` and the expected ABI-prefixed version
+The APK manifest reports version `0.10.0` and the expected ABI-prefixed version
 code. All split APKs passed v2 signature verification. The AAB is signed by the
 same release certificate and `jarsigner -verify` exited successfully; JDK 21
 reported the expected self-signed/no-timestamp warnings and JarInputStream
@@ -92,8 +92,8 @@ validate` was not run because only Gradle's non-executable bundletool library
 jar is available locally. The Gradle `bundleRelease` task completed normally.
 
 The previous production-signed `0.8.2`, `0.8.3`, `0.8.4`, `0.8.5`, `0.9.0`,
-`0.9.1`, and `0.9.2` artifacts remain in `dist/` for rollback. No debug or
-profile artifact was produced for `0.9.3`.
+`0.9.1`, `0.9.2`, and `0.9.3` artifacts remain in `dist/` for rollback. No
+debug or profile artifact was produced for `0.10.0`.
 
 ## iOS
 

@@ -10,17 +10,20 @@ abstract final class TsPhoneSpacing {
 }
 
 abstract final class TsPhoneRadii {
-  static const double small = 10;
-  static const double medium = 14;
-  static const double panel = 18;
-  static const double bubble = 18;
-  static const double composer = 22;
+  static const double small = 6;
+  static const double medium = 8;
+  static const double panel = 8;
+  static const double bubble = 16;
+  static const double composer = 20;
 }
 
 abstract final class TsPhoneMotion {
   static const Duration quick = Duration(milliseconds: 120);
   static const Duration standard = Duration(milliseconds: 180);
   static const Duration statusPulse = Duration(milliseconds: 720);
+
+  static Duration resolve(BuildContext context, Duration duration) =>
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : duration;
 }
 
 @immutable
@@ -347,11 +350,11 @@ abstract final class TsPhoneTheme {
       cardTheme: CardThemeData(
         elevation: 0,
         margin: EdgeInsets.zero,
-        color: glassTheme.elevatedSurface,
+        color: scheme.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
-          side: BorderSide(color: glassTheme.border, width: 0.7),
+          side: BorderSide(color: scheme.outlineVariant, width: 0.5),
         ),
       ),
       dividerTheme: DividerThemeData(
@@ -393,7 +396,7 @@ abstract final class TsPhoneTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(48, 48),
+          minimumSize: const Size(44, 44),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
           ),
@@ -402,7 +405,7 @@ abstract final class TsPhoneTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(48, 48),
+          minimumSize: const Size(44, 44),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
           ),
@@ -412,7 +415,7 @@ abstract final class TsPhoneTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          minimumSize: const Size(48, 48),
+          minimumSize: const Size(44, 44),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
           ),
@@ -421,7 +424,7 @@ abstract final class TsPhoneTheme {
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
-          minimumSize: const WidgetStatePropertyAll<Size>(Size.square(48)),
+          minimumSize: const WidgetStatePropertyAll<Size>(Size.square(44)),
           animationDuration: TsPhoneMotion.quick,
           overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
             if (states.contains(WidgetState.pressed)) {

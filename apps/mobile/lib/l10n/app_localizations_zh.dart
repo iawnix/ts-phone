@@ -297,10 +297,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get sessionRuntimeTapHint => '查看模型与上下文详情';
+  String get sessionRuntimeTapHint => '查看会话详情';
 
   @override
-  String get sessionRuntimeDetails => '模型与上下文';
+  String get sessionRuntimeDetails => '会话详情';
 
   @override
   String get sessionRuntimeLastKnown => 'TSPi 当前离线，以下为最后一次运行时快照。';
@@ -609,7 +609,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get timelineSystem => '系统记录';
 
   @override
+  String get timelineCompleted => '已完成';
+
+  @override
   String get timelineFailed => '失败';
+
+  @override
+  String get timelineRecorded => '已记录';
 
   @override
   String get timelineStage => '阶段';

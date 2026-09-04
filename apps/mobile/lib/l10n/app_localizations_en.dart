@@ -319,10 +319,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get sessionRuntimeTapHint => 'View model and context details';
+  String get sessionRuntimeTapHint => 'View session details';
 
   @override
-  String get sessionRuntimeDetails => 'Model and context';
+  String get sessionRuntimeDetails => 'Session details';
 
   @override
   String get sessionRuntimeLastKnown =>
@@ -647,7 +647,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get timelineSystem => 'System';
 
   @override
+  String get timelineCompleted => 'Completed';
+
+  @override
   String get timelineFailed => 'Failed';
+
+  @override
+  String get timelineRecorded => 'Recorded';
 
   @override
   String get timelineStage => 'Stage';

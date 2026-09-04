@@ -140,9 +140,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
-                  child: TsGlassSurface(
-                    elevated: true,
-                    blurSigma: 12,
+                  child: TsContentSurface(
                     padding: const EdgeInsets.all(TsPhoneSpacing.large),
                     child: Form(
                       key: _formKey,

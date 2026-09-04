@@ -89,7 +89,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('chat header opens authoritative model and context details', (
+  testWidgets('chat header keeps runtime metadata in session details', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(320, 700);
@@ -137,13 +137,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('gpt-5.6-sol · 78k / 128k'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('session-runtime-summary')),
-    );
+    expect(find.text('已连接 · 可发送'), findsOneWidget);
+    expect(find.textContaining('gpt-5.6-sol'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey<String>('chat-more-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('会话详情'));
     await tester.pumpAndSettle();
 
-    expect(find.text('模型与上下文'), findsOneWidget);
+    expect(find.text('会话详情'), findsOneWidget);
     expect(find.text('gpt-5.6-sol'), findsOneWidget);
     expect(find.text('78,214 / 128,000'), findsOneWidget);
     expect(find.text('49,786 · 39%'), findsOneWidget);
@@ -205,10 +206,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('— / 128k'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('session-runtime-summary')),
-    );
+    expect(find.text('Connected · Ready'), findsOneWidget);
+    expect(find.textContaining('a-very-long-frontier'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey<String>('chat-more-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Session details'));
     await tester.pumpAndSettle();
     expect(find.text('Not available'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -297,7 +299,10 @@ void main() {
     expect(find.textContaining('消息来自本机历史记录'), findsNothing);
     expect(find.text('只读观察模式'), findsNothing);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
-    expect(find.byTooltip('同步消息'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('chat-more-menu')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -319,7 +324,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('离线'), findsOneWidget);
+    expect(find.textContaining('离线', findRichText: true), findsOneWidget);
     expect(find.text('0 在线'), findsNothing);
     expect(find.text('研究目录'), findsNothing);
     expect(find.text('tsphone.example.test'), findsNothing);
@@ -338,83 +343,80 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'workspace status cards preserve state at 320px with large text',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(320, 640);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final gateway = UiFakeGateway(
-        workspaces: const <WorkspaceSummary>[
-          WorkspaceSummary(
-            id: 'live-workspace',
-            name: 'Long active research workspace',
-            runtimeState: RuntimeState.running,
-            isStreaming: true,
-            liveSessionCount: 2,
-            sessionCount: 4,
-          ),
-          offlineWorkspace,
-        ],
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('en'),
-          supportedLocales: AppLocalizations.supportedLocales,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          theme: TsPhoneTheme.light(),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(1.4)),
-            child: child!,
-          ),
-          home: WorkspaceListPage(
-            settings: _settings,
-            onOpenSettings: () {},
-            gatewayBuilder: (_) => gateway,
-          ),
+  testWidgets('workspace status rows preserve state at 320px with large text', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = UiFakeGateway(
+      workspaces: const <WorkspaceSummary>[
+        WorkspaceSummary(
+          id: 'live-workspace',
+          name: 'Long active research workspace',
+          runtimeState: RuntimeState.running,
+          isStreaming: true,
+          liveSessionCount: 2,
+          sessionCount: 4,
         ),
-      );
-      await tester.pumpAndSettle();
+        offlineWorkspace,
+      ],
+    );
 
-      expect(find.byIcon(Icons.folder_open_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.folder_rounded), findsOneWidget);
-      expect(find.text('CONNECTED'), findsNothing);
-      expect(find.text('RUNNING'), findsOneWidget);
-      expect(find.text('2 LIVE'), findsOneWidget);
-      expect(find.text('OFFLINE'), findsOneWidget);
-      expect(find.text('0 LIVE'), findsNothing);
-      final tiles = tester.widgetList<TsStatusListTile>(
-        find.byType(TsStatusListTile),
-      );
-      expect(tiles, hasLength(2));
-      expect(tiles.every((tile) => !tile.showStatusIndicator), isTrue);
-      expect(
-        tiles.every((tile) => tile.titleTrailing is TsInlineStatus),
-        isTrue,
-      );
-      expect(find.byType(TsStatusBadge), findsNothing);
-      expect(
-        (tester.getCenter(find.text('ts_001')).dy -
-                tester.getCenter(find.text('OFFLINE')).dy)
-            .abs(),
-        lessThan(4),
-      );
-      expect(
-        find.descendant(
-          of: find.byType(TsStatusListTile),
-          matching: find.byType(BackdropFilter),
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.4)),
+          child: child!,
         ),
-        findsNothing,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+        home: WorkspaceListPage(
+          settings: _settings,
+          onOpenSettings: () {},
+          gatewayBuilder: (_) => gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-  testWidgets('workspace cards fit dark mode at 320px and 2x text', (
+    expect(find.byIcon(Icons.folder_open_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.folder_rounded), findsOneWidget);
+    expect(find.text('CONNECTED'), findsNothing);
+    expect(find.textContaining('RUNNING', findRichText: true), findsOneWidget);
+    expect(find.text('2 LIVE'), findsOneWidget);
+    final offlineStatus = find.textContaining('OFFLINE', findRichText: true);
+    expect(offlineStatus, findsOneWidget);
+    expect(find.text('0 LIVE'), findsNothing);
+    final tiles = tester.widgetList<TsStatusListTile>(
+      find.byType(TsStatusListTile),
+    );
+    expect(tiles, hasLength(2));
+    expect(tiles.every((tile) => !tile.showStatusIndicator), isTrue);
+    expect(tiles.every((tile) => tile.titleTrailing is TsInlineStatus), isTrue);
+    expect(find.byType(TsStatusBadge), findsNothing);
+    expect(
+      (tester.getCenter(find.text('ts_001')).dy -
+              tester.getCenter(offlineStatus).dy)
+          .abs(),
+      lessThan(4),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(TsStatusListTile),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('workspace rows fit dark mode at 320px and 2x text', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(320, 640);
@@ -456,7 +458,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('CONNECTED'), findsNothing);
-    expect(find.text('READY'), findsOneWidget);
+    expect(find.textContaining('READY', findRichText: true), findsOneWidget);
     expect(find.text('1 LIVE'), findsOneWidget);
     expect(find.text('Research workspaces'), findsNothing);
     expect(find.text('tsphone.example.test'), findsNothing);
@@ -492,7 +494,7 @@ void main() {
     expect(find.text('观察会话'), findsOneWidget);
     expect(find.text('主会话'), findsOneWidget);
     expect(find.text('只读会话 · test/observer'), findsOneWidget);
-    expect(find.text('就绪'), findsNWidgets(2));
+    expect(find.textContaining('就绪', findRichText: true), findsNWidgets(2));
     expect(find.byType(TsStatusListTile), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
@@ -587,8 +589,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Generating'), findsOneWidget);
-    expect(find.text('History session'), findsOneWidget);
+    expect(
+      find.textContaining('Generating', findRichText: true),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('History session', findRichText: true),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -688,12 +696,12 @@ void main() {
 
     expect(find.byKey(const ValueKey<String>('chat-composer')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('chat-back')), findsOneWidget);
-    expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('composer-send')), findsOneWidget);
-    final idleSendButton = tester.widget<IconButton>(
-      find.widgetWithIcon(IconButton, Icons.arrow_upward_rounded),
+    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('composer-send')), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('composer-action-slot')),
+      findsOneWidget,
     );
-    expect(idleSendButton.onPressed, isNull);
     final idleComposerWidth = tester
         .getSize(find.byKey(const ValueKey<String>('chat-composer')))
         .width;
@@ -703,23 +711,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Stop generation'), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('composer-stop')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('composer-stop')), findsNothing);
     expect(find.byIcon(Icons.arrow_upward_rounded), findsNothing);
     expect(
       tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
       'Ask or instruct session...',
     );
-    final fieldBottom = tester.getBottomRight(find.byType(TextField)).dy;
-    final stopBottom = tester
-        .getBottomRight(find.byKey(const ValueKey<String>('composer-stop')))
+    final liveStopBottom = tester
+        .getBottomRight(find.byKey(const ValueKey<String>('live-run-stop')))
         .dy;
-    expect((fieldBottom - stopBottom).abs(), lessThan(1));
+    final composerTop = tester
+        .getTopLeft(find.byKey(const ValueKey<String>('chat-composer')))
+        .dy;
+    expect(liveStopBottom, lessThanOrEqualTo(composerTop));
     expect(
       tester.getSize(find.byKey(const ValueKey<String>('chat-composer'))).width,
       idleComposerWidth,
     );
     expect(tester.getSize(find.byType(TextField)).width, idleFieldWidth);
-    expect(find.textContaining('GENERATING · session'), findsOneWidget);
+    expect(find.text('Generating'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '排队消息');
     await tester.pumpAndSettle();
@@ -1054,6 +1065,10 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('zh'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          theme: TsPhoneTheme.light(),
           home: ChatPage(
             settings: _settings,
             workspace: const WorkspaceSummary(
@@ -1072,19 +1087,33 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('已载入 2 / 2501 项'), findsOneWidget);
-      expect(find.textContaining('子代理 · Compute · Inspect'), findsOneWidget);
-      expect(find.byIcon(Icons.smart_toy_rounded), findsOneWidget);
+      expect(find.text('Compute · Inspect'), findsOneWidget);
+      expect(find.text('已完成'), findsOneWidget);
+      expect(find.text('1.2 秒'), findsOneWidget);
+      expect(find.byIcon(Icons.account_tree_outlined), findsOneWidget);
       expect(find.byIcon(Icons.hub_outlined), findsNothing);
-      expect(find.text('加载全部历史'), findsOneWidget);
+      expect(find.textContaining('Node 1'), findsNothing);
+      expect(find.textContaining('42 tokens'), findsNothing);
+      expect(find.text('加载全部历史'), findsNothing);
       expect(
-        find.byKey(const ValueKey<String>('timeline-branch-menu')),
+        find.byKey(const ValueKey<String>('timeline-history-menu')),
         findsOneWidget,
       );
 
       await tester.tap(
-        find.byKey(const ValueKey<String>('timeline-branch-menu')),
+        find.byKey(
+          const ValueKey<String>('timeline-activity-details-00000011'),
+        ),
       );
       await tester.pumpAndSettle();
+      expect(find.textContaining('Node 1'), findsOneWidget);
+      expect(find.textContaining('42 tokens'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('timeline-history-menu')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('加载全部历史'), findsOneWidget);
       await tester.tap(find.text('分支 0002').last);
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -1160,7 +1189,8 @@ void main() {
           .opacity,
       1,
     );
-    expect(find.textContaining('会话配置 · 模型切换'), findsWidgets);
+    expect(find.text('模型切换'), findsWidgets);
+    expect(find.text('已记录'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

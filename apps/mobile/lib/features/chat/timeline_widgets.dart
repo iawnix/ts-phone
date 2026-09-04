@@ -6,6 +6,15 @@ import '../../theme/ts_phone_theme.dart';
 import '../../widgets/chat_message_view.dart';
 import 'chat_controller.dart';
 
+enum _TimelineHistoryActionKind { loadEarlier, loadAll, selectBranch }
+
+class _TimelineHistoryAction {
+  const _TimelineHistoryAction(this.kind, {this.branchId});
+
+  final _TimelineHistoryActionKind kind;
+  final String? branchId;
+}
+
 class TimelineHistoryControl extends StatelessWidget {
   const TimelineHistoryControl({
     required this.controller,
@@ -29,126 +38,132 @@ class TimelineHistoryControl extends StatelessWidget {
     final loading =
         controller.loadingEarlierMessages || controller.loadingAllHistory;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: colors.outlineVariant),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 9, 8, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Icon(Icons.history_rounded, size: 18, color: colors.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      <String>[
-                        l10n.timelineProgress(
-                          controller.loadedTimelineItemCount,
-                          controller.totalTimelineItemCount,
-                        ),
-                        l10n.timelineTurns(controller.timelineTurnCount),
-                        l10n.timelineActivities(
-                          controller.timelineActivityCount,
-                        ),
-                      ].join(' · '),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
+      padding: const EdgeInsets.fromLTRB(16, 2, 8, 6),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.history_rounded, size: 18, color: colors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                <String>[
+                  l10n.timelineProgress(
+                    controller.loadedTimelineItemCount,
+                    controller.totalTimelineItemCount,
                   ),
-                  if (controller.timelineBranches.length > 1)
-                    PopupMenuButton<String>(
-                      key: const ValueKey<String>('timeline-branch-menu'),
-                      tooltip: l10n.timelineBranches,
-                      onSelected: onSelectBranch,
-                      icon: const Icon(Icons.account_tree_outlined, size: 20),
-                      itemBuilder: (context) => <PopupMenuEntry<String>>[
-                        for (final branch in controller.timelineBranches)
-                          PopupMenuItem<String>(
-                            value: branch.id,
-                            child: Row(
-                              children: <Widget>[
-                                Icon(
-                                  branch.id == history.selectedBranchId
-                                      ? Icons.check_circle_rounded
-                                      : Icons.circle_outlined,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    branch.name ??
-                                        (branch.active
-                                            ? l10n.timelineActiveBranch
-                                            : l10n.timelineBranchLabel(
-                                                branch.id.substring(
-                                                  branch.id.length - 4,
-                                                ),
-                                              )),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${branch.turnCount}',
-                                  style: Theme.of(context).textTheme.labelSmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                ],
-              ),
-              if (controller.canLoadEarlierMessages || loading) ...<Widget>[
-                const SizedBox(height: 6),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 4,
-                  children: <Widget>[
-                    TextButton.icon(
-                      key: const ValueKey<String>('load-earlier-timeline'),
-                      onPressed: loading ? null : onLoadEarlier,
-                      icon: const Icon(Icons.expand_less_rounded, size: 18),
-                      label: Text(
-                        controller.loadingEarlierMessages
-                            ? l10n.loadingEarlierMessages
-                            : l10n.loadEarlierMessages,
-                      ),
-                    ),
-                    TextButton.icon(
-                      key: const ValueKey<String>('load-all-timeline'),
-                      onPressed: loading ? null : onLoadAll,
-                      icon: controller.loadingAllHistory
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(
-                              Icons.vertical_align_top_rounded,
-                              size: 18,
-                            ),
-                      label: Text(
-                        controller.loadingAllHistory
-                            ? l10n.loadingAllHistory
-                            : l10n.loadAllHistory,
-                      ),
-                    ),
-                  ],
+                  l10n.timelineTurns(controller.timelineTurnCount),
+                  l10n.timelineActivities(controller.timelineActivityCount),
+                ].join(' · '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
                 ),
-              ],
-            ],
-          ),
+              ),
+            ),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            PopupMenuButton<_TimelineHistoryAction>(
+              key: const ValueKey<String>('timeline-history-menu'),
+              tooltip: l10n.timelineBranches,
+              onSelected: (selection) async {
+                switch (selection.kind) {
+                  case _TimelineHistoryActionKind.loadEarlier:
+                    await onLoadEarlier();
+                  case _TimelineHistoryActionKind.loadAll:
+                    await onLoadAll();
+                  case _TimelineHistoryActionKind.selectBranch:
+                    await onSelectBranch(selection.branchId!);
+                }
+              },
+              icon: const Icon(Icons.more_horiz_rounded, size: 22),
+              itemBuilder: (context) =>
+                  <PopupMenuEntry<_TimelineHistoryAction>>[
+                    if (controller.canLoadEarlierMessages || loading)
+                      PopupMenuItem<_TimelineHistoryAction>(
+                        key: const ValueKey<String>('load-earlier-timeline'),
+                        value: const _TimelineHistoryAction(
+                          _TimelineHistoryActionKind.loadEarlier,
+                        ),
+                        enabled: !loading,
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.expand_less_rounded),
+                          title: Text(
+                            controller.loadingEarlierMessages
+                                ? l10n.loadingEarlierMessages
+                                : l10n.loadEarlierMessages,
+                          ),
+                        ),
+                      ),
+                    if (controller.canLoadEarlierMessages || loading)
+                      PopupMenuItem<_TimelineHistoryAction>(
+                        key: const ValueKey<String>('load-all-timeline'),
+                        value: const _TimelineHistoryAction(
+                          _TimelineHistoryActionKind.loadAll,
+                        ),
+                        enabled: !loading,
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.vertical_align_top_rounded),
+                          title: Text(
+                            controller.loadingAllHistory
+                                ? l10n.loadingAllHistory
+                                : l10n.loadAllHistory,
+                          ),
+                        ),
+                      ),
+                    if ((controller.canLoadEarlierMessages || loading) &&
+                        controller.timelineBranches.length > 1)
+                      const PopupMenuDivider(),
+                    for (final branch in controller.timelineBranches)
+                      if (controller.timelineBranches.length > 1)
+                        PopupMenuItem<_TimelineHistoryAction>(
+                          value: _TimelineHistoryAction(
+                            _TimelineHistoryActionKind.selectBranch,
+                            branchId: branch.id,
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Icon(
+                                branch.id == history.selectedBranchId
+                                    ? Icons.check_circle_rounded
+                                    : Icons.circle_outlined,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  branch.name ??
+                                      (branch.active
+                                          ? l10n.timelineActiveBranch
+                                          : l10n.timelineBranchLabel(
+                                              branch.id.substring(
+                                                branch.id.length - 4,
+                                              ),
+                                            )),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${branch.turnCount}',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                  ],
+            ),
+          ],
         ),
       ),
     );
@@ -165,23 +180,17 @@ class TimelineTurnDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 5),
-      child: Row(
-        children: <Widget>[
-          Expanded(child: Divider(color: colors.outlineVariant)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(
-              context.l10n.timelineTurnLabel(number),
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant),
-            ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          context.l10n.timelineTurnLabel(number),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
           ),
-          Expanded(child: Divider(color: colors.outlineVariant)),
-        ],
+        ),
       ),
     );
   }
@@ -281,48 +290,26 @@ class TimelineTurnGroupView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Column(
       key: ValueKey<String>('timeline-group-content-${group.identity}'),
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         if (group.turnId != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-            child: Row(
-              children: <Widget>[
-                Expanded(child: Divider(color: colors.outlineVariant)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        Icons.forum_outlined,
-                        size: 14,
-                        color: colors.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        context.l10n.timelineTurnLabel(group.number),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (group.activityCount > 0) ...<Widget>[
-                        const SizedBox(width: 6),
-                        Text(
-                          '· ${context.l10n.timelineActivities(group.activityCount)}',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: colors.onSurfaceVariant),
-                        ),
-                      ],
-                    ],
-                  ),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                <String>[
+                  context.l10n.timelineTurnLabel(group.number),
+                  if (group.activityCount > 0)
+                    context.l10n.timelineActivities(group.activityCount),
+                ].join(' · '),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
                 ),
-                Expanded(child: Divider(color: colors.outlineVariant)),
-              ],
+              ),
             ),
           ),
         for (final item in group.items)
@@ -362,20 +349,22 @@ class TimelineActivityView extends StatelessWidget {
         : activity.status == TimelineActivityStatus.completed
         ? status.connected
         : colors.onSurfaceVariant;
-    final roleOperation = <String>[
+    final operation = <String>[
       ?activity.role?.trim(),
       ?activity.operation?.trim(),
     ].where((value) => value.isNotEmpty).map(_humanizeIdentifier).join(' · ');
-    final primaryDetail = roleOperation.isNotEmpty
-        ? roleOperation
+    final primaryDetail = operation.isNotEmpty
+        ? operation
         : _activityTitleLabel(context, activity.title);
-    final metadata = <String>[
-      ...activity.nodeRefs.map(_humanizeIdentifier),
-      if (activity.durationMs case final duration?)
-        context.l10n.timelineDuration((duration / 1000).toStringAsFixed(1)),
-      if (activity.totalTokens case final tokens?)
-        context.l10n.timelineTokens(tokens),
-    ];
+    final durationMs = activity.durationMs;
+    final durationLabel = durationMs == null
+        ? null
+        : context.l10n.timelineDuration((durationMs / 1000).toStringAsFixed(1));
+    final stateLabel = switch (activity.status) {
+      TimelineActivityStatus.completed => context.l10n.timelineCompleted,
+      TimelineActivityStatus.failed => context.l10n.timelineFailed,
+      TimelineActivityStatus.recorded => context.l10n.timelineRecorded,
+    };
     final details = <String>[
       if (activity.detail case final detail? when detail.trim().isNotEmpty)
         detail,
@@ -386,6 +375,8 @@ class TimelineActivityView extends StatelessWidget {
       if (activity.reference case final reference?
           when reference.trim().isNotEmpty)
         '${context.l10n.timelineReference}: $reference',
+      if (activity.totalTokens case final tokens?)
+        context.l10n.timelineTokens(tokens),
       if (activity.retrySafe case final retrySafe?)
         retrySafe
             ? context.l10n.timelineRetrySafe
@@ -395,26 +386,32 @@ class TimelineActivityView extends StatelessWidget {
       activity: activity,
       tone: tone,
       primaryDetail: primaryDetail,
-      metadata: metadata,
-      failed: failed,
+      stateLabel: stateLabel,
+      durationLabel: durationLabel,
     );
     return Semantics(
-      label: failed ? context.l10n.timelineFailed : null,
+      label: <String>[
+        _activityCategoryLabel(context, activity.category),
+        primaryDetail,
+        stateLabel,
+      ].join(' · '),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+        padding: const EdgeInsets.fromLTRB(16, 2, 12, 2),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(8),
-            border: Border(left: BorderSide(color: tone, width: 3)),
+            border: Border(
+              left: BorderSide(color: tone.withValues(alpha: 0.72), width: 2),
+            ),
           ),
           child: Material(
             color: Colors.transparent,
-            clipBehavior: Clip.antiAlias,
             child: details.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-                    child: summary,
+                ? ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+                      child: summary,
+                    ),
                   )
                 : Theme(
                     data: Theme.of(
@@ -424,7 +421,7 @@ class TimelineActivityView extends StatelessWidget {
                       key: ValueKey<String>(
                         'timeline-activity-details-${identity ?? activity.title}',
                       ),
-                      tilePadding: const EdgeInsets.fromLTRB(10, 2, 8, 2),
+                      tilePadding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
                       childrenPadding: const EdgeInsets.fromLTRB(42, 0, 12, 10),
                       title: summary,
                       trailing: Icon(
@@ -454,15 +451,15 @@ class _ActivitySummary extends StatelessWidget {
     required this.activity,
     required this.tone,
     required this.primaryDetail,
-    required this.metadata,
-    required this.failed,
+    required this.stateLabel,
+    required this.durationLabel,
   });
 
   final TimelineActivity activity;
   final Color tone;
   final String primaryDetail;
-  final List<String> metadata;
-  final bool failed;
+  final String stateLabel;
+  final String? durationLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -477,44 +474,66 @@ class _ActivitySummary extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                <String>[
-                  _activityCategoryLabel(context, activity.category),
-                  if (primaryDetail.isNotEmpty) primaryDetail,
-                ].join(' · '),
+                primaryDetail,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelLarge,
               ),
-              if (metadata.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 3),
-                Text(
-                  metadata.join(' · '),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
+              const SizedBox(height: 3),
+              Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        _activityStateIcon(activity.status),
+                        size: 14,
+                        color: tone,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        stateLabel,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: tone,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  if (durationLabel case final duration?)
+                    Text(
+                      duration,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
-        const SizedBox(width: 8),
-        if (failed)
-          Icon(Icons.error_outline_rounded, color: tone, size: 18)
-        else if (activity.status == TimelineActivityStatus.completed)
-          Icon(Icons.check_rounded, color: tone, size: 18),
       ],
     );
   }
 }
 
 IconData _activityIcon(TimelineActivityCategory category) => switch (category) {
-  TimelineActivityCategory.subagent => Icons.smart_toy_rounded,
+  TimelineActivityCategory.subagent => Icons.account_tree_outlined,
   TimelineActivityCategory.research => Icons.science_rounded,
   TimelineActivityCategory.review => Icons.fact_check_rounded,
   TimelineActivityCategory.workspace => Icons.folder_copy_rounded,
   TimelineActivityCategory.configuration => Icons.settings_rounded,
   TimelineActivityCategory.context => Icons.compress_rounded,
   TimelineActivityCategory.system => Icons.info_rounded,
+};
+
+IconData _activityStateIcon(TimelineActivityStatus status) => switch (status) {
+  TimelineActivityStatus.completed => Icons.check_circle_outline_rounded,
+  TimelineActivityStatus.failed => Icons.error_outline_rounded,
+  TimelineActivityStatus.recorded => Icons.circle_outlined,
 };
 
 String _activityCategoryLabel(

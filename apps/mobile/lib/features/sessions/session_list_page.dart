@@ -263,6 +263,13 @@ class _SessionTile extends StatelessWidget {
       statusColor: stateColor,
       icon: accessIcon,
       title: session.localizedDisplayName(l10n),
+      titleTrailing: TsInlineStatus(
+        label: session.runtimeState.localizedCompactLabel(l10n),
+        color: stateColor,
+        pulsing:
+            session.runtimeState == RuntimeState.running ||
+            session.runtimeState == RuntimeState.connecting,
+      ),
       subtitle: accessLabel,
       details: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -286,46 +293,7 @@ class _SessionTile extends StatelessWidget {
           ),
         ],
       ),
-      trailing: _SessionStateBadge(
-        state: session.runtimeState,
-        color: stateColor,
-      ),
       onTap: onTap,
-    );
-  }
-}
-
-class _SessionStateBadge extends StatelessWidget {
-  const _SessionStateBadge({required this.state, required this.color});
-
-  final RuntimeState state;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: state.localizedLabel(context.l10n),
-      child: SizedBox(
-        width: 108,
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TsStatusBadge(
-                  label: state.localizedCompactLabel(context.l10n),
-                  color: color,
-                  compact: true,
-                  pulsing: state == RuntimeState.idle,
-                ),
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(Icons.chevron_right, size: 20, color: colors.outline),
-          ],
-        ),
-      ),
     );
   }
 }

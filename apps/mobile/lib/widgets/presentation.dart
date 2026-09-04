@@ -13,20 +13,55 @@ class TsPageBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isLight = theme.brightness == Brightness.light;
     return RepaintBoundary(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isLight
-                ? const <Color>[Color(0xFFF2F2F7), Color(0xFFEDEDF2)]
-                : const <Color>[Color(0xFF0B0F14), Color(0xFF090D12)],
-          ),
-        ),
+      child: ColoredBox(
+        color: Theme.of(context).colorScheme.surface,
         child: child,
+      ),
+    );
+  }
+}
+
+/// A quiet, opaque surface for ordinary content.
+///
+/// Glass is reserved for navigation and transient controls. Lists, settings,
+/// notices, and other readable content use this surface so their hierarchy
+/// remains stable in both color schemes and at large text sizes.
+class TsContentSurface extends StatelessWidget {
+  const TsContentSurface({
+    super.key,
+    required this.child,
+    this.padding,
+    this.backgroundColor,
+    this.borderColor,
+    this.borderRadius = const BorderRadius.all(
+      Radius.circular(TsPhoneRadii.panel),
+    ),
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final Color? backgroundColor;
+  final Color? borderColor;
+  final BorderRadius borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor ?? colors.surfaceContainerLowest,
+        borderRadius: borderRadius,
+        border: Border.all(
+          color: borderColor ?? colors.outlineVariant,
+          width: 0.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: padding == null
+            ? child
+            : Padding(padding: padding!, child: child),
       ),
     );
   }
@@ -290,31 +325,36 @@ class TsInfoBand extends StatelessWidget {
         TsPhoneSpacing.medium,
         0,
       ),
-      child: TsGlassSurface(
-        tint: background.withValues(alpha: 0.82),
-        borderColor: rail.withValues(alpha: 0.24),
-        padding: EdgeInsets.fromLTRB(
-          TsPhoneSpacing.medium,
-          TsPhoneSpacing.small,
-          action == null ? TsPhoneSpacing.medium : TsPhoneSpacing.xSmall,
-          TsPhoneSpacing.small,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+          border: Border(left: BorderSide(color: rail, width: 3)),
         ),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, size: 19, color: rail),
-            const SizedBox(width: TsPhoneSpacing.small),
-            Expanded(
-              child: Text(
-                message,
-                maxLines: maxLines,
-                overflow: maxLines == null ? null : TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: foreground),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            TsPhoneSpacing.medium,
+            TsPhoneSpacing.small,
+            action == null ? TsPhoneSpacing.medium : TsPhoneSpacing.xSmall,
+            TsPhoneSpacing.small,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(icon, size: 19, color: rail),
+              const SizedBox(width: TsPhoneSpacing.small),
+              Expanded(
+                child: Text(
+                  message,
+                  maxLines: maxLines,
+                  overflow: maxLines == null ? null : TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: foreground),
+                ),
               ),
-            ),
-            ?action,
-          ],
+              ?action,
+            ],
+          ),
         ),
       ),
     );
@@ -352,96 +392,82 @@ class TsStatusListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: TsPhoneSpacing.medium,
-        vertical: 3,
-      ),
-      child: TsGlassSurface(
-        tint: TsPhoneGlassTheme.resolve(context).elevatedSurface,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
-            onTap: onTap,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 72),
+    return Material(
+      color: colors.surfaceContainerLowest,
+      child: InkWell(
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: colors.outlineVariant, width: 0.5),
+            ),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 68),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TsPhoneSpacing.large,
+                vertical: TsPhoneSpacing.small,
+              ),
               child: Row(
                 children: <Widget>[
-                  const SizedBox(width: TsPhoneSpacing.medium),
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerHigh.withValues(
-                          alpha: 0.7,
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          TsPhoneRadii.medium,
-                        ),
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: <Widget>[
-                          Icon(icon, size: 23, color: iconColor ?? statusColor),
-                          if (showStatusIndicator)
-                            Positioned(
-                              right: 2,
-                              bottom: 2,
-                              child: Container(
-                                width: 9,
-                                height: 9,
-                                decoration: BoxDecoration(
-                                  color: statusColor,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: colors.surfaceContainerLowest,
-                                    width: 1.5,
-                                  ),
+                  SizedBox(
+                    width: 36,
+                    height: 44,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        Icon(icon, size: 24, color: iconColor ?? statusColor),
+                        if (showStatusIndicator)
+                          Positioned(
+                            right: 1,
+                            bottom: 5,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: statusColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: colors.surface,
+                                  width: 1.5,
                                 ),
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: TsPhoneSpacing.medium),
                   Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          _StatusListTileTitle(
-                            title: title,
-                            monospace: titleMonospace,
-                            trailing: titleTrailing,
-                          ),
-                          const SizedBox(height: TsPhoneSpacing.xSmall),
-                          details ??
-                              Text(
-                                subtitle,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: colors.onSurfaceVariant),
-                              ),
-                        ],
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _StatusListTileTitle(
+                          title: title,
+                          monospace: titleMonospace,
+                          trailing: titleTrailing,
+                        ),
+                        const SizedBox(height: TsPhoneSpacing.xSmall),
+                        details ??
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.onSurfaceVariant),
+                            ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: TsPhoneSpacing.small),
-                  Center(
-                    child:
-                        trailing ??
-                        Icon(
-                          Icons.chevron_right,
-                          size: 22,
-                          color: colors.outline,
-                        ),
-                  ),
-                  const SizedBox(width: TsPhoneSpacing.medium),
+                  trailing ??
+                      Icon(
+                        Icons.chevron_right,
+                        size: 22,
+                        color: colors.outline,
+                      ),
                 ],
               ),
             ),
@@ -468,13 +494,13 @@ class _StatusListTileTitle extends StatelessWidget {
     final titleWidget = monospace
         ? TsMonoText(
             title,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall,
           )
         : Text(
             title,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall,
           );
@@ -483,13 +509,17 @@ class _StatusListTileTitle extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useWrap = MediaQuery.textScalerOf(context).scale(15) > 21;
+        final useWrap =
+            MediaQuery.textScalerOf(context).scale(15) > 21 ||
+            constraints.maxWidth < 180;
         if (useWrap) {
-          return Wrap(
-            spacing: TsPhoneSpacing.small,
-            runSpacing: TsPhoneSpacing.xSmall,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[titleWidget, trailingWidget],
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              titleWidget,
+              const SizedBox(height: TsPhoneSpacing.xSmall),
+              trailingWidget,
+            ],
           );
         }
         return Row(
@@ -544,8 +574,7 @@ class TsSettingsSection extends StatelessWidget {
               ),
             ),
           ),
-          TsGlassSurface(
-            elevated: true,
+          TsContentSurface(
             child: Material(color: Colors.transparent, child: child),
           ),
           if (footer case final value?)
@@ -610,20 +639,14 @@ class TsEmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(TsPhoneSpacing.large),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
-        child: TsGlassSurface(
-          elevated: true,
+        child: Padding(
           padding: const EdgeInsets.all(TsPhoneSpacing.xLarge),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
-                ),
-                child: Icon(icon, size: 28, color: theme.colorScheme.primary),
+              SizedBox.square(
+                dimension: 48,
+                child: Icon(icon, size: 30, color: theme.colorScheme.primary),
               ),
               const SizedBox(height: TsPhoneSpacing.large),
               Text(
@@ -806,24 +829,27 @@ class TsInlineStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        TsStatusDot(color: color, size: 6, pulsing: pulsing),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: color,
-            fontFamily: 'monospace',
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0,
-            height: 1.1,
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: color,
+      fontFamily: 'monospace',
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0,
+      height: 1.1,
+    );
+    return Text.rich(
+      TextSpan(
+        style: style,
+        children: <InlineSpan>[
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: TsStatusDot(color: color, size: 6, pulsing: pulsing),
           ),
-        ),
-      ],
+          const WidgetSpan(child: SizedBox(width: 5)),
+          TextSpan(text: label),
+        ],
+      ),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

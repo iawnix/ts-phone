@@ -310,13 +310,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       _DiagnosticRow(
                         icon: Icons.phone_iphone_rounded,
                         label: l10n.client,
-                        value: '0.9.3',
+                        value: '0.10.0',
                       ),
                       const _SettingsDivider(),
                       _DiagnosticRow(
                         icon: Icons.build_outlined,
                         label: l10n.build,
-                        value: '31',
+                        value: '32',
                       ),
                     ],
                   ),
@@ -591,7 +591,6 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
 
         final theme = Theme.of(context);
         final colors = theme.colorScheme;
-        final glass = TsPhoneGlassTheme.resolve(context);
         return SizedBox(
           width: double.infinity,
           height: 44,
@@ -601,7 +600,7 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
             backgroundColor: colors.surfaceContainerHigh.withValues(
               alpha: 0.68,
             ),
-            thumbColor: glass.elevatedSurface,
+            thumbColor: colors.surfaceContainerLowest,
             padding: const EdgeInsets.all(3),
             children: <T, Widget>{
               for (final entry in choices.entries)

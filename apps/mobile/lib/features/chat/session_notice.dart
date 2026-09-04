@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
+import '../../theme/ts_phone_theme.dart';
 import '../../widgets/presentation.dart';
 import 'session_view_state.dart';
 
@@ -77,7 +78,7 @@ class SessionNoticeView extends StatelessWidget {
     };
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
+      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.standard),
       switchInCurve: Curves.easeOut,
       switchOutCurve: Curves.easeIn,
       child: TsInfoBand(

@@ -9,10 +9,9 @@ import 'chat_controller.dart';
 
 /// A compact, persistent indication that the current turn is still running.
 ///
-/// When a concrete tool activity is known it owns the single stop action.  If
-/// the run has no tool activity, the composer remains the stop affordance.
-/// Once the turn settles, the strip disappears and the persisted timeline
-/// becomes the source of truth.
+/// This bar owns the single stop action for every abortable run, including the
+/// interval before a concrete tool is known. Once the turn settles, the strip
+/// disappears and the persisted timeline becomes the source of truth.
 class LiveRunStrip extends StatefulWidget {
   const LiveRunStrip({
     super.key,
@@ -86,39 +85,38 @@ class _LiveRunStripState extends State<LiveRunStrip> {
     return Semantics(
       liveRegion: true,
       label: label,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          TsPhoneSpacing.medium,
-          TsPhoneSpacing.small,
-          TsPhoneSpacing.medium,
-          0,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerLow,
+          border: Border(
+            top: BorderSide(color: colors.outlineVariant, width: 0.5),
+          ),
         ),
-        child: TsGlassSurface(
-          tint: colors.secondaryContainer.withValues(alpha: 0.72),
-          borderColor: accent.withValues(alpha: 0.32),
-          padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
           child: Row(
             children: <Widget>[
+              const SizedBox(width: TsPhoneSpacing.large),
               TsStatusDot(color: accent, size: 8, pulsing: !failed),
               const SizedBox(width: TsPhoneSpacing.small),
               Icon(
                 failed
                     ? Icons.error_outline_rounded
-                    : Icons.auto_awesome_rounded,
+                    : Icons.hourglass_top_rounded,
                 size: 18,
                 color: accent,
               ),
               const SizedBox(width: TsPhoneSpacing.small),
               Expanded(
                 child: AnimatedSwitcher(
-                  duration: TsPhoneMotion.quick,
+                  duration: TsPhoneMotion.resolve(context, TsPhoneMotion.quick),
                   child: Text(
                     key: ValueKey<String>(label),
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: colors.onSecondaryContainer,
+                      color: colors.onSurface,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -129,19 +127,21 @@ class _LiveRunStripState extends State<LiveRunStrip> {
                 Text(
                   elapsedLabel,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: colors.onSecondaryContainer.withValues(alpha: 0.78),
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ],
-              if (activity?.kind == ChatActivityKind.runningTool) ...<Widget>[
+              if (!failed && (widget.canAbort || widget.aborting)) ...<Widget>[
                 const SizedBox(width: TsPhoneSpacing.xSmall),
                 IconButton(
+                  key: const ValueKey<String>('live-run-stop'),
                   onPressed: widget.canAbort && !widget.aborting
                       ? widget.onAbort
                       : null,
                   tooltip: widget.aborting
                       ? context.l10n.aborting
                       : context.l10n.abortGeneration,
+                  color: colors.error,
                   icon: widget.aborting
                       ? const SizedBox.square(
                           dimension: 17,
@@ -150,7 +150,8 @@ class _LiveRunStripState extends State<LiveRunStrip> {
                       : const Icon(Icons.stop_circle_outlined, size: 21),
                   visualDensity: VisualDensity.compact,
                 ),
-              ],
+              ] else
+                const SizedBox(width: TsPhoneSpacing.large),
             ],
           ),
         ),

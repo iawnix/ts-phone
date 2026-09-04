@@ -9,12 +9,14 @@ import 'package:http/testing.dart';
 import 'package:ts_phone/app.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/data/settings_store.dart';
+import 'package:ts_phone/features/chat/timeline_widgets.dart';
 import 'package:ts_phone/features/connection/connection_page.dart';
 import 'package:ts_phone/features/settings/settings_page.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
 import 'package:ts_phone/models/app_theme_preference.dart';
 import 'package:ts_phone/models/app_locale_preference.dart';
 import 'package:ts_phone/models/connection_settings.dart';
+import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 import 'package:ts_phone/models/chat_message.dart';
 import 'package:ts_phone/widgets/chat_message_view.dart';
@@ -260,12 +262,79 @@ void main() {
     final theme = Theme.of(tester.element(find.byType(ConnectionPage)));
     final style = theme.iconButtonTheme.style!;
 
-    expect(style.minimumSize!.resolve(<WidgetState>{}), const Size.square(48));
+    expect(style.minimumSize!.resolve(<WidgetState>{}), const Size.square(44));
     expect(
       style.overlayColor!.resolve(<WidgetState>{WidgetState.pressed}),
       isNotNull,
     );
     expect(theme.splashColor.a, greaterThan(0));
+  });
+
+  testWidgets('pulsing status indicators respect Reduce Motion', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: const Scaffold(
+            body: Center(
+              child: TsStatusDot(color: Colors.green, pulsing: true),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(TsStatusDot), findsOneWidget);
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('failed activity rail fits dark mode with 2x text', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.dark(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: const Scaffold(
+          body: TimelineActivityView(
+            identity: 'activity-failed',
+            activity: TimelineActivity(
+              category: TimelineActivityCategory.review,
+              status: TimelineActivityStatus.failed,
+              title: 'review_run',
+              role: 'review',
+              operation: 'validate',
+              durationMs: 2400,
+              detail: 'Result contract validation failed.',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review · Validate'), findsOneWidget);
+    expect(find.text('Failed'), findsOneWidget);
+    expect(find.text('2.4s'), findsOneWidget);
+    expect(find.byIcon(Icons.fact_check_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('switches the full app to English and restores the preference', (
@@ -342,7 +411,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(TsGlassAppBar), findsOneWidget);
-      expect(find.byType(TsGlassSurface), findsOneWidget);
+      expect(find.byType(TsContentSurface), findsOneWidget);
+      expect(find.byType(TsGlassSurface), findsNothing);
       expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -372,7 +442,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('settings use iOS grouped sections and segmented controls', (
+  testWidgets('settings use flat grouped sections and segmented controls', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -392,7 +462,8 @@ void main() {
 
     expect(find.byType(TsSettingsSection), findsNWidgets(4));
     expect(find.byType(TsGlassAppBar), findsOneWidget);
-    expect(find.byType(TsGlassSurface), findsNWidgets(4));
+    expect(find.byType(TsContentSurface), findsNWidgets(4));
+    expect(find.byType(TsGlassSurface), findsNothing);
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(
       find.byWidgetPredicate(

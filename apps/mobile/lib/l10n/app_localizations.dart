@@ -641,13 +641,13 @@ abstract class AppLocalizations {
   /// No description provided for @sessionRuntimeTapHint.
   ///
   /// In en, this message translates to:
-  /// **'View model and context details'**
+  /// **'View session details'**
   String get sessionRuntimeTapHint;
 
   /// No description provided for @sessionRuntimeDetails.
   ///
   /// In en, this message translates to:
-  /// **'Model and context'**
+  /// **'Session details'**
   String get sessionRuntimeDetails;
 
   /// No description provided for @sessionRuntimeLastKnown.
@@ -1226,11 +1226,23 @@ abstract class AppLocalizations {
   /// **'System'**
   String get timelineSystem;
 
+  /// No description provided for @timelineCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get timelineCompleted;
+
   /// No description provided for @timelineFailed.
   ///
   /// In en, this message translates to:
   /// **'Failed'**
   String get timelineFailed;
+
+  /// No description provided for @timelineRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded'**
+  String get timelineRecorded;
 
   /// No description provided for @timelineStage.
   ///

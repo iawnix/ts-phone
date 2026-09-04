@@ -26,6 +26,8 @@ import 'timeline_widgets.dart';
 
 enum _ChatScrollMode { following, reading }
 
+enum _ChatMenuAction { sync, sessionDetails }
+
 const double _jumpToStartThreshold = 160;
 
 class ChatPage extends StatefulWidget {
@@ -161,7 +163,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               _controller.timelineItems.isNotEmpty ||
               _controller.hasStreamingText)) {
         // A structured timeline can change its extent once the grouped
-        // activity cards finish laying out.  Re-check on the next frame so a
+        // activity rows finish laying out. Re-check on the next frame so a
         // first-frame jump cannot leave the controller beyond the new tail.
         Future<void>.microtask(() {
           if (!mounted || !_scroll.hasClients || _initialTimelinePositioned) {
@@ -278,11 +280,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     });
     try {
       if (_scroll.hasClients) {
-        await _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        );
+        final target = _scroll.position.maxScrollExtent;
+        if (MediaQuery.disableAnimationsOf(context)) {
+          _scroll.jumpTo(target);
+        } else {
+          await _scroll.animateTo(
+            target,
+            duration: TsPhoneMotion.standard,
+            curve: Curves.easeOut,
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -304,11 +311,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     });
     try {
       if (_scroll.hasClients) {
-        await _scroll.animateTo(
-          _scroll.position.minScrollExtent,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        );
+        final target = _scroll.position.minScrollExtent;
+        if (MediaQuery.disableAnimationsOf(context)) {
+          _scroll.jumpTo(target);
+        } else {
+          await _scroll.animateTo(
+            target,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -460,23 +472,30 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       );
   }
 
-  void _showSessionRuntimeDetails() {
-    final runtime = _controller.sessionRuntime;
-    if (runtime == null) return;
+  void _showSessionDetails() {
     ActionFeedback.selection();
     showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => _SessionRuntimeDetailsSheet(
-        runtime: runtime,
+      builder: (context) => _SessionDetailsSheet(
+        runtime: _controller.sessionRuntime,
         workspaceName: widget.workspace.name,
         accessMode: _controller.accessMode,
         runtimeState: _controller.runtimeState,
-        sessionShortId: widget.session.shortId,
+        sessionId: widget.session.sessionId,
       ),
     );
+  }
+
+  void _handleChatMenuAction(_ChatMenuAction action) {
+    switch (action) {
+      case _ChatMenuAction.sync:
+        unawaited(_sync());
+      case _ChatMenuAction.sessionDetails:
+        _showSessionDetails();
+    }
   }
 
   void _queueUiRequest(ExtensionUiRequest request) {
@@ -556,32 +575,47 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               title:
                   _controller.sessionTitle ??
                   widget.session.localizedDisplayName(l10n),
-              workspaceName: widget.workspace.name,
-              accessMode: _controller.accessMode,
               runtimeState: _controller.runtimeState,
               historyOnly: _controller.historyOnly,
               connectionState: _controller.eventConnectionState,
-              sessionShortId: widget.session.shortId,
-              runtime: _controller.sessionRuntime,
-              onRuntimeTap: _showSessionRuntimeDetails,
             ),
             actions: <Widget>[
               Padding(
                 padding: const EdgeInsets.only(right: 4),
-                child: IconButton(
-                  onPressed:
-                      !viewState.canRefresh ||
-                          _controller.commandInFlight ||
-                          _syncing
-                      ? null
-                      : _sync,
-                  tooltip: _syncing ? l10n.syncing : l10n.syncMessages,
+                child: PopupMenuButton<_ChatMenuAction>(
+                  key: const ValueKey<String>('chat-more-menu'),
+                  tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+                  onSelected: _handleChatMenuAction,
                   icon: _syncing
                       ? const SizedBox.square(
                           dimension: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.refresh_rounded, size: 22),
+                      : const Icon(Icons.more_horiz_rounded, size: 23),
+                  itemBuilder: (context) => <PopupMenuEntry<_ChatMenuAction>>[
+                    PopupMenuItem<_ChatMenuAction>(
+                      value: _ChatMenuAction.sync,
+                      enabled:
+                          viewState.canRefresh &&
+                          !_controller.commandInFlight &&
+                          !_syncing,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.sync_rounded),
+                        title: Text(
+                          _syncing ? l10n.syncing : l10n.syncMessages,
+                        ),
+                      ),
+                    ),
+                    PopupMenuItem<_ChatMenuAction>(
+                      value: _ChatMenuAction.sessionDetails,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.info_outline_rounded),
+                        title: Text(l10n.sessionRuntimeDetails),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -591,6 +625,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               child: Column(
                 children: <Widget>[
                   if (showContent) _priorityBanner() ?? const SizedBox.shrink(),
+                  Expanded(child: child!),
                   if (viewState.hasLiveRun ||
                       _controller.activity?.kind == ChatActivityKind.toolFailed)
                     LiveRunStrip(
@@ -602,7 +637,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       aborting: _aborting,
                       onAbort: _abort,
                     ),
-                  Expanded(child: child!),
                   _buildComposer(context),
                 ],
               ),
@@ -745,17 +779,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final viewState = SessionViewState.fromController(_controller);
-    final running = viewState.hasLiveRun;
-    final hasActivityStrip =
-        running && _controller.activity?.kind == ChatActivityKind.runningTool;
     final canSend = viewState.canCompose && !_sending && _hasDraft;
-    final canAbort = viewState.canAbort && !_aborting;
     final sendButton = IconButton.filled(
       onPressed: canSend ? _send : null,
       tooltip: _sending ? l10n.sending : l10n.send,
       style: IconButton.styleFrom(
-        minimumSize: const Size.square(40),
-        maximumSize: const Size.square(40),
+        minimumSize: const Size.square(44),
+        maximumSize: const Size.square(44),
         padding: EdgeInsets.zero,
         shape: const CircleBorder(),
       ),
@@ -766,29 +796,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             )
           : const Icon(Icons.arrow_upward_rounded, size: 21),
     );
-    final stopButton = IconButton.filled(
-      onPressed: canAbort ? _abort : null,
-      tooltip: _aborting ? l10n.aborting : l10n.abortGeneration,
-      style: IconButton.styleFrom(
-        minimumSize: const Size.square(40),
-        maximumSize: const Size.square(40),
-        padding: EdgeInsets.zero,
-        shape: const CircleBorder(),
-        foregroundColor: colors.onError,
-        backgroundColor: colors.error,
-        disabledForegroundColor: colors.onSurface.withValues(alpha: 0.38),
-        disabledBackgroundColor: colors.surfaceContainerHighest.withValues(
-          alpha: 0.72,
-        ),
-      ),
-      icon: _aborting
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.stop_rounded, size: 20),
-    );
-    final showSend = !running || _hasDraft || _sending;
     return TsGlassBar(
       edge: TsGlassBarEdge.top,
       child: Material(
@@ -801,25 +808,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               final focused = _composerFocus.hasFocus && viewState.canCompose;
               return AnimatedContainer(
                 key: const ValueKey<String>('chat-composer'),
-                duration: TsPhoneMotion.quick,
+                duration: TsPhoneMotion.resolve(context, TsPhoneMotion.quick),
                 curve: Curves.easeOut,
-                padding: const EdgeInsets.fromLTRB(4, 3, 4, 3),
+                padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
                 decoration: BoxDecoration(
-                  color: TsPhoneGlassTheme.resolve(context).elevatedSurface,
+                  color: colors.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(TsPhoneRadii.composer),
                   border: Border.all(
                     color: focused
                         ? colors.primary.withValues(alpha: 0.5)
-                        : TsPhoneGlassTheme.resolve(context).border,
+                        : colors.outlineVariant,
                     width: focused ? 1 : 0.6,
                   ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: TsPhoneGlassTheme.resolve(context).shadow,
-                      blurRadius: focused ? 14 : 9,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -865,29 +865,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       ),
                     ),
                     const SizedBox(width: TsPhoneSpacing.xSmall),
-                    AnimatedSize(
-                      key: const ValueKey<String>('composer-actions'),
-                      alignment: Alignment.centerRight,
-                      duration: TsPhoneMotion.quick,
-                      curve: Curves.easeOut,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          if (showSend)
-                            SizedBox.square(
-                              key: const ValueKey<String>('composer-send'),
-                              dimension: 40,
-                              child: sendButton,
-                            ),
-                          if (showSend && running)
-                            const SizedBox(width: TsPhoneSpacing.xSmall),
-                          if (running && !hasActivityStrip)
-                            SizedBox.square(
-                              key: const ValueKey<String>('composer-stop'),
-                              dimension: 40,
-                              child: stopButton,
-                            ),
-                        ],
+                    SizedBox.square(
+                      key: const ValueKey<String>('composer-action-slot'),
+                      dimension: 44,
+                      child: AnimatedSwitcher(
+                        duration: TsPhoneMotion.resolve(
+                          context,
+                          TsPhoneMotion.quick,
+                        ),
+                        child: _hasDraft || _sending
+                            ? SizedBox.square(
+                                key: const ValueKey<String>('composer-send'),
+                                dimension: 44,
+                                child: sendButton,
+                              )
+                            : const SizedBox.shrink(
+                                key: ValueKey<String>('composer-action-empty'),
+                              ),
                       ),
                     ),
                   ],
@@ -933,25 +927,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 class _ChatNavigationTitle extends StatelessWidget {
   const _ChatNavigationTitle({
     required this.title,
-    required this.workspaceName,
-    required this.accessMode,
     required this.runtimeState,
     required this.historyOnly,
     required this.connectionState,
-    required this.sessionShortId,
-    required this.runtime,
-    required this.onRuntimeTap,
   });
 
   final String title;
-  final String workspaceName;
-  final SessionAccessMode accessMode;
   final RuntimeState runtimeState;
   final bool historyOnly;
   final EventConnectionState connectionState;
-  final String sessionShortId;
-  final SessionRuntimeSnapshot? runtime;
-  final VoidCallback onRuntimeTap;
 
   @override
   Widget build(BuildContext context) {
@@ -971,172 +955,125 @@ class _ChatNavigationTitle extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 1),
-        _SessionContextLine(
-          workspaceName: workspaceName,
-          accessMode: accessMode,
+        _SessionStatusLine(
           runtimeState: runtimeState,
           historyOnly: historyOnly,
           connectionState: connectionState,
-          sessionShortId: sessionShortId,
-          runtime: runtime,
-          onRuntimeTap: onRuntimeTap,
         ),
       ],
     );
   }
 }
 
-class _SessionContextLine extends StatelessWidget {
-  const _SessionContextLine({
-    required this.workspaceName,
-    required this.accessMode,
+class _SessionStatusLine extends StatelessWidget {
+  const _SessionStatusLine({
     required this.runtimeState,
     required this.historyOnly,
     required this.connectionState,
-    required this.sessionShortId,
-    required this.runtime,
-    required this.onRuntimeTap,
   });
 
-  final String workspaceName;
-  final SessionAccessMode accessMode;
   final RuntimeState runtimeState;
   final bool historyOnly;
   final EventConnectionState connectionState;
-  final String sessionShortId;
-  final SessionRuntimeSnapshot? runtime;
-  final VoidCallback onRuntimeTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = TsPhoneStatusTheme.resolve(context);
     final l10n = context.l10n;
-    final (connectionColor, connectionMessage) = switch (connectionState) {
-      EventConnectionState.connected => (
-        status.connected,
-        l10n.liveSyncConnected,
-      ),
-      EventConnectionState.suspended => (
-        theme.colorScheme.outline,
-        l10n.liveSyncSuspended,
-      ),
-      EventConnectionState.closed => (
-        theme.colorScheme.outline,
-        l10n.liveSyncClosed,
-      ),
-      EventConnectionState.failed => (status.error, l10n.liveSyncFailed),
-      EventConnectionState.reconnecting => (
-        status.warning,
-        l10n.liveSyncRestoring,
-      ),
-      EventConnectionState.connecting => (
-        status.warning,
-        l10n.liveSyncConnecting,
-      ),
-    };
-    final stateLabel = historyOnly
-        ? l10n.historySession
-        : runtimeState.localizedCompactLabel(l10n);
-    final accessLabel = historyOnly
-        ? l10n.historySession
-        : accessMode.localizedLabel(l10n);
-    final accessIcon = historyOnly
-        ? Icons.history_rounded
-        : accessMode == SessionAccessMode.controller
-        ? Icons.admin_panel_settings_outlined
-        : Icons.visibility_outlined;
-    final runtimeLabel = runtime == null
-        ? l10n.sessionToken(sessionShortId)
-        : _compactRuntimeLabel(runtime!);
-    final tooltip = <String>[
-      workspaceName,
-      if (!historyOnly) accessMode.localizedLabel(l10n),
-      connectionMessage,
-      if (runtime != null) runtime!.model.id,
-    ].join(' · ');
-    final content = Row(
+    final (color, label, pulsing) = historyOnly
+        ? (theme.colorScheme.outline, l10n.historySession, false)
+        : switch (connectionState) {
+            EventConnectionState.connected => switch (runtimeState) {
+              RuntimeState.idle => (
+                status.connected,
+                runtimeState.localizedLabel(l10n),
+                false,
+              ),
+              RuntimeState.running || RuntimeState.connecting => (
+                status.warning,
+                runtimeState.localizedLabel(l10n),
+                true,
+              ),
+              RuntimeState.recoveryRequired => (
+                status.error,
+                runtimeState.localizedLabel(l10n),
+                false,
+              ),
+              RuntimeState.offline => (
+                theme.colorScheme.outline,
+                runtimeState.localizedLabel(l10n),
+                false,
+              ),
+            },
+            EventConnectionState.suspended => (
+              theme.colorScheme.outline,
+              l10n.liveSyncSuspended,
+              false,
+            ),
+            EventConnectionState.closed => (
+              theme.colorScheme.outline,
+              l10n.liveSyncClosed,
+              false,
+            ),
+            EventConnectionState.failed => (
+              status.error,
+              l10n.liveSyncFailed,
+              false,
+            ),
+            EventConnectionState.reconnecting => (
+              status.warning,
+              l10n.liveSyncRestoring,
+              true,
+            ),
+            EventConnectionState.connecting => (
+              status.warning,
+              l10n.liveSyncConnecting,
+              true,
+            ),
+          };
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(
-          accessIcon,
-          size: 13,
-          semanticLabel: accessLabel,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: 3),
-        TsStatusDot(
-          color: connectionColor,
-          size: 7,
-          pulsing:
-              connectionState == EventConnectionState.connecting ||
-              connectionState == EventConnectionState.reconnecting,
-        ),
+        TsStatusDot(color: color, size: 7, pulsing: pulsing),
         const SizedBox(width: 5),
         Flexible(
-          child: TsMonoText(
-            runtime == null
-                ? '${stateLabel.toUpperCase()} · $runtimeLabel'
-                : runtimeLabel,
+          child: Text(
+            label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: runtime == null
-                  ? connectionColor
-                  : theme.colorScheme.onSurfaceVariant,
-              fontWeight: runtime == null ? FontWeight.w700 : null,
+              color: color,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
       ],
     );
-    return Tooltip(
-      message: runtime == null
-          ? tooltip
-          : '$tooltip · ${l10n.sessionRuntimeTapHint}',
-      child: runtime == null
-          ? content
-          : Semantics(
-              button: true,
-              label: l10n.sessionRuntimeTapHint,
-              child: InkWell(
-                key: const ValueKey<String>('session-runtime-summary'),
-                onTap: onRuntimeTap,
-                borderRadius: BorderRadius.circular(4),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 3,
-                    vertical: 2,
-                  ),
-                  child: content,
-                ),
-              ),
-            ),
-    );
   }
 }
 
-class _SessionRuntimeDetailsSheet extends StatelessWidget {
-  const _SessionRuntimeDetailsSheet({
+class _SessionDetailsSheet extends StatelessWidget {
+  const _SessionDetailsSheet({
     required this.runtime,
     required this.workspaceName,
     required this.accessMode,
     required this.runtimeState,
-    required this.sessionShortId,
+    required this.sessionId,
   });
 
-  final SessionRuntimeSnapshot runtime;
+  final SessionRuntimeSnapshot? runtime;
   final String workspaceName;
   final SessionAccessMode accessMode;
   final RuntimeState runtimeState;
-  final String sessionShortId;
+  final String sessionId;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    final usage = runtime.context;
+    final usage = runtime?.context;
     final number = NumberFormat.decimalPattern(
       Localizations.localeOf(context).toLanguageTag(),
     );
@@ -1151,13 +1088,15 @@ class _SessionRuntimeDetailsSheet extends StatelessWidget {
     final remainingValue = remaining == null || remainingPercent == null
         ? l10n.sessionContextUnavailable
         : '${number.format(remaining)} · $remainingPercent%';
-    final updated = runtime.updatedAt.toLocal();
-    final updatedValue = [
-      MaterialLocalizations.of(context).formatMediumDate(updated),
-      MaterialLocalizations.of(
-        context,
-      ).formatTimeOfDay(TimeOfDay.fromDateTime(updated)),
-    ].join(' · ');
+    final updated = runtime?.updatedAt.toLocal();
+    final updatedValue = updated == null
+        ? l10n.sessionContextUnavailable
+        : [
+            MaterialLocalizations.of(context).formatMediumDate(updated),
+            MaterialLocalizations.of(
+              context,
+            ).formatTimeOfDay(TimeOfDay.fromDateTime(updated)),
+          ].join(' · ');
     final lastKnown =
         runtimeState == RuntimeState.offline ||
         runtimeState == RuntimeState.recoveryRequired;
@@ -1194,14 +1133,30 @@ class _SessionRuntimeDetailsSheet extends StatelessWidget {
           ],
           const SizedBox(height: TsPhoneSpacing.large),
           _RuntimeDetailRow(
+            icon: Icons.folder_outlined,
+            label: l10n.approvalWorkspace,
+            value: workspaceName,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.tag_rounded,
+            label: l10n.approvalSession,
+            value: sessionId,
+          ),
+          _RuntimeDetailRow(
+            icon: Icons.shield_outlined,
+            label: l10n.auth,
+            value: accessMode.localizedLabel(l10n),
+          ),
+          const Divider(height: TsPhoneSpacing.xLarge),
+          _RuntimeDetailRow(
             icon: Icons.smart_toy_outlined,
             label: l10n.sessionModel,
-            value: runtime.model.id,
+            value: runtime?.model.id ?? l10n.sessionContextUnavailable,
           ),
           _RuntimeDetailRow(
             icon: Icons.route_outlined,
             label: l10n.sessionProvider,
-            value: runtime.model.provider,
+            value: runtime?.model.provider ?? l10n.sessionContextUnavailable,
           ),
           _RuntimeDetailRow(
             icon: Icons.data_usage_rounded,
@@ -1222,22 +1177,6 @@ class _SessionRuntimeDetailsSheet extends StatelessWidget {
             icon: Icons.schedule_rounded,
             label: l10n.sessionRuntimeUpdated,
             value: updatedValue,
-          ),
-          const Divider(height: TsPhoneSpacing.xLarge),
-          _RuntimeDetailRow(
-            icon: Icons.folder_outlined,
-            label: l10n.approvalWorkspace,
-            value: workspaceName,
-          ),
-          _RuntimeDetailRow(
-            icon: Icons.tag_rounded,
-            label: l10n.approvalSession,
-            value: l10n.sessionToken(sessionShortId),
-          ),
-          _RuntimeDetailRow(
-            icon: Icons.shield_outlined,
-            label: l10n.auth,
-            value: accessMode.localizedLabel(l10n),
           ),
         ],
       ),
@@ -1309,22 +1248,6 @@ class _RuntimeDetailRow extends StatelessWidget {
       ),
     );
   }
-}
-
-String _compactRuntimeLabel(SessionRuntimeSnapshot runtime) {
-  final usage = runtime.context;
-  if (usage == null) return runtime.model.id;
-  final used = usage.usedTokens;
-  return '${runtime.model.id} · ${used == null ? '—' : _compactTokenCount(used)} / ${_compactTokenCount(usage.limitTokens)}';
-}
-
-String _compactTokenCount(int value) {
-  if (value < 1000) return '$value';
-  final thousands = value / 1000;
-  final digits = thousands < 10 && thousands != thousands.roundToDouble()
-      ? 1
-      : 0;
-  return '${thousands.toStringAsFixed(digits)}k';
 }
 
 class _MessageTimeline extends StatelessWidget {

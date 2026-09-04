@@ -13,18 +13,18 @@ failures, Turn boundaries, and Pi branches share one read model without creating
 a second conversation database. Raw custom records, provider endpoints,
 credentials, thinking, and unapproved fields never cross the server boundary.
 
-Mobile version 0.9.3 distinguishes live, observer, recovery, history-only, and
+Mobile version 0.10.0 distinguishes live, observer, recovery, history-only, and
 historical-branch views. Histories up to 2000 projected items load completely by
 default; larger sessions show loaded/total progress and support one-page or
 load-all retrieval while preserving the visible scroll anchor. The current Pi
 branch remains interactive when its Bridge is live, while earlier branches are
 explicitly read-only. Servers that do not advertise `history.timeline` continue
-to use the compatible `/messages` path. The command-style conversation header,
-adaptive iOS-style composer, node-based workspace identity, compact workspace
-status, measured latency and last-sync metadata, restrained glass hierarchy,
-terminal/code presentation, full-width connection diagnostics, and an on-demand
-model/context detail sheet remain shared by the Chinese and English UI. API v3,
-Events v3, and Bridge v2 remain wire-compatible.
+to use the compatible `/messages` path. The content-first conversation header,
+stable composer, node-based workspace identity, compact workspace status,
+measured latency and last-sync metadata, restrained control-layer glass,
+activity rail, terminal/code presentation, full-width connection diagnostics,
+and an on-demand session detail sheet remain shared by the Chinese and English
+UI. API v3, Events v3, and Bridge v2 remain wire-compatible.
 
 ## Session Model
 
@@ -102,7 +102,7 @@ python3 deploy/build-component-release.py \
 The builder runs server typecheck, tests, and build; verifies the APK v2
 signature and signer certificate; and writes
 `ts-phone-component-release/1`. The manifest binds server `0.5.1`, mobile
-`0.9.3+31`, API v3, Events v3, Bridge v2, the server entry, APK, source commit,
+`0.10.0+32`, API v3, Events v3, Bridge v2, the server entry, APK, source commit,
 and deterministic archive digest.
 
 The TSPi repository consumes this manifest with `build_package.py` and
@@ -132,7 +132,7 @@ controller lock is held.
 
 Complete deployments are selected by the TSPi Package, not by a second Phone
 `current` pointer. Server version 0.5.1 is compatible with TSPi 0.11.1 and the
-API v3-compatible 0.9.3 mobile client. API v3 and Bridge v2 remain intentional
+API v3-compatible 0.10.0 mobile client. API v3 and Bridge v2 remain intentional
 compatibility breaks from older releases.
 
 See docs/deployment.md before changing the running service. Configuration,

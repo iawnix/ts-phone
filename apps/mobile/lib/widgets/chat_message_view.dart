@@ -30,7 +30,7 @@ class ChatMessageView extends StatelessWidget {
     );
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
-      duration: TsPhoneMotion.standard,
+      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.standard),
       curve: Curves.easeOut,
       child: _MessageFrame(
         isUser: isUser,
@@ -305,8 +305,8 @@ class _ToolDetailView extends StatelessWidget {
         : context.l10n.statusReady;
     return Padding(
       padding: const EdgeInsets.only(top: TsPhoneSpacing.small),
-      child: TsGlassSurface(
-        tint: terminal.terminalBackground,
+      child: TsContentSurface(
+        backgroundColor: terminal.terminalBackground,
         borderColor: detail.isError
             ? terminal.error.withValues(alpha: 0.52)
             : terminal.terminalMuted.withValues(alpha: 0.34),
