@@ -56,10 +56,10 @@ installation, not to an immutable component release.
 
 | Artifact | ABI / purpose | Version code | Size (bytes) | SHA-256 |
 | --- | --- | ---: | ---: | --- |
-| `ts-phone-v0.11.0-build34-arm64-v8a-release.apk` | arm64-v8a phones | 2034 | 21396755 | `d310378d52a7627ebc135702d49121ef40fc7c5154339dec8c30d5452ad9f119` |
-| `ts-phone-v0.11.0-build34-armeabi-v7a-release.apk` | 32-bit ARM phones | 1034 | 19186289 | `cb7fb31960aaa29e11c9a51e1761e38933b3ab25bdbde44f9d9300090f6bb192` |
-| `ts-phone-v0.11.0-build34-x86_64-release.apk` | x86_64 emulator/device | 4034 | 22853870 | `219304e6aaa4b6b574f20f79a6272fa5b2d89fd9f9ecd220b20a5126ab767f2d` |
-| `ts-phone-v0.11.0-build34-release.aab` | Store bundle | 34 | 58219252 | `92d5f590c8d577e9682f09993e88f9e8baf0b490797bbb96255b08851a170da5` |
+| `ts-phone-v0.11.0-build34-arm64-v8a-release.apk` | arm64-v8a phones | 2034 | 21396755 | `f55edea5bf9486658410732bd1e999f351cd98e9e014e3524184b54cecc734b3` |
+| `ts-phone-v0.11.0-build34-armeabi-v7a-release.apk` | 32-bit ARM phones | 1034 | 19186289 | `7cbfc79646085dc740481b59983bbe2ef2d538297b16b7a521f3b2155b49e074` |
+| `ts-phone-v0.11.0-build34-x86_64-release.apk` | x86_64 emulator/device | 4034 | 22853870 | `e787303ec6326bf5b597bc042c80f4066c48c14e79fd2da3ed5eaeac33df883a` |
+| `ts-phone-v0.11.0-build34-release.aab` | Store bundle | 34 | 58218660 | `9a6c6608e0ad535eb9143be6530352f828ebd709ef91fcbca6b4a5a39754658e` |
 
 Flutter adds an ABI-specific prefix to split APK version codes. All artifacts
 still represent app version `0.11.0+34`. The APK manifests are not debuggable.
