@@ -240,6 +240,14 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
                   icon: Icons.folder_off_outlined,
                   title: l10n.noWorkspacesTitle,
                   message: l10n.noWorkspacesMessage,
+                  action: TextButton.icon(
+                    onPressed: () {
+                      ActionFeedback.selection();
+                      widget.onOpenSettings();
+                    },
+                    icon: const Icon(Icons.settings_outlined),
+                    label: Text(l10n.connectionSettings),
+                  ),
                 ),
               ],
             )
@@ -312,7 +320,7 @@ class _WorkspaceTile extends StatelessWidget {
       RuntimeState.idle => l10n.statusReady,
       RuntimeState.connecting => l10n.statusConnecting,
       RuntimeState.recoveryRequired => l10n.statusRecovery,
-      RuntimeState.offline => l10n.statusOffline,
+      RuntimeState.offline => l10n.runtimeOffline,
     };
     final sync = lastSync?.toLocal();
     final syncLabel = sync == null
@@ -353,13 +361,15 @@ class _WorkspaceTile extends StatelessWidget {
             ),
           TsMetadataItem(
             icon: Icons.speed_rounded,
-            text: latencyLabel,
+            text: '${l10n.tsPhoneService} · $latencyLabel',
             tooltip: l10n.latency,
+            maxLines: 3,
           ),
           TsMetadataItem(
             icon: Icons.sync_rounded,
-            text: syncLabel,
+            text: '${l10n.lastSync} · $syncLabel',
             tooltip: l10n.lastSync,
+            maxLines: 3,
           ),
         ],
       ),

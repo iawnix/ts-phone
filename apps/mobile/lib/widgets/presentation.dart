@@ -507,29 +507,11 @@ class _StatusListTileTitle extends StatelessWidget {
     final trailingWidget = trailing;
     if (trailingWidget == null) return titleWidget;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useWrap =
-            MediaQuery.textScalerOf(context).scale(15) > 21 ||
-            constraints.maxWidth < 180;
-        if (useWrap) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              titleWidget,
-              const SizedBox(height: TsPhoneSpacing.xSmall),
-              trailingWidget,
-            ],
-          );
-        }
-        return Row(
-          children: <Widget>[
-            Expanded(child: titleWidget),
-            const SizedBox(width: TsPhoneSpacing.small),
-            trailingWidget,
-          ],
-        );
-      },
+    return Wrap(
+      spacing: TsPhoneSpacing.small,
+      runSpacing: TsPhoneSpacing.xSmall,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[titleWidget, trailingWidget],
     );
   }
 }
@@ -594,26 +576,6 @@ class TsSettingsSection extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-class TsSettingsIcon extends StatelessWidget {
-  const TsSettingsIcon({super.key, required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(TsPhoneRadii.small),
-      ),
-      child: Icon(icon, size: 19, color: Colors.white),
     );
   }
 }
@@ -891,11 +853,13 @@ class TsMetadataItem extends StatelessWidget {
     required this.icon,
     required this.text,
     this.tooltip,
+    this.maxLines = 1,
   });
 
   final IconData icon;
   final String text;
   final String? tooltip;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -908,7 +872,7 @@ class TsMetadataItem extends StatelessWidget {
         Flexible(
           child: TsMonoText(
             text,
-            maxLines: 1,
+            maxLines: maxLines,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(
               context,

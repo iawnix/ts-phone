@@ -137,7 +137,7 @@ class InlineCodeBuilder extends MarkdownElementBuilder {
     TextStyle? preferredStyle,
     TextStyle? parentStyle,
   ) {
-    final status = TsPhoneStatusTheme.resolve(context);
+    final colors = Theme.of(context).colorScheme;
     return Container(
       constraints: BoxConstraints(
         maxWidth: (MediaQuery.sizeOf(context).width - 64)
@@ -146,18 +146,15 @@ class InlineCodeBuilder extends MarkdownElementBuilder {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
-        color: status.codeBackground,
+        color: colors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(
-          color: status.connected.withValues(alpha: 0.18),
-          width: 0.5,
-        ),
+        border: Border.all(color: colors.outlineVariant, width: 0.5),
       ),
       child: Text(
         element.textContent,
         softWrap: true,
         style: (preferredStyle ?? parentStyle)?.copyWith(
-          color: status.codeForeground,
+          color: colors.onSurface,
           backgroundColor: Colors.transparent,
           fontFamily: 'monospace',
           letterSpacing: 0,

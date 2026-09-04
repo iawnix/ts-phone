@@ -298,6 +298,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get historySession => '历史会话';
 
   @override
+  String get historyReadOnlyStatus => '历史 · 只读';
+
+  @override
   String sessionFallback(String shortId) {
     return '会话 $shortId';
   }
@@ -315,6 +318,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sessionRuntimeLastKnown => 'TSPi 当前离线，以下为最后一次运行时快照。';
+
+  @override
+  String get sessionRuntimeUnavailable => '此会话未保存运行时快照。';
+
+  @override
+  String get copySessionId => '复制会话 ID';
+
+  @override
+  String get sessionIdCopied => '会话 ID 已复制';
+
+  @override
+  String get copySessionIdFailed => '无法复制会话 ID';
 
   @override
   String get sessionModel => '模型';
@@ -439,6 +454,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get composerMessage => '输入指令或问题...';
+
+  @override
+  String get composerReadOnly => '历史视图为只读';
 
   @override
   String get observerMode => '只读观察模式';

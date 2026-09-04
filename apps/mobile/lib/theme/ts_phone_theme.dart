@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 abstract final class TsPhoneSpacing {
   static const double xSmall = 4;
@@ -207,6 +208,22 @@ abstract final class TsPhoneTheme {
 
   static ThemeData dark() => _build(Brightness.dark);
 
+  static SystemUiOverlayStyle systemUiOverlayStyle(ColorScheme scheme) {
+    final isLight = scheme.brightness == Brightness.light;
+    final iconBrightness = isLight ? Brightness.dark : Brightness.light;
+
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: iconBrightness,
+      statusBarBrightness: scheme.brightness,
+      systemStatusBarContrastEnforced: true,
+      systemNavigationBarColor: scheme.surface,
+      systemNavigationBarIconBrightness: iconBrightness,
+      systemNavigationBarDividerColor: scheme.surface,
+      systemNavigationBarContrastEnforced: true,
+    );
+  }
+
   static ThemeData _build(Brightness brightness) {
     final isLight = brightness == Brightness.light;
     final glassTheme = TsPhoneGlassTheme.forBrightness(brightness);
@@ -318,6 +335,7 @@ abstract final class TsPhoneTheme {
         color: scheme.outlineVariant.withValues(alpha: 0.72),
       ),
     );
+    final overlayStyle = systemUiOverlayStyle(scheme);
 
     return ThemeData(
       useMaterial3: true,
@@ -345,6 +363,7 @@ abstract final class TsPhoneTheme {
           color: scheme.onSurface,
           fontWeight: FontWeight.w600,
         ),
+        systemOverlayStyle: overlayStyle,
         shape: const Border(),
       ),
       cardTheme: CardThemeData(

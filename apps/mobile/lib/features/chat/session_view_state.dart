@@ -85,6 +85,7 @@ SessionViewState resolveSessionViewState({
     SessionUiPhase.offline => SessionNoticeKind.offline,
     _ => null,
   };
+  final isHistorical = historyOnly || viewingInactiveBranch;
   return SessionViewState(
     phase: phase,
     notice: notice,
@@ -98,7 +99,7 @@ SessionViewState resolveSessionViewState({
     // button.
     canAbort: canSend && phase == SessionUiPhase.running && !commandInFlight,
     canRefresh: canRefresh,
-    isHistorical: historyOnly || viewingInactiveBranch,
+    isHistorical: isHistorical,
   );
 }
 

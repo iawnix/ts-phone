@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/features/chat/chat_page.dart';
@@ -139,9 +141,9 @@ void main() {
 
     expect(find.text('已连接 · 可发送'), findsOneWidget);
     expect(find.textContaining('gpt-5.6-sol'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey<String>('chat-more-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('会话详情'));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('chat-session-details')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('会话详情'), findsOneWidget);
@@ -208,9 +210,9 @@ void main() {
 
     expect(find.text('Connected · Ready'), findsOneWidget);
     expect(find.textContaining('a-very-long-frontier'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey<String>('chat-more-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Session details'));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('chat-session-details')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Not available'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -295,13 +297,202 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('已有历史消息'), findsOneWidget);
-    expect(find.textContaining('历史会话'), findsOneWidget);
+    expect(find.text('ts_001'), findsOneWidget);
+    expect(find.text('历史 · 只读'), findsOneWidget);
     expect(find.textContaining('消息来自本机历史记录'), findsNothing);
     expect(find.text('只读观察模式'), findsNothing);
-    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    expect(find.byType(TextField), findsNothing);
     expect(
-      find.byKey(const ValueKey<String>('chat-more-menu')),
+      find.byKey(const ValueKey<String>('chat-read-only-bar')),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey<String>('chat-read-only-bar')))
+          .height,
+      greaterThanOrEqualTo(48),
+    );
+    expect(find.byKey(const ValueKey<String>('chat-sync')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('chat-session-details')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history lock remains readable at 320px and 2x text', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = UiFakeGateway(
+      sessions: const <SessionSummary>[historySession],
+      snapshot: const TsPhoneMessageSnapshot(
+        sessionId: 'session-history',
+        sessionRevision: '33333333-3333-4333-8333-333333333333',
+        messages: <Object?>[],
+        lastEventId: 'history:0',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: ChatPage(
+          settings: _settings,
+          workspace: offlineWorkspace,
+          session: historySession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final lockMessage = find.text('History is read-only');
+    expect(lockMessage, findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(
+      tester.renderObject<RenderParagraph>(lockMessage).didExceedMaxLines,
+      isFalse,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey<String>('chat-read-only-bar')))
+          .height,
+      greaterThanOrEqualTo(48),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('session details collapse when no runtime snapshot exists', (
+    WidgetTester tester,
+  ) async {
+    String? copiedSessionId;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copiedSessionId =
+            (call.arguments as Map<Object?, Object?>)['text'] as String?;
+      }
+      if (call.method == 'Clipboard.getData') {
+        return <String, Object?>{'text': copiedSessionId};
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = UiFakeGateway(
+      sessions: const <SessionSummary>[historySession],
+      snapshot: const TsPhoneMessageSnapshot(
+        sessionId: 'session-history',
+        sessionRevision: '33333333-3333-4333-8333-333333333333',
+        messages: <Object?>[],
+        lastEventId: 'history:0',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: offlineWorkspace,
+          session: historySession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('chat-session-details')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('此会话未保存运行时快照。'), findsOneWidget);
+    expect(find.text('session-…'), findsOneWidget);
+    expect(find.text('模型'), findsNothing);
+    expect(find.text('Provider'), findsNothing);
+    expect(find.text('上下文'), findsNothing);
+    expect(find.text('剩余'), findsNothing);
+    expect(find.text('测量方式'), findsNothing);
+    expect(find.text('更新时间'), findsNothing);
+    expect(find.text('暂无数据'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('copy-session-id')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(find.byTooltip('会话 ID 已复制'), findsOneWidget);
+    expect(
+      (await Clipboard.getData(Clipboard.kTextPlain))?.text,
+      'session-history',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('live observer sessions remain promptable', (
+    WidgetTester tester,
+  ) async {
+    final gateway = UiFakeGateway(
+      sessions: const <SessionSummary>[observerSession],
+      snapshot: const TsPhoneMessageSnapshot(
+        sessionId: 'session-observer',
+        sessionRevision: '22222222-2222-4222-8222-222222222222',
+        messages: <Object?>[],
+        lastEventId: 'observer:0',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: observerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('已连接 · 可发送'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('chat-composer')), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+    expect(
+      find.byKey(const ValueKey<String>('chat-read-only-bar')),
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });
@@ -324,7 +515,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('离线', findRichText: true), findsOneWidget);
+    expect(find.textContaining('TSPi 未启动', findRichText: true), findsOneWidget);
     expect(find.text('0 在线'), findsNothing);
     expect(find.text('研究目录'), findsNothing);
     expect(find.text('tsphone.example.test'), findsNothing);
@@ -390,7 +581,10 @@ void main() {
     expect(find.text('CONNECTED'), findsNothing);
     expect(find.textContaining('RUNNING', findRichText: true), findsOneWidget);
     expect(find.text('2 LIVE'), findsOneWidget);
-    final offlineStatus = find.textContaining('OFFLINE', findRichText: true);
+    final offlineStatus = find.textContaining(
+      'TSPi not running',
+      findRichText: true,
+    );
     expect(offlineStatus, findsOneWidget);
     expect(find.text('0 LIVE'), findsNothing);
     final tiles = tester.widgetList<TsStatusListTile>(
@@ -401,10 +595,8 @@ void main() {
     expect(tiles.every((tile) => tile.titleTrailing is TsInlineStatus), isTrue);
     expect(find.byType(TsStatusBadge), findsNothing);
     expect(
-      (tester.getCenter(find.text('ts_001')).dy -
-              tester.getCenter(offlineStatus).dy)
-          .abs(),
-      lessThan(4),
+      tester.getTopLeft(offlineStatus).dy,
+      greaterThan(tester.getTopLeft(find.text('ts_001')).dy),
     );
     expect(
       find.descendant(
@@ -460,6 +652,18 @@ void main() {
     expect(find.text('CONNECTED'), findsNothing);
     expect(find.textContaining('READY', findRichText: true), findsOneWidget);
     expect(find.text('1 LIVE'), findsOneWidget);
+    final serviceMetadata = find.textContaining('TS Phone service');
+    final syncMetadata = find.textContaining('Last sync');
+    expect(serviceMetadata, findsOneWidget);
+    expect(syncMetadata, findsOneWidget);
+    expect(
+      tester.renderObject<RenderParagraph>(serviceMetadata).didExceedMaxLines,
+      isFalse,
+    );
+    expect(
+      tester.renderObject<RenderParagraph>(syncMetadata).didExceedMaxLines,
+      isFalse,
+    );
     expect(find.text('Research workspaces'), findsNothing);
     expect(find.text('tsphone.example.test'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -696,7 +900,11 @@ void main() {
 
     expect(find.byKey(const ValueKey<String>('chat-composer')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('chat-back')), findsOneWidget);
-    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('chat-sync')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('chat-session-details')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey<String>('composer-send')), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('composer-action-slot')),
@@ -1120,10 +1328,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.byType(TextField), findsNothing);
       expect(
-        tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
-        '历史分支只读',
+        find.byKey(const ValueKey<String>('chat-read-only-bar')),
+        findsOneWidget,
       );
+      expect(find.text('历史视图为只读'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

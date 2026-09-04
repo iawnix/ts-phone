@@ -90,6 +90,22 @@ void main() {
     expect(history.notice, isNull);
     expect(history.canCompose, isFalse);
     expect(history.isHistorical, isTrue);
+
+    final promptableObserver = resolveSessionViewState(
+      runtimeState: RuntimeState.idle,
+      eventConnectionState: EventConnectionState.connected,
+      isSynchronizing: false,
+      problem: null,
+      historyOnly: false,
+      viewingInactiveBranch: false,
+      canSend: true,
+      commandInFlight: false,
+      canRefresh: true,
+    );
+    expect(promptableObserver.phase, SessionUiPhase.ready);
+    expect(promptableObserver.isHistorical, isFalse);
+    expect(promptableObserver.canCompose, isTrue);
+    expect(promptableObserver.canAbort, isFalse);
   });
 
   test('a recovered page becomes ready after the runtime recovers', () {

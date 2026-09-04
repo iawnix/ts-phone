@@ -320,6 +320,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historySession => 'History session';
 
   @override
+  String get historyReadOnlyStatus => 'History · Read-only';
+
+  @override
   String sessionFallback(String shortId) {
     return 'Session $shortId';
   }
@@ -338,6 +341,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get sessionRuntimeLastKnown =>
       'TSPi is offline. These are the last known runtime values.';
+
+  @override
+  String get sessionRuntimeUnavailable =>
+      'No runtime snapshot was saved for this session.';
+
+  @override
+  String get copySessionId => 'Copy session ID';
+
+  @override
+  String get sessionIdCopied => 'Session ID copied';
+
+  @override
+  String get copySessionIdFailed => 'Could not copy session ID';
 
   @override
   String get sessionModel => 'Model';
@@ -471,6 +487,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get composerMessage => 'Ask or instruct session...';
+
+  @override
+  String get composerReadOnly => 'History is read-only';
 
   @override
   String get observerMode => 'Read-only observer mode';

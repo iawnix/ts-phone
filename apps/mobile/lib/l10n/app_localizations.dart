@@ -644,6 +644,12 @@ abstract class AppLocalizations {
   /// **'History session'**
   String get historySession;
 
+  /// No description provided for @historyReadOnlyStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'History · Read-only'**
+  String get historyReadOnlyStatus;
+
   /// No description provided for @sessionFallback.
   ///
   /// In en, this message translates to:
@@ -673,6 +679,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'TSPi is offline. These are the last known runtime values.'**
   String get sessionRuntimeLastKnown;
+
+  /// No description provided for @sessionRuntimeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No runtime snapshot was saved for this session.'**
+  String get sessionRuntimeUnavailable;
+
+  /// No description provided for @copySessionId.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy session ID'**
+  String get copySessionId;
+
+  /// No description provided for @sessionIdCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Session ID copied'**
+  String get sessionIdCopied;
+
+  /// No description provided for @copySessionIdFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not copy session ID'**
+  String get copySessionIdFailed;
 
   /// No description provided for @sessionModel.
   ///
@@ -913,6 +943,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ask or instruct session...'**
   String get composerMessage;
+
+  /// No description provided for @composerReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'History is read-only'**
+  String get composerReadOnly;
 
   /// No description provided for @observerMode.
   ///

@@ -48,6 +48,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _diagnosing = false;
   bool _showConnectionDetails = false;
   _ConnectionDiagnostics? _diagnostics;
+  int _diagnosticsGeneration = 0;
 
   @override
   void didUpdateWidget(SettingsPage oldWidget) {
@@ -56,7 +57,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final current = widget.connectionSettings;
     if (previous?.serverUrl != current?.serverUrl ||
         previous?.token != current?.token) {
+      _diagnosticsGeneration += 1;
       _diagnostics = null;
+      _diagnosing = false;
     }
   }
 
@@ -98,12 +101,17 @@ class _SettingsPageState extends State<SettingsPage> {
     final connection = widget.connectionSettings;
     if (_diagnosing || connection == null) return;
     ActionFeedback.tap();
-    setState(() => _diagnosing = true);
-    final gateway =
-        widget.gatewayBuilder?.call(connection) ?? TsPhoneApi(connection);
+    final generation = ++_diagnosticsGeneration;
+    setState(() {
+      _diagnosing = true;
+      _diagnostics = null;
+    });
+    TsPhoneGateway? gateway;
     try {
+      gateway =
+          widget.gatewayBuilder?.call(connection) ?? TsPhoneApi(connection);
       final version = await gateway.version();
-      if (!mounted) return;
+      if (!mounted || generation != _diagnosticsGeneration) return;
       setState(() {
         _diagnostics = _ConnectionDiagnostics(
           apiVersion: version['apiVersion'] as String?,
@@ -111,7 +119,7 @@ class _SettingsPageState extends State<SettingsPage> {
       });
       ActionFeedback.selection();
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _diagnosticsGeneration) return;
       setState(() {
         _diagnostics = _ConnectionDiagnostics(
           problem: describeTsPhoneProblem(error),
@@ -119,8 +127,14 @@ class _SettingsPageState extends State<SettingsPage> {
       });
       ActionFeedback.error();
     } finally {
-      gateway.close();
-      if (mounted) setState(() => _diagnosing = false);
+      try {
+        gateway?.close();
+      } on Object {
+        // Closing is best-effort; the visible diagnostics state must settle.
+      }
+      if (mounted && generation == _diagnosticsGeneration) {
+        setState(() => _diagnosing = false);
+      }
     }
   }
 
@@ -129,9 +143,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final connection = widget.connectionSettings;
     final l10n = context.l10n;
     final colors = Theme.of(context).colorScheme;
-    final authority = connection == null
-        ? l10n.notConfigured
-        : Uri.parse(connection.serverUrl).authority;
+    final endpointSummary = connection?.serverUrl ?? l10n.notConfigured;
     final diagnostics = _diagnostics;
     final statusTheme = TsPhoneStatusTheme.resolve(context);
     final authValue = connection == null
@@ -182,8 +194,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           child: Column(
                             children: <Widget>[
                               _PreferenceControlRow(
-                                icon: Icons.brightness_6_outlined,
-                                iconColor: colors.primary,
                                 label: l10n.appearance,
                                 saving: _savingTheme,
                                 control:
@@ -202,8 +212,6 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                               const _SettingsDivider(),
                               _PreferenceControlRow(
-                                icon: Icons.translate_rounded,
-                                iconColor: colors.secondary,
                                 label: l10n.language,
                                 saving: _savingLocale,
                                 control:
@@ -229,17 +237,24 @@ class _SettingsPageState extends State<SettingsPage> {
                           child: Column(
                             children: <Widget>[
                               ListTile(
+                                key: const ValueKey<String>(
+                                  'connection-service-edit',
+                                ),
                                 onTap: () {
                                   ActionFeedback.selection();
                                   widget.onEditConnection();
                                 },
-                                leading: TsSettingsIcon(
-                                  icon: Icons.dns_outlined,
-                                  color: colors.primary,
+                                leading: Icon(
+                                  Icons.dns_outlined,
+                                  size: 22,
+                                  color: colors.onSurfaceVariant,
                                 ),
                                 title: Text(l10n.tsPhoneService),
                                 subtitle: TsMonoText(
-                                  authority,
+                                  endpointSummary,
+                                  key: const ValueKey<String>(
+                                    'connection-service-endpoint',
+                                  ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.bodySmall
@@ -248,8 +263,12 @@ class _SettingsPageState extends State<SettingsPage> {
                                       ),
                                 ),
                                 trailing: Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: colors.outline,
+                                  Icons.edit_outlined,
+                                  key: const ValueKey<String>(
+                                    'connection-edit-affordance',
+                                  ),
+                                  size: 20,
+                                  color: colors.primary,
                                 ),
                               ),
                               const _SettingsDivider(),
@@ -351,64 +370,46 @@ class _SettingsDivider extends StatelessWidget {
 
 class _PreferenceControlRow extends StatelessWidget {
   const _PreferenceControlRow({
-    required this.icon,
-    required this.iconColor,
     required this.label,
     required this.control,
     required this.saving,
   });
 
-  final IconData icon;
-  final Color iconColor;
   final String label;
   final Widget control;
   final bool saving;
 
   @override
   Widget build(BuildContext context) {
-    final textScaler = MediaQuery.textScalerOf(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final stacked = constraints.maxWidth < 340 || textScaler.scale(15) > 18;
-        final header = Row(
-          children: <Widget>[
-            TsSettingsIcon(icon: icon, color: iconColor),
-            const SizedBox(width: TsPhoneSpacing.medium),
-            Expanded(
-              child: Text(
+    final theme = Theme.of(context);
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TsPhoneSpacing.large,
+            10,
+            TsPhoneSpacing.large,
+            10,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
-        );
-        return Column(
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.all(TsPhoneSpacing.medium),
-              child: stacked
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        header,
-                        const SizedBox(height: TsPhoneSpacing.medium),
-                        control,
-                      ],
-                    )
-                  : Row(
-                      children: <Widget>[
-                        SizedBox(width: 126, child: header),
-                        const SizedBox(width: TsPhoneSpacing.small),
-                        Expanded(child: control),
-                      ],
-                    ),
-            ),
-            if (saving) const LinearProgressIndicator(minHeight: 2),
-          ],
-        );
-      },
+              const SizedBox(height: TsPhoneSpacing.small),
+              control,
+            ],
+          ),
+        ),
+        if (saving) const LinearProgressIndicator(minHeight: 2),
+      ],
     );
   }
 }
@@ -503,19 +504,25 @@ class _AppIdentityFooter extends StatelessWidget {
       key: const ValueKey<String>('settings-app-identity'),
       padding: const EdgeInsets.fromLTRB(
         TsPhoneSpacing.large,
-        TsPhoneSpacing.xLarge,
+        TsPhoneSpacing.large,
         TsPhoneSpacing.large,
         0,
       ),
-      child: Column(
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: TsPhoneSpacing.small,
+        runSpacing: TsPhoneSpacing.xSmall,
         children: <Widget>[
-          const TsPhoneBrandBadge(size: 32),
-          const SizedBox(height: TsPhoneSpacing.small),
-          Text('TS Phone', style: theme.textTheme.titleSmall),
-          const SizedBox(height: TsPhoneSpacing.xSmall),
+          const TsPhoneBrandBadge(size: 18),
           Text(
-            context.l10n.clientVersionBuild('0.10.1', '33'),
-            textAlign: TextAlign.center,
+            'TS Phone',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            context.l10n.clientVersionBuild('0.11.0', '34'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -638,15 +645,31 @@ class _DiagnosticsActionRow extends StatelessWidget {
     final l10n = context.l10n;
     final status = TsPhoneStatusTheme.resolve(context);
     final problem = diagnostics?.problem;
-    final (label, color) = diagnosing
-        ? (l10n.diagnosticsRunning, theme.colorScheme.primary)
+    final (label, color, statusIcon) = diagnosing
+        ? (
+            l10n.diagnosticsRunning,
+            theme.colorScheme.primary,
+            Icons.sync_rounded,
+          )
         : !enabled
-        ? (l10n.notConfigured, theme.colorScheme.outline)
+        ? (
+            l10n.notConfigured,
+            theme.colorScheme.outline,
+            Icons.remove_circle_outline_rounded,
+          )
         : problem != null
-        ? (l10n.diagnosticFailed, status.error)
+        ? (l10n.diagnosticFailed, status.error, Icons.error_outline_rounded)
         : diagnostics != null
-        ? (l10n.diagnosticVerified, status.connected)
-        : (l10n.diagnosticNotChecked, theme.colorScheme.onSurfaceVariant);
+        ? (
+            l10n.diagnosticVerified,
+            status.connected,
+            Icons.check_circle_outline_rounded,
+          )
+        : (
+            l10n.diagnosticNotChecked,
+            theme.colorScheme.onSurfaceVariant,
+            Icons.help_outline_rounded,
+          );
     final motionDuration = TsPhoneMotion.resolve(
       context,
       TsPhoneMotion.standard,
@@ -666,9 +689,10 @@ class _DiagnosticsActionRow extends StatelessWidget {
             ),
             child: Row(
               children: <Widget>[
-                TsSettingsIcon(
-                  icon: Icons.monitor_heart_outlined,
-                  color: theme.colorScheme.primary,
+                Icon(
+                  Icons.monitor_heart_outlined,
+                  size: 22,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: TsPhoneSpacing.medium),
                 Expanded(
@@ -691,14 +715,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
                           ),
                           mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: color,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
+                            Icon(statusIcon, size: 15, color: color),
                             const SizedBox(width: TsPhoneSpacing.xSmall),
                             Flexible(
                               child: Text(

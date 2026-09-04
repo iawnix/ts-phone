@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -167,7 +168,7 @@ void main() {
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
     expect(find.text('外观'), findsOneWidget);
-    expect(find.text('tsphone.iawnix.xyz'), findsOneWidget);
+    expect(find.text('https://tsphone.iawnix.xyz'), findsOneWidget);
 
     await tester.tap(find.text('深色'));
     await tester.pumpAndSettle();
@@ -175,6 +176,18 @@ void main() {
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
       ThemeMode.dark,
+    );
+    final darkOverlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+      find.byKey(const ValueKey<String>('system-ui-overlay')),
+    );
+    expect(darkOverlay.value.statusBarIconBrightness, Brightness.light);
+    expect(
+      darkOverlay.value.systemNavigationBarIconBrightness,
+      Brightness.light,
+    );
+    expect(
+      darkOverlay.value.systemNavigationBarColor,
+      TsPhoneTheme.dark().colorScheme.surface,
     );
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -728,10 +741,12 @@ void main() {
   }
 
   test('light and dark themes keep distinct neutral surfaces', () {
-    final light = TsPhoneTheme.light().colorScheme;
-    final dark = TsPhoneTheme.dark().colorScheme;
-    final lightStatus = TsPhoneTheme.light().extension<TsPhoneStatusTheme>()!;
-    final darkStatus = TsPhoneTheme.dark().extension<TsPhoneStatusTheme>()!;
+    final lightTheme = TsPhoneTheme.light();
+    final darkTheme = TsPhoneTheme.dark();
+    final light = lightTheme.colorScheme;
+    final dark = darkTheme.colorScheme;
+    final lightStatus = lightTheme.extension<TsPhoneStatusTheme>()!;
+    final darkStatus = darkTheme.extension<TsPhoneStatusTheme>()!;
 
     expect(light.surface, isNot(light.primaryContainer));
     expect(dark.surface, isNot(dark.primaryContainer));
@@ -743,7 +758,32 @@ void main() {
     expect(darkStatus.connected, const Color(0xFF00C2A8));
     expect(darkStatus.warning, const Color(0xFFFFB020));
     expect(darkStatus.error, const Color(0xFFFF453A));
-    expect(TsPhoneTheme.light().cardTheme.elevation, 0);
+    expect(lightTheme.cardTheme.elevation, 0);
+  });
+
+  test('system chrome uses readable icons and theme-matched surfaces', () {
+    final lightTheme = TsPhoneTheme.light();
+    final darkTheme = TsPhoneTheme.dark();
+    final light = TsPhoneTheme.systemUiOverlayStyle(lightTheme.colorScheme);
+    final dark = TsPhoneTheme.systemUiOverlayStyle(darkTheme.colorScheme);
+
+    expect(light.statusBarColor, Colors.transparent);
+    expect(light.statusBarIconBrightness, Brightness.dark);
+    expect(light.statusBarBrightness, Brightness.light);
+    expect(light.systemNavigationBarColor, lightTheme.colorScheme.surface);
+    expect(light.systemNavigationBarIconBrightness, Brightness.dark);
+    expect(light.systemStatusBarContrastEnforced, isTrue);
+    expect(light.systemNavigationBarContrastEnforced, isTrue);
+    expect(lightTheme.appBarTheme.systemOverlayStyle, light);
+
+    expect(dark.statusBarColor, Colors.transparent);
+    expect(dark.statusBarIconBrightness, Brightness.light);
+    expect(dark.statusBarBrightness, Brightness.dark);
+    expect(dark.systemNavigationBarColor, darkTheme.colorScheme.surface);
+    expect(dark.systemNavigationBarIconBrightness, Brightness.light);
+    expect(dark.systemStatusBarContrastEnforced, isTrue);
+    expect(dark.systemNavigationBarContrastEnforced, isTrue);
+    expect(darkTheme.appBarTheme.systemOverlayStyle, dark);
   });
 
   test('invalid stored theme values fall back to the system theme', () {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'data/settings_store.dart';
 import 'features/connection/connection_page.dart';
@@ -90,6 +91,11 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
         AppThemePreference.light => ThemeMode.light,
         AppThemePreference.dark => ThemeMode.dark,
       },
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        key: const ValueKey<String>('system-ui-overlay'),
+        value: TsPhoneTheme.systemUiOverlayStyle(Theme.of(context).colorScheme),
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: _loading
           ? const _LoadingPage()
           : _editingConnection || (_settings == null && !_showSettings)
