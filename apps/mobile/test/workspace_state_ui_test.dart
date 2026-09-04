@@ -1073,7 +1073,7 @@ void main() {
 
       expect(find.textContaining('已载入 2 / 2501 项'), findsOneWidget);
       expect(find.textContaining('子代理 · Compute · Inspect'), findsOneWidget);
-      expect(find.byIcon(Icons.call_split_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.smart_toy_rounded), findsOneWidget);
       expect(find.byIcon(Icons.hub_outlined), findsNothing);
       expect(find.text('加载全部历史'), findsOneWidget);
       expect(

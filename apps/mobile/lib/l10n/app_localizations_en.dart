@@ -650,6 +650,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get timelineFailed => 'Failed';
 
   @override
+  String get timelineStage => 'Stage';
+
+  @override
+  String get timelineNodes => 'Research nodes';
+
+  @override
+  String get timelineReference => 'Reference';
+
+  @override
+  String get timelineRetrySafe => 'Safe to retry';
+
+  @override
+  String get timelineRetryUnsafe => 'Do not retry automatically';
+
+  @override
   String timelineDuration(String seconds) {
     return '${seconds}s';
   }

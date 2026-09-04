@@ -612,6 +612,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get timelineFailed => '失败';
 
   @override
+  String get timelineStage => '阶段';
+
+  @override
+  String get timelineNodes => '研究节点';
+
+  @override
+  String get timelineReference => '引用';
+
+  @override
+  String get timelineRetrySafe => '可以安全重试';
+
+  @override
+  String get timelineRetryUnsafe => '不可自动重试';
+
+  @override
   String timelineDuration(String seconds) {
     return '$seconds 秒';
   }

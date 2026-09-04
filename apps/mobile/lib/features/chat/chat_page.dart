@@ -19,6 +19,9 @@ import '../../widgets/chat_message_view.dart';
 import '../../widgets/presentation.dart';
 import 'approval_panel.dart';
 import 'chat_controller.dart';
+import 'live_run_strip.dart';
+import 'session_notice.dart';
+import 'session_view_state.dart';
 import 'timeline_widgets.dart';
 
 enum _ChatScrollMode { following, reading }
@@ -157,7 +160,29 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           (_controller.messages.isNotEmpty ||
               _controller.timelineItems.isNotEmpty ||
               _controller.hasStreamingText)) {
-        setState(() => _initialTimelinePositioned = true);
+        // A structured timeline can change its extent once the grouped
+        // activity cards finish laying out.  Re-check on the next frame so a
+        // first-frame jump cannot leave the controller beyond the new tail.
+        Future<void>.microtask(() {
+          if (!mounted || !_scroll.hasClients || _initialTimelinePositioned) {
+            return;
+          }
+          final current = _scroll.position;
+          if (_scrollMode == _ChatScrollMode.following &&
+              !_scrollingToLatest &&
+              !current.isScrollingNotifier.value) {
+            final target = current.maxScrollExtent;
+            if ((target - current.pixels).abs() > 0.5) {
+              current.jumpTo(target);
+            }
+          }
+          if (!_initialTimelinePositioned &&
+              (_controller.messages.isNotEmpty ||
+                  _controller.timelineItems.isNotEmpty ||
+                  _controller.hasStreamingText)) {
+            setState(() => _initialTimelinePositioned = true);
+          }
+        });
       }
       _updateTimelineNavigationVisibility(position);
     });
@@ -188,6 +213,34 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       unawaited(_loadEarlierMessages());
     }
     _updateTimelineNavigationVisibility(notification.metrics);
+    return false;
+  }
+
+  bool _handleScrollMetricsNotification(
+    ScrollMetricsNotification notification,
+  ) {
+    if (notification.metrics.axis != Axis.vertical ||
+        _scrollMode != _ChatScrollMode.following ||
+        _scrollingToLatest ||
+        !_scroll.hasClients) {
+      return false;
+    }
+    final position = _scroll.position;
+    if ((position.pixels - position.maxScrollExtent).abs() <= 0.5) {
+      return false;
+    }
+    Future<void>.microtask(() {
+      if (!mounted ||
+          !_scroll.hasClients ||
+          _scrollMode != _ChatScrollMode.following ||
+          _scrollingToLatest) {
+        return;
+      }
+      final current = _scroll.position;
+      if ((current.pixels - current.maxScrollExtent).abs() > 0.5) {
+        current.jumpTo(current.maxScrollExtent);
+      }
+    });
     return false;
   }
 
@@ -482,71 +535,81 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     return AnimatedBuilder(
       animation: _controller,
       child: _buildMessages(),
-      builder: (context, child) => Scaffold(
-        appBar: TsGlassAppBar(
-          toolbarHeight: 62,
-          centerTitle: true,
-          titleSpacing: 0,
-          leading: IconButton(
-            key: const ValueKey<String>('chat-back'),
-            onPressed: _goBack,
-            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+      builder: (context, child) {
+        final viewState = SessionViewState.fromController(_controller);
+        final showContent =
+            _controller.messages.isNotEmpty ||
+            _controller.timelineItems.isNotEmpty ||
+            _controller.hasStreamingText;
+        return Scaffold(
+          appBar: TsGlassAppBar(
+            toolbarHeight: 62,
+            centerTitle: true,
+            titleSpacing: 0,
+            leading: IconButton(
+              key: const ValueKey<String>('chat-back'),
+              onPressed: _goBack,
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            ),
+            title: _ChatNavigationTitle(
+              title:
+                  _controller.sessionTitle ??
+                  widget.session.localizedDisplayName(l10n),
+              workspaceName: widget.workspace.name,
+              accessMode: _controller.accessMode,
+              runtimeState: _controller.runtimeState,
+              historyOnly: _controller.historyOnly,
+              connectionState: _controller.eventConnectionState,
+              sessionShortId: widget.session.shortId,
+              runtime: _controller.sessionRuntime,
+              onRuntimeTap: _showSessionRuntimeDetails,
+            ),
+            actions: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: IconButton(
+                  onPressed:
+                      !viewState.canRefresh ||
+                          _controller.commandInFlight ||
+                          _syncing
+                      ? null
+                      : _sync,
+                  tooltip: _syncing ? l10n.syncing : l10n.syncMessages,
+                  icon: _syncing
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 22),
+                ),
+              ),
+            ],
           ),
-          title: _ChatNavigationTitle(
-            title:
-                _controller.sessionTitle ??
-                widget.session.localizedDisplayName(l10n),
-            workspaceName: widget.workspace.name,
-            accessMode: _controller.accessMode,
-            runtimeState: _controller.runtimeState,
-            historyOnly: _controller.historyOnly,
-            connectionState: _controller.eventConnectionState,
-            sessionShortId: widget.session.shortId,
-            runtime: _controller.sessionRuntime,
-            onRuntimeTap: _showSessionRuntimeDetails,
-          ),
-          actions: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: IconButton(
-                onPressed:
-                    !_controller.canRefresh ||
-                        _controller.commandInFlight ||
-                        _syncing
-                    ? null
-                    : _sync,
-                tooltip: _syncing ? l10n.syncing : l10n.syncMessages,
-                icon: _syncing
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 22),
+          body: TsPageBackdrop(
+            child: SafeArea(
+              child: Column(
+                children: <Widget>[
+                  if (showContent) _priorityBanner() ?? const SizedBox.shrink(),
+                  if (viewState.hasLiveRun ||
+                      _controller.activity?.kind == ChatActivityKind.toolFailed)
+                    LiveRunStrip(
+                      activity: _controller.activity,
+                      canAbort:
+                          viewState.canAbort &&
+                          _controller.activity?.kind !=
+                              ChatActivityKind.toolFailed,
+                      aborting: _aborting,
+                      onAbort: _abort,
+                    ),
+                  Expanded(child: child!),
+                  _buildComposer(context),
+                ],
               ),
             ),
-          ],
-        ),
-        body: TsPageBackdrop(
-          child: SafeArea(
-            child: Column(
-              children: <Widget>[
-                ?_priorityBanner(),
-                if (!_controller.historyOnly &&
-                    _controller.accessMode == SessionAccessMode.observer)
-                  const _ObserverBanner(),
-                if (_controller.statuses.isNotEmpty ||
-                    _controller.activity != null)
-                  _StatusBand(controller: _controller),
-                for (final entry in _controller.widgets.entries)
-                  _WidgetBand(title: entry.key, lines: entry.value),
-                Expanded(child: child!),
-                _buildComposer(context),
-              ],
-            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -560,6 +623,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         streamUpdatesEnabledListenable: _streamUpdatesEnabled,
         scrollController: _scroll,
         onScrollNotification: _handleScrollNotification,
+        onScrollMetricsNotification: _handleScrollMetricsNotification,
         onLoadEarlier: _loadEarlierMessages,
         onLoadAll: _loadAllHistory,
         onSelectBranch: _selectTimelineBranch,
@@ -569,6 +633,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Widget _buildMessagesForState(Widget timeline) {
+    final viewState = SessionViewState.fromController(_controller);
     final messages = _controller.messages;
     final hasTimelineItems =
         _controller.usesStructuredTimeline &&
@@ -586,11 +651,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           onRetry: _retryConnection,
         );
       }
-      if (_controller.isSynchronizing ||
-          _controller.runtimeState == RuntimeState.connecting) {
+      if (viewState.phase == SessionUiPhase.synchronizing) {
         return const _SessionConnectingView();
       }
-      if (_controller.runtimeState == RuntimeState.offline) {
+      if (viewState.phase == SessionUiPhase.offline) {
         return _OfflineWorkspaceView(
           command: _startCommand,
           retrying:
@@ -602,7 +666,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           onRetry: _retryConnection,
         );
       }
-      if (_controller.runtimeState == RuntimeState.recoveryRequired) {
+      if (viewState.phase == SessionUiPhase.recovery) {
         return _RecoveryWorkspaceView(
           command: _startCommand,
           retrying:
@@ -680,13 +744,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     final l10n = context.l10n;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final running = _controller.runtimeState == RuntimeState.running;
-    final canSend =
-        _controller.canSend &&
-        !_controller.commandInFlight &&
-        !_sending &&
-        _hasDraft;
-    final canAbort = running && !_controller.commandInFlight && !_aborting;
+    final viewState = SessionViewState.fromController(_controller);
+    final running = viewState.hasLiveRun;
+    final hasActivityStrip =
+        running && _controller.activity?.kind == ChatActivityKind.runningTool;
+    final canSend = viewState.canCompose && !_sending && _hasDraft;
+    final canAbort = viewState.canAbort && !_aborting;
     final sendButton = IconButton.filled(
       onPressed: canSend ? _send : null,
       tooltip: _sending ? l10n.sending : l10n.send,
@@ -735,7 +798,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           child: AnimatedBuilder(
             animation: _composerFocus,
             builder: (context, _) {
-              final focused = _composerFocus.hasFocus && _controller.canSend;
+              final focused = _composerFocus.hasFocus && viewState.canCompose;
               return AnimatedContainer(
                 key: const ValueKey<String>('chat-composer'),
                 duration: TsPhoneMotion.quick,
@@ -765,7 +828,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       child: TextField(
                         controller: _composer,
                         focusNode: _composerFocus,
-                        enabled: _controller.canSend,
+                        enabled: viewState.canCompose,
                         minLines: 1,
                         maxLines: 7,
                         keyboardType: TextInputType.multiline,
@@ -818,7 +881,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             ),
                           if (showSend && running)
                             const SizedBox(width: TsPhoneSpacing.xSmall),
-                          if (running)
+                          if (running && !hasActivityStrip)
                             SizedBox.square(
                               key: const ValueKey<String>('composer-stop'),
                               dimension: 40,
@@ -843,43 +906,27 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         !_controller.hasStreamingText) {
       return null;
     }
-    if (_controller.problem case final problem?) {
-      return _ErrorBanner(
-        message: problem.localizedMessage(context.l10n),
-        onRetry: _retryConnection,
-      );
-    }
-    if (_controller.runtimeState == RuntimeState.recoveryRequired ||
-        widget.recoveredSession) {
-      return const _RecoveryBanner();
-    }
-    if (_controller.runtimeState == RuntimeState.offline) {
-      if (_controller.historyOnly) return null;
-      return _OfflineBanner(onCopy: _copyStartCommand);
-    }
-    return null;
+    return SessionNoticeView(
+      state: SessionViewState.fromController(_controller),
+      problem: _controller.problem,
+      onRetry: _retryConnection,
+      onCopyStartCommand: _copyStartCommand,
+    );
   }
 
   String _composerHint() {
     final l10n = context.l10n;
-    if (_controller.isSynchronizing ||
-        _controller.runtimeState == RuntimeState.connecting) {
-      return l10n.composerSynchronizing;
-    }
-    if (_controller.runtimeState == RuntimeState.offline) {
-      if (_controller.historyOnly) return l10n.composerHistory;
-      return l10n.composerOffline;
-    }
-    if (_controller.runtimeState == RuntimeState.recoveryRequired) {
-      return l10n.composerRecovery;
-    }
-    if (_controller.viewingInactiveBranch) {
-      return l10n.composerHistoricalBranch;
-    }
-    if (_controller.eventConnectionState != EventConnectionState.connected) {
-      return l10n.composerReconnecting;
-    }
-    return l10n.composerMessage;
+    return switch (SessionViewState.fromController(_controller).phase) {
+      SessionUiPhase.failed => l10n.composerReconnecting,
+      SessionUiPhase.recovery => l10n.composerRecovery,
+      SessionUiPhase.offline =>
+        _controller.historyOnly ? l10n.composerHistory : l10n.composerOffline,
+      SessionUiPhase.history => l10n.composerHistoricalBranch,
+      SessionUiPhase.synchronizing => l10n.composerSynchronizing,
+      SessionUiPhase.running => l10n.composerMessage,
+      SessionUiPhase.reconnecting => l10n.composerReconnecting,
+      SessionUiPhase.ready => l10n.composerMessage,
+    };
   }
 }
 
@@ -991,8 +1038,16 @@ class _SessionContextLine extends StatelessWidget {
     final stateLabel = historyOnly
         ? l10n.historySession
         : runtimeState.localizedCompactLabel(l10n);
-    final contextLabel = runtime == null
-        ? '${stateLabel.toUpperCase()} · ${l10n.sessionToken(sessionShortId)}'
+    final accessLabel = historyOnly
+        ? l10n.historySession
+        : accessMode.localizedLabel(l10n);
+    final accessIcon = historyOnly
+        ? Icons.history_rounded
+        : accessMode == SessionAccessMode.controller
+        ? Icons.admin_panel_settings_outlined
+        : Icons.visibility_outlined;
+    final runtimeLabel = runtime == null
+        ? l10n.sessionToken(sessionShortId)
         : _compactRuntimeLabel(runtime!);
     final tooltip = <String>[
       workspaceName,
@@ -1003,20 +1058,34 @@ class _SessionContextLine extends StatelessWidget {
     final content = Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        Icon(
+          accessIcon,
+          size: 13,
+          semanticLabel: accessLabel,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 3),
         TsStatusDot(
           color: connectionColor,
           size: 7,
-          pulsing: connectionState == EventConnectionState.connected,
+          pulsing:
+              connectionState == EventConnectionState.connecting ||
+              connectionState == EventConnectionState.reconnecting,
         ),
         const SizedBox(width: 5),
         Flexible(
           child: TsMonoText(
-            contextLabel,
+            runtime == null
+                ? '${stateLabel.toUpperCase()} · $runtimeLabel'
+                : runtimeLabel,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: runtime == null
+                  ? connectionColor
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: runtime == null ? FontWeight.w700 : null,
             ),
           ),
         ),
@@ -1266,6 +1335,7 @@ class _MessageTimeline extends StatelessWidget {
     required this.streamUpdatesEnabledListenable,
     required this.scrollController,
     required this.onScrollNotification,
+    required this.onScrollMetricsNotification,
     required this.onLoadEarlier,
     required this.onLoadAll,
     required this.onSelectBranch,
@@ -1277,6 +1347,8 @@ class _MessageTimeline extends StatelessWidget {
   final ValueListenable<bool> streamUpdatesEnabledListenable;
   final ScrollController scrollController;
   final NotificationListenerCallback<ScrollNotification> onScrollNotification;
+  final NotificationListenerCallback<ScrollMetricsNotification>
+  onScrollMetricsNotification;
   final Future<void> Function() onLoadEarlier;
   final Future<void> Function() onLoadAll;
   final Future<void> Function(String branchId) onSelectBranch;
@@ -1329,25 +1401,12 @@ class _MessageTimeline extends StatelessWidget {
     return ValueListenableBuilder<List<SessionTimelineItem>>(
       valueListenable: controller.timelineUpdates,
       builder: (context, items, _) {
-        final turnNumbers = <String, int>{};
-        for (final item in items) {
-          final turnId = item.turnId;
-          if (turnId != null) turnNumbers.putIfAbsent(turnId, () => 0);
-        }
-        final firstTurnNumber =
-            (controller.timelineTurnCount - turnNumbers.length + 1).clamp(
-              1,
-              controller.timelineTurnCount == 0
-                  ? 1
-                  : controller.timelineTurnCount,
-            );
-        var nextTurnNumber = firstTurnNumber;
-        for (final turnId in turnNumbers.keys) {
-          turnNumbers[turnId] = nextTurnNumber;
-          nextTurnNumber += 1;
-        }
+        final groups = groupTimelineItems(
+          items,
+          totalTurnCount: controller.timelineTurnCount,
+        );
         return _list(
-          itemCount: items.length + 2,
+          itemCount: groups.length + 2,
           itemBuilder: (context, index) {
             if (index == 0) {
               return TimelineHistoryControl(
@@ -1357,31 +1416,12 @@ class _MessageTimeline extends StatelessWidget {
                 onSelectBranch: onSelectBranch,
               );
             }
-            final itemIndex = index - 1;
-            if (itemIndex == items.length) return _streamingMessage();
-            final item = items[itemIndex];
-            final previousTurnId = itemIndex == 0
-                ? null
-                : items[itemIndex - 1].turnId;
-            final showTurn =
-                item.turnId != null && item.turnId != previousTurnId;
-            return Column(
-              key: ValueKey<String>('timeline-${item.id}'),
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (showTurn)
-                  TimelineTurnDivider(
-                    number: turnNumbers[item.turnId] ?? firstTurnNumber,
-                  ),
-                switch (item) {
-                  TimelineMessageItem(:final message) => ChatMessageView(
-                    message: message,
-                  ),
-                  TimelineActivityItem(:final activity) => TimelineActivityView(
-                    activity: activity,
-                  ),
-                },
-              ],
+            final groupIndex = index - 1;
+            if (groupIndex == groups.length) return _streamingMessage();
+            final group = groups[groupIndex];
+            return TimelineTurnGroupView(
+              key: ValueKey<String>('timeline-group-${group.identity}'),
+              group: group,
             );
           },
         );
@@ -1393,15 +1433,18 @@ class _MessageTimeline extends StatelessWidget {
     required int itemCount,
     required NullableIndexedWidgetBuilder itemBuilder,
   }) {
-    return NotificationListener<ScrollNotification>(
-      onNotification: onScrollNotification,
-      child: ListView.builder(
-        key: const ValueKey<String>('chat-message-list'),
-        controller: scrollController,
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: itemCount,
-        itemBuilder: itemBuilder,
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: onScrollMetricsNotification,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: onScrollNotification,
+        child: ListView.builder(
+          key: const ValueKey<String>('chat-message-list'),
+          controller: scrollController,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: itemCount,
+          itemBuilder: itemBuilder,
+        ),
       ),
     );
   }
@@ -1445,74 +1488,6 @@ class _EarlierMessagesControl extends StatelessWidget {
                 : context.l10n.loadEarlierMessages,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ObserverBanner extends StatelessWidget {
-  const _ObserverBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return TsInfoBand(
-      icon: Icons.visibility_outlined,
-      message: context.l10n.observerMode,
-      tone: TsInfoTone.info,
-    );
-  }
-}
-
-class _RecoveryBanner extends StatelessWidget {
-  const _RecoveryBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return TsInfoBand(
-      icon: Icons.warning_amber_rounded,
-      message: context.l10n.generationDisconnectedBanner,
-      tone: TsInfoTone.error,
-    );
-  }
-}
-
-class _OfflineBanner extends StatelessWidget {
-  const _OfflineBanner({required this.onCopy});
-
-  final VoidCallback onCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    return TsInfoBand(
-      icon: Icons.terminal_outlined,
-      message: context.l10n.tspiDisconnectedBanner,
-      action: IconButton(
-        onPressed: onCopy,
-        tooltip: context.l10n.copyStartCommand,
-        icon: const Icon(Icons.copy_outlined),
-      ),
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return TsInfoBand(
-      icon: Icons.cloud_off_outlined,
-      message: message,
-      tone: TsInfoTone.error,
-      action: IconButton(
-        onPressed: onRetry,
-        tooltip: context.l10n.reconnect,
-        color: colors.onErrorContainer,
-        icon: const Icon(Icons.refresh),
       ),
     );
   }
@@ -1713,59 +1688,4 @@ class _ConnectionProblemView extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StatusBand extends StatelessWidget {
-  const _StatusBand({required this.controller});
-
-  final ChatController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final values = <String>[
-      if (controller.activity != null)
-        _plain(controller.activity!.localizedMessage(l10n)),
-      for (final value in controller.statuses.values) _plain(value),
-    ];
-    return TsInfoBand(
-      icon: Icons.monitor_heart_outlined,
-      message: values.join(' · '),
-      tone: TsInfoTone.neutral,
-      maxLines: null,
-    );
-  }
-}
-
-class _WidgetBand extends StatelessWidget {
-  const _WidgetBand({required this.title, required this.lines});
-
-  final String title;
-  final List<String> lines;
-
-  @override
-  Widget build(BuildContext context) {
-    if (lines.isEmpty) return const SizedBox.shrink();
-    return ExpansionTile(
-      dense: true,
-      leading: const Icon(Icons.monitor_heart_outlined, size: 19),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      children: <Widget>[
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SelectableText(
-            lines.map(_plain).join('\n'),
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-String _plain(String value) {
-  return value.replaceAll(RegExp(r'\x1B\[[0-?]*[ -/]*[@-~]'), '');
 }

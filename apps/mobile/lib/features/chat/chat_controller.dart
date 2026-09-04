@@ -77,10 +77,18 @@ const int _timelinePageSize = 500;
 const int _automaticTimelineItemLimit = 2000;
 
 class ChatActivity {
-  const ChatActivity(this.kind, {this.toolName});
+  const ChatActivity(this.kind, {this.toolName, this.startedAt});
 
   final ChatActivityKind kind;
   final String? toolName;
+  final DateTime? startedAt;
+
+  Duration? get elapsed {
+    final started = startedAt;
+    if (started == null) return null;
+    final value = DateTime.now().difference(started);
+    return value.isNegative ? Duration.zero : value;
+  }
 }
 
 class ChatController extends ChangeNotifier {
@@ -222,8 +230,6 @@ class ChatController extends ChangeNotifier {
       _snapshotReady &&
       !_snapshotSyncInProgress &&
       _eventConnectionState == EventConnectionState.connected;
-  Map<String, String> get statuses => const <String, String>{};
-  Map<String, List<String>> get widgets => const <String, List<String>>{};
   Stream<ExtensionUiRequest> get uiRequests => _uiRequests.stream;
 
   String messageKeyAt(int index) =>
@@ -945,11 +951,19 @@ class ChatController extends ChangeNotifier {
         _activity = ChatActivity(
           ChatActivityKind.runningTool,
           toolName: payload?['toolName'] as String?,
+          startedAt: event.at,
         );
       case 'tool_execution_end':
-        _activity = payload?['isError'] == true
-            ? const ChatActivity(ChatActivityKind.toolFailed)
-            : null;
+        if (payload?['isError'] == true) {
+          final previous = _activity;
+          _activity = ChatActivity(
+            ChatActivityKind.toolFailed,
+            toolName: previous?.toolName,
+            startedAt: previous?.startedAt,
+          );
+        } else {
+          _activity = null;
+        }
       case 'approval.request':
         if (payload != null) _handleApproval(payload, event.sessionRevision);
     }

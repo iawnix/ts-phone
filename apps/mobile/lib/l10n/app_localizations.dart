@@ -1232,6 +1232,36 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get timelineFailed;
 
+  /// No description provided for @timelineStage.
+  ///
+  /// In en, this message translates to:
+  /// **'Stage'**
+  String get timelineStage;
+
+  /// No description provided for @timelineNodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Research nodes'**
+  String get timelineNodes;
+
+  /// No description provided for @timelineReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference'**
+  String get timelineReference;
+
+  /// No description provided for @timelineRetrySafe.
+  ///
+  /// In en, this message translates to:
+  /// **'Safe to retry'**
+  String get timelineRetrySafe;
+
+  /// No description provided for @timelineRetryUnsafe.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not retry automatically'**
+  String get timelineRetryUnsafe;
+
   /// No description provided for @timelineDuration.
   ///
   /// In en, this message translates to:
