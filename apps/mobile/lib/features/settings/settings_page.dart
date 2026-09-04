@@ -46,6 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _savingTheme = false;
   bool _savingLocale = false;
   bool _diagnosing = false;
+  bool _showConnectionDetails = false;
   _ConnectionDiagnostics? _diagnostics;
 
   @override
@@ -127,6 +128,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final connection = widget.connectionSettings;
     final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
     final authority = connection == null
         ? l10n.notConfigured
         : Uri.parse(connection.serverUrl).authority;
@@ -168,157 +170,153 @@ class _SettingsPageState extends State<SettingsPage> {
             child: ListView(
               padding: const EdgeInsets.only(bottom: TsPhoneSpacing.xxLarge),
               children: <Widget>[
-                TsSettingsSection(
-                  title: l10n.appearance,
-                  child: Column(
-                    children: <Widget>[
-                      Padding(
-                        padding: const EdgeInsets.all(TsPhoneSpacing.medium),
-                        child: _AdaptiveChoiceControl<AppThemePreference>(
-                          groupValue: widget.themePreference,
-                          choices: <AppThemePreference, String>{
-                            AppThemePreference.system: l10n.themeSystem,
-                            AppThemePreference.light: l10n.themeLight,
-                            AppThemePreference.dark: l10n.themeDark,
-                          },
-                          onValueChanged: (value) =>
-                              unawaited(_changeTheme(value)),
-                        ),
-                      ),
-                      if (_savingTheme)
-                        const LinearProgressIndicator(minHeight: 2),
-                    ],
-                  ),
-                ),
-                TsSettingsSection(
-                  title: l10n.language,
-                  child: Column(
-                    children: <Widget>[
-                      Padding(
-                        padding: const EdgeInsets.all(TsPhoneSpacing.medium),
-                        child: _AdaptiveChoiceControl<AppLocalePreference>(
-                          groupValue: widget.localePreference,
-                          choices: <AppLocalePreference, String>{
-                            AppLocalePreference.system: l10n.languageSystem,
-                            AppLocalePreference.zh: l10n.languageChinese,
-                            AppLocalePreference.en: l10n.languageEnglish,
-                          },
-                          onValueChanged: (value) =>
-                              unawaited(_changeLocale(value)),
-                        ),
-                      ),
-                      if (_savingLocale)
-                        const LinearProgressIndicator(minHeight: 2),
-                    ],
-                  ),
-                ),
-                TsSettingsSection(
-                  title: l10n.connection,
-                  child: Column(
-                    children: <Widget>[
-                      ListTile(
-                        onTap: () {
-                          ActionFeedback.selection();
-                          widget.onEditConnection();
-                        },
-                        leading: TsSettingsIcon(
-                          icon: Icons.dns_outlined,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        title: Text(l10n.tsPhoneService),
-                        subtitle: TsMonoText(
-                          authority,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                      ),
-                      _SettingsDivider(),
-                      _DiagnosticRow(
-                        icon: Icons.link_rounded,
-                        label: l10n.endpoint,
-                        value: connection?.serverUrl ?? l10n.notConfigured,
-                        stacked: true,
-                        selectable: connection != null,
-                      ),
-                      _SettingsDivider(),
-                      _DiagnosticRow(
-                        icon: Icons.key_rounded,
-                        label: l10n.auth,
-                        value: authValue,
-                        valueColor: authColor,
-                      ),
-                      _SettingsDivider(),
-                      _DiagnosticRow(
-                        icon: Icons.lan_outlined,
-                        label: l10n.protocol,
-                        value: protocolValue,
-                      ),
-                      _SettingsDivider(),
-                      _DiagnosticsActionRow(
-                        enabled: connection != null,
-                        diagnosing: _diagnosing,
-                        diagnostics: diagnostics,
-                        onTap: _runDiagnostics,
-                      ),
-                      if (diagnostics?.problem case final problem?) ...<Widget>[
-                        _SettingsDivider(),
-                        Padding(
-                          padding: const EdgeInsets.all(TsPhoneSpacing.medium),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 620),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        TsSettingsSection(
+                          title: l10n.preferences,
+                          child: Column(
                             children: <Widget>[
-                              Icon(
-                                Icons.error_outline_rounded,
-                                size: 18,
-                                color: statusTheme.error,
+                              _PreferenceControlRow(
+                                icon: Icons.brightness_6_outlined,
+                                iconColor: colors.primary,
+                                label: l10n.appearance,
+                                saving: _savingTheme,
+                                control:
+                                    _AdaptiveChoiceControl<AppThemePreference>(
+                                      groupValue: widget.themePreference,
+                                      choices: <AppThemePreference, String>{
+                                        AppThemePreference.system:
+                                            l10n.themeSystem,
+                                        AppThemePreference.light:
+                                            l10n.themeLight,
+                                        AppThemePreference.dark: l10n.themeDark,
+                                      },
+                                      onValueChanged: (value) =>
+                                          unawaited(_changeTheme(value)),
+                                    ),
                               ),
-                              const SizedBox(width: TsPhoneSpacing.small),
-                              Expanded(
-                                child: Text(
-                                  problem.localizedMessage(l10n),
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: statusTheme.error),
-                                ),
+                              const _SettingsDivider(),
+                              _PreferenceControlRow(
+                                icon: Icons.translate_rounded,
+                                iconColor: colors.secondary,
+                                label: l10n.language,
+                                saving: _savingLocale,
+                                control:
+                                    _AdaptiveChoiceControl<AppLocalePreference>(
+                                      groupValue: widget.localePreference,
+                                      choices: <AppLocalePreference, String>{
+                                        AppLocalePreference.system:
+                                            l10n.languageSystem,
+                                        AppLocalePreference.zh:
+                                            l10n.languageChinese,
+                                        AppLocalePreference.en:
+                                            l10n.languageEnglish,
+                                      },
+                                      onValueChanged: (value) =>
+                                          unawaited(_changeLocale(value)),
+                                    ),
                               ),
                             ],
                           ),
                         ),
+                        TsSettingsSection(
+                          title: l10n.connection,
+                          child: Column(
+                            children: <Widget>[
+                              ListTile(
+                                onTap: () {
+                                  ActionFeedback.selection();
+                                  widget.onEditConnection();
+                                },
+                                leading: TsSettingsIcon(
+                                  icon: Icons.dns_outlined,
+                                  color: colors.primary,
+                                ),
+                                title: Text(l10n.tsPhoneService),
+                                subtitle: TsMonoText(
+                                  authority,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                ),
+                                trailing: Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: colors.outline,
+                                ),
+                              ),
+                              const _SettingsDivider(),
+                              _DiagnosticsActionRow(
+                                enabled: connection != null,
+                                diagnosing: _diagnosing,
+                                diagnostics: diagnostics,
+                                onTap: _runDiagnostics,
+                              ),
+                              if (diagnostics?.problem
+                                  case final problem?) ...<Widget>[
+                                const _SettingsDivider(),
+                                _ConnectionProblem(
+                                  message: problem.localizedMessage(l10n),
+                                ),
+                              ],
+                              const _SettingsDivider(),
+                              _ConnectionDetailsToggle(
+                                expanded: _showConnectionDetails,
+                                onTap: () {
+                                  ActionFeedback.selection();
+                                  setState(
+                                    () => _showConnectionDetails =
+                                        !_showConnectionDetails,
+                                  );
+                                },
+                              ),
+                              if (_showConnectionDetails) ...<Widget>[
+                                const _SettingsDivider(),
+                                KeyedSubtree(
+                                  key: const ValueKey<String>(
+                                    'connection-details',
+                                  ),
+                                  child: Column(
+                                    children: <Widget>[
+                                      _DiagnosticRow(
+                                        icon: Icons.link_rounded,
+                                        label: l10n.endpoint,
+                                        value:
+                                            connection?.serverUrl ??
+                                            l10n.notConfigured,
+                                        stacked: true,
+                                        selectable: connection != null,
+                                      ),
+                                      const _SettingsDivider(),
+                                      _DiagnosticRow(
+                                        icon: Icons.key_rounded,
+                                        label: l10n.auth,
+                                        value: authValue,
+                                        valueColor: authColor,
+                                      ),
+                                      const _SettingsDivider(),
+                                      _DiagnosticRow(
+                                        icon: Icons.lan_outlined,
+                                        label: l10n.protocol,
+                                        value: protocolValue,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const _AppIdentityFooter(),
                       ],
-                    ],
-                  ),
-                ),
-                TsSettingsSection(
-                  title: l10n.about,
-                  child: Column(
-                    children: <Widget>[
-                      ListTile(
-                        leading: const TsPhoneBrandBadge(size: 32),
-                        title: const Text('TS Phone'),
-                        subtitle: Text(l10n.mobileCompanion),
-                      ),
-                      const _SettingsDivider(),
-                      _DiagnosticRow(
-                        icon: Icons.phone_iphone_rounded,
-                        label: l10n.client,
-                        value: '0.10.0',
-                      ),
-                      const _SettingsDivider(),
-                      _DiagnosticRow(
-                        icon: Icons.build_outlined,
-                        label: l10n.build,
-                        value: '32',
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -347,6 +345,183 @@ class _SettingsDivider extends StatelessWidget {
       thickness: 0.5,
       indent: 52,
       color: Theme.of(context).colorScheme.outlineVariant,
+    );
+  }
+}
+
+class _PreferenceControlRow extends StatelessWidget {
+  const _PreferenceControlRow({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.control,
+    required this.saving,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final Widget control;
+  final bool saving;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 340 || textScaler.scale(15) > 18;
+        final header = Row(
+          children: <Widget>[
+            TsSettingsIcon(icon: icon, color: iconColor),
+            const SizedBox(width: TsPhoneSpacing.medium),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        );
+        return Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(TsPhoneSpacing.medium),
+              child: stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        header,
+                        const SizedBox(height: TsPhoneSpacing.medium),
+                        control,
+                      ],
+                    )
+                  : Row(
+                      children: <Widget>[
+                        SizedBox(width: 126, child: header),
+                        const SizedBox(width: TsPhoneSpacing.small),
+                        Expanded(child: control),
+                      ],
+                    ),
+            ),
+            if (saving) const LinearProgressIndicator(minHeight: 2),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ConnectionDetailsToggle extends StatelessWidget {
+  const _ConnectionDetailsToggle({required this.expanded, required this.onTap});
+
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      expanded: expanded,
+      child: InkWell(
+        key: const ValueKey<String>('connection-details-toggle'),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TsPhoneSpacing.large,
+              vertical: TsPhoneSpacing.small,
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 19,
+                  color: colors.onSurfaceVariant,
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
+                Expanded(
+                  child: Text(
+                    context.l10n.connectionDetails,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: colors.outline,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConnectionProblem extends StatelessWidget {
+  const _ConnectionProblem({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = TsPhoneStatusTheme.resolve(context).error;
+    return Padding(
+      padding: const EdgeInsets.all(TsPhoneSpacing.medium),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.error_outline_rounded, size: 18, color: error),
+          const SizedBox(width: TsPhoneSpacing.small),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppIdentityFooter extends StatelessWidget {
+  const _AppIdentityFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      key: const ValueKey<String>('settings-app-identity'),
+      padding: const EdgeInsets.fromLTRB(
+        TsPhoneSpacing.large,
+        TsPhoneSpacing.xLarge,
+        TsPhoneSpacing.large,
+        0,
+      ),
+      child: Column(
+        children: <Widget>[
+          const TsPhoneBrandBadge(size: 32),
+          const SizedBox(height: TsPhoneSpacing.small),
+          Text('TS Phone', style: theme.textTheme.titleSmall),
+          const SizedBox(height: TsPhoneSpacing.xSmall),
+          Text(
+            context.l10n.clientVersionBuild('0.10.1', '33'),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -463,27 +638,19 @@ class _DiagnosticsActionRow extends StatelessWidget {
     final l10n = context.l10n;
     final status = TsPhoneStatusTheme.resolve(context);
     final problem = diagnostics?.problem;
-    final (label, color, icon) = diagnosing
-        ? (l10n.diagnosticsRunning, theme.colorScheme.primary, null)
+    final (label, color) = diagnosing
+        ? (l10n.diagnosticsRunning, theme.colorScheme.primary)
         : !enabled
-        ? (
-            l10n.notConfigured,
-            theme.colorScheme.outline,
-            Icons.remove_circle_outline_rounded,
-          )
+        ? (l10n.notConfigured, theme.colorScheme.outline)
         : problem != null
-        ? (l10n.diagnosticFailed, status.error, Icons.error_outline_rounded)
+        ? (l10n.diagnosticFailed, status.error)
         : diagnostics != null
-        ? (
-            l10n.diagnosticVerified,
-            status.connected,
-            Icons.check_circle_outline_rounded,
-          )
-        : (
-            l10n.diagnosticNotChecked,
-            theme.colorScheme.onSurfaceVariant,
-            Icons.help_outline_rounded,
-          );
+        ? (l10n.diagnosticVerified, status.connected)
+        : (l10n.diagnosticNotChecked, theme.colorScheme.onSurfaceVariant);
+    final motionDuration = TsPhoneMotion.resolve(
+      context,
+      TsPhoneMotion.standard,
+    );
     return Semantics(
       button: true,
       enabled: enabled && !diagnosing,
@@ -505,60 +672,70 @@ class _DiagnosticsActionRow extends StatelessWidget {
                 ),
                 const SizedBox(width: TsPhoneSpacing.medium),
                 Expanded(
-                  child: Text(
-                    l10n.runDiagnostics,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        l10n.runDiagnostics,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: motionDuration,
+                        child: Row(
+                          key: ValueKey<String>(
+                            diagnosing ? 'diagnostics-running' : label,
+                          ),
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: TsPhoneSpacing.xSmall),
+                            Flexible(
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: color,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: TsPhoneSpacing.small),
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
+                  duration: motionDuration,
                   child: diagnosing
-                      ? Row(
-                          key: const ValueKey<String>('diagnostics-running'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: color,
-                              ),
-                            ),
-                            const SizedBox(width: TsPhoneSpacing.xSmall),
-                            Text(
-                              label,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                      ? SizedBox.square(
+                          key: const ValueKey<String>('diagnostics-spinner'),
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: color,
+                          ),
                         )
-                      : Row(
-                          key: ValueKey<String>('diagnostics-$label'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Icon(icon, size: 17, color: color),
-                            const SizedBox(width: TsPhoneSpacing.xSmall),
-                            Text(
-                              label,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (enabled) ...<Widget>[
-                              const SizedBox(width: TsPhoneSpacing.xSmall),
-                              Icon(
-                                Icons.refresh_rounded,
-                                size: 18,
-                                color: theme.colorScheme.outline,
-                              ),
-                            ],
-                          ],
+                      : Icon(
+                          Icons.refresh_rounded,
+                          key: const ValueKey<String>('diagnostics-refresh'),
+                          size: 20,
+                          color: enabled
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline,
                         ),
                 ),
               ],
@@ -586,7 +763,7 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final scaledLabelSize = MediaQuery.textScalerOf(context).scale(13);
-        final useRows = scaledLabelSize > 17 || constraints.maxWidth < 280;
+        final useRows = scaledLabelSize > 17 || constraints.maxWidth < 180;
         if (useRows) return _buildRows(context);
 
         final theme = Theme.of(context);

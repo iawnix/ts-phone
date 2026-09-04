@@ -460,9 +460,9 @@ void main() {
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TsSettingsSection), findsNWidgets(4));
+    expect(find.byType(TsSettingsSection), findsNWidgets(2));
     expect(find.byType(TsGlassAppBar), findsOneWidget);
-    expect(find.byType(TsContentSurface), findsNWidgets(4));
+    expect(find.byType(TsContentSurface), findsNWidgets(2));
     expect(find.byType(TsGlassSurface), findsNothing);
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(
@@ -508,14 +508,22 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView), const Offset(0, -500));
-      await tester.pumpAndSettle();
 
       final endpoint = find.byWidgetPredicate(
         (widget) =>
             widget is SelectableText && widget.data == settings.serverUrl,
       );
+      expect(endpoint, findsNothing);
+      final detailsToggle = find.byKey(
+        const ValueKey<String>('connection-details-toggle'),
+      );
+      await tester.ensureVisible(detailsToggle);
+      await tester.tap(detailsToggle);
+      await tester.pumpAndSettle();
+
       expect(endpoint, findsOneWidget);
+      await tester.ensureVisible(endpoint);
+      await tester.pumpAndSettle();
       expect(tester.getSize(endpoint).height, greaterThan(20));
       final diagnosticsRow = tester.getRect(
         find.byKey(const ValueKey<String>('run-connection-diagnostics')),
@@ -584,6 +592,13 @@ void main() {
       find.descendant(of: diagnostics, matching: find.text('Healthy')),
       findsOneWidget,
     );
+    expect(find.text('ts-phone-api/3'), findsNothing);
+    final detailsToggle = find.byKey(
+      const ValueKey<String>('connection-details-toggle'),
+    );
+    await tester.ensureVisible(detailsToggle);
+    await tester.tap(detailsToggle);
+    await tester.pumpAndSettle();
     expect(find.text('ts-phone-api/3'), findsOneWidget);
     expect(find.text('Ping'), findsNothing);
     expect(find.text('Runtime'), findsNothing);

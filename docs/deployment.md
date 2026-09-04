@@ -14,7 +14,7 @@ be restricted to known clients.
 
 Server version 0.5.1 restores validated disk sessions, serves both compatible
 message history and a capability-advertised structured research timeline, and
-validates bounded Root Agent runtime snapshots. Mobile version 0.10.0 displays
+validates bounded Root Agent runtime snapshots. Mobile version 0.10.1 displays
 bounded TS activities, Pi branches, the active model, and Pi-estimated context
 usage, and switches to live capabilities when the matching Bridge reconnects.
 Mobile and server release numbers are independent; compatibility is governed by
@@ -24,7 +24,7 @@ the protocol versions in this table:
 | --- | ---: | --- |
 | TS Phone server | 0.5.1 | API v3, Events v3, Bridge v2, structured timeline and runtime snapshot |
 | TSPi package | 0.11.1 | Bridge v2, runtime metadata, and controller/observer launch policy |
-| Mobile app | 0.10.0+32 | API v3, zh/en UI, session details, timeline branches and activity rail |
+| Mobile app | 0.10.1+33 | API v3, zh/en UI, session details, timeline branches and activity rail |
 
 Do not mix the old Bridge v1 or API v2 components with this set.
 

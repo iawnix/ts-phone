@@ -65,6 +65,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get validationTokenInvalid => 'The access token format is invalid';
 
   @override
+  String get preferences => 'Preferences';
+
+  @override
   String get appearance => 'Appearance';
 
   @override
@@ -98,6 +101,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connection => 'Connection';
 
   @override
+  String get connectionDetails => 'Connection details';
+
+  @override
   String get tsPhoneService => 'TS Phone service';
 
   @override
@@ -109,6 +115,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String clientDescription(String version) {
     return 'Client $version · TSPi mobile companion';
+  }
+
+  @override
+  String clientVersionBuild(String version, String build) {
+    return 'Version $version · Build $build';
   }
 
   @override

@@ -206,6 +206,12 @@ abstract class AppLocalizations {
   /// **'The access token format is invalid'**
   String get validationTokenInvalid;
 
+  /// No description provided for @preferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences'**
+  String get preferences;
+
   /// No description provided for @appearance.
   ///
   /// In en, this message translates to:
@@ -272,6 +278,12 @@ abstract class AppLocalizations {
   /// **'Connection'**
   String get connection;
 
+  /// No description provided for @connectionDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection details'**
+  String get connectionDetails;
+
   /// No description provided for @tsPhoneService.
   ///
   /// In en, this message translates to:
@@ -295,6 +307,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Client {version} · TSPi mobile companion'**
   String clientDescription(String version);
+
+  /// No description provided for @clientVersionBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} · Build {build}'**
+  String clientVersionBuild(String version, String build);
 
   /// No description provided for @endpoint.
   ///

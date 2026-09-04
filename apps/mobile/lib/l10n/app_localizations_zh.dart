@@ -63,6 +63,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get validationTokenInvalid => '访问令牌格式无效';
 
   @override
+  String get preferences => '偏好设置';
+
+  @override
   String get appearance => '外观';
 
   @override
@@ -96,6 +99,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connection => '连接';
 
   @override
+  String get connectionDetails => '连接详情';
+
+  @override
   String get tsPhoneService => 'TS Phone 服务';
 
   @override
@@ -107,6 +113,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String clientDescription(String version) {
     return '客户端 $version · TSPi 移动终端';
+  }
+
+  @override
+  String clientVersionBuild(String version, String build) {
+    return '版本 $version · 构建 $build';
   }
 
   @override
