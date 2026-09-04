@@ -462,8 +462,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   String get _navigationTitle {
     final sessionTitle = _controller.sessionTitle?.trim();
     if (sessionTitle?.isNotEmpty == true) return sessionTitle!;
-    final workspaceName = widget.workspace.name.trim();
-    return workspaceName.isEmpty ? widget.workspace.id : workspaceName;
+    return widget.session.localizedDisplayName(context.l10n);
   }
 
   void _showActionMessage(String message) {

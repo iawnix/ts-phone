@@ -155,6 +155,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('unnamed chat sessions retain distinct short IDs', (
+    WidgetTester tester,
+  ) async {
+    Future<void> pumpSession(String sessionId, String sessionRevision) async {
+      final session = SessionSummary(
+        sessionId: sessionId,
+        sessionRevision: sessionRevision,
+        runtimeState: RuntimeState.offline,
+        isStreaming: false,
+        accessMode: SessionAccessMode.observer,
+        historyAvailable: true,
+        historyOnly: true,
+        canPrompt: false,
+      );
+      final gateway = UiFakeGateway(
+        sessions: <SessionSummary>[session],
+        snapshot: TsPhoneMessageSnapshot(
+          sessionId: sessionId,
+          sessionRevision: sessionRevision,
+          messages: const <Object?>[],
+          lastEventId: 'history:0',
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: ChatPage(
+            key: ValueKey<String>(sessionId),
+            settings: _settings,
+            workspace: offlineWorkspace,
+            session: session,
+            gateway: gateway,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await pumpSession(
+      '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      '11111111-1111-4111-8111-111111111111',
+    );
+    expect(find.text('Session 11111111'), findsOneWidget);
+
+    await pumpSession(
+      '22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      '22222222-2222-4222-8222-222222222222',
+    );
+    expect(find.text('Session 22222222'), findsOneWidget);
+    expect(find.text('Session 11111111'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('long models and unknown post-compaction usage fit narrow UI', (
     WidgetTester tester,
   ) async {
@@ -297,7 +352,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('已有历史消息'), findsOneWidget);
-    expect(find.text('ts_001'), findsOneWidget);
+    expect(find.text('会话 session-'), findsOneWidget);
     expect(find.text('历史 · 只读'), findsOneWidget);
     expect(find.textContaining('消息来自本机历史记录'), findsNothing);
     expect(find.text('只读观察模式'), findsNothing);
