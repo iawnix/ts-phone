@@ -585,7 +585,7 @@ void main() {
       ),
       findsNothing,
     );
-    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -922,7 +922,14 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final gateway = UiFakeGateway();
+    final gateway = UiFakeGateway(
+      snapshot: TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        messages: <Object?>[userMessage('Keep the latest result visible')],
+        lastEventId: 'epoch:0',
+      ),
+    );
     const workspace = WorkspaceSummary(
       id: 'ts_001',
       name: 'ts_001',
@@ -943,6 +950,7 @@ void main() {
           ).copyWith(textScaler: const TextScaler.linear(1.4)),
           child: child!,
         ),
+        theme: TsPhoneTheme.light(),
         home: ChatPage(
           settings: _settings,
           workspace: workspace,
@@ -969,6 +977,20 @@ void main() {
         .getSize(find.byKey(const ValueKey<String>('chat-composer')))
         .width;
     final idleFieldWidth = tester.getSize(find.byType(TextField)).width;
+    final messageListRect = tester.getRect(
+      find.byKey(const ValueKey<String>('chat-message-list')),
+    );
+    final appBarRect = tester.getRect(find.byType(AppBar));
+    final idleComposerRect = tester.getRect(
+      find.byKey(const ValueKey<String>('chat-composer')),
+    );
+    final messageList = tester.widget<ListView>(
+      find.byKey(const ValueKey<String>('chat-message-list')),
+    );
+    final messagePadding = messageList.padding! as EdgeInsets;
+    expect(messageListRect.top, lessThan(appBarRect.bottom));
+    expect(messageListRect.bottom, greaterThan(idleComposerRect.top));
+    expect(messagePadding.bottom, greaterThan(idleComposerRect.height));
 
     gateway.addWorkspaceState(RuntimeState.running);
     await tester.pumpAndSettle();

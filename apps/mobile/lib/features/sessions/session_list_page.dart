@@ -122,6 +122,14 @@ class _SessionListPageState extends State<SessionListPage>
     final l10n = context.l10n;
     return Scaffold(
       appBar: TsGlassAppBar(
+        leading: IconButton(
+          onPressed: () {
+            ActionFeedback.selection();
+            Navigator.of(context).maybePop();
+          },
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
         title: Text(widget.workspace.name),
         actions: <Widget>[
           IconButton(

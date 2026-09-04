@@ -522,7 +522,7 @@ class _AppIdentityFooter extends StatelessWidget {
             ),
           ),
           Text(
-            context.l10n.clientVersionBuild('0.11.0', '34'),
+            context.l10n.clientVersionBuild('0.12.0', '35'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

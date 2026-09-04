@@ -3,7 +3,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/rendering.dart' show RenderBox, ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
@@ -27,6 +27,7 @@ import 'timeline_widgets.dart';
 enum _ChatScrollMode { following, reading }
 
 const double _jumpToStartThreshold = 160;
+const double _chatToolbarHeight = 62;
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -54,6 +55,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final TextEditingController _composer = TextEditingController();
   final FocusNode _composerFocus = FocusNode();
   final ScrollController _scroll = ScrollController();
+  final GlobalKey _bottomDockKey = GlobalKey(debugLabel: 'chat-bottom-dock');
   final Queue<ExtensionUiRequest> _pendingUiRequests =
       Queue<ExtensionUiRequest>();
   final ValueNotifier<bool> _streamUpdatesEnabled = ValueNotifier<bool>(true);
@@ -69,6 +71,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _aborting = false;
   bool _hasDraft = false;
   bool _initialTimelinePositioned = false;
+  bool _bottomDockMeasureScheduled = false;
+  double _bottomDockHeight = 72;
 
   @override
   void initState() {
@@ -551,13 +555,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       child: _buildMessages(),
       builder: (context, child) {
         final viewState = SessionViewState.fromController(_controller);
-        final showContent =
-            _controller.messages.isNotEmpty ||
-            _controller.timelineItems.isNotEmpty ||
-            _controller.hasStreamingText;
         return Scaffold(
+          extendBody: true,
+          extendBodyBehindAppBar: true,
           appBar: TsGlassAppBar(
-            toolbarHeight: 62,
+            toolbarHeight: _chatToolbarHeight,
             centerTitle: true,
             titleSpacing: 0,
             leading: IconButton(
@@ -600,31 +602,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               ),
             ],
           ),
-          body: TsPageBackdrop(
-            child: SafeArea(
-              child: Column(
-                children: <Widget>[
-                  if (showContent) _priorityBanner() ?? const SizedBox.shrink(),
-                  Expanded(child: child!),
-                  if (viewState.hasLiveRun ||
-                      _controller.activity?.kind == ChatActivityKind.toolFailed)
-                    LiveRunStrip(
-                      activity: _controller.activity,
-                      canAbort:
-                          viewState.canAbort &&
-                          _controller.activity?.kind !=
-                              ChatActivityKind.toolFailed,
-                      aborting: _aborting,
-                      onAbort: _abort,
-                    ),
-                  if (viewState.isHistorical)
-                    const _ReadOnlySessionBar()
-                  else
-                    _buildComposer(context),
-                ],
-              ),
-            ),
-          ),
+          body: TsPageBackdrop(child: child!),
+          bottomNavigationBar: _buildBottomDock(context, viewState),
         );
       },
     );
@@ -633,20 +612,94 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Widget _buildMessages() {
     return AnimatedBuilder(
       animation: _controller,
-      child: _MessageTimeline(
-        controller: _controller,
-        messagesListenable: _controller.messagesUpdates,
-        streamingTextListenable: _controller.streamingTextUpdates,
-        streamUpdatesEnabledListenable: _streamUpdatesEnabled,
-        scrollController: _scroll,
-        onScrollNotification: _handleScrollNotification,
-        onScrollMetricsNotification: _handleScrollMetricsNotification,
-        onLoadEarlier: _loadEarlierMessages,
-        onLoadAll: _loadAllHistory,
-        onSelectBranch: _selectTimelineBranch,
-      ),
-      builder: (context, child) => _buildMessagesForState(child!),
+      builder: (context, _) {
+        final showNotice =
+            _controller.messages.isNotEmpty ||
+            _controller.timelineItems.isNotEmpty ||
+            _controller.hasStreamingText;
+        return _buildMessagesForState(
+          _MessageTimeline(
+            controller: _controller,
+            messagesListenable: _controller.messagesUpdates,
+            streamingTextListenable: _controller.streamingTextUpdates,
+            streamUpdatesEnabledListenable: _streamUpdatesEnabled,
+            scrollController: _scroll,
+            onScrollNotification: _handleScrollNotification,
+            onScrollMetricsNotification: _handleScrollMetricsNotification,
+            onLoadEarlier: _loadEarlierMessages,
+            onLoadAll: _loadAllHistory,
+            onSelectBranch: _selectTimelineBranch,
+            header: showNotice ? _priorityBanner() : null,
+            bottomContentInset: _bottomDockHeight,
+          ),
+        );
+      },
     );
+  }
+
+  Widget _buildBottomDock(BuildContext context, SessionViewState viewState) {
+    _scheduleBottomDockMeasurement();
+    final showLiveRun =
+        viewState.hasLiveRun ||
+        _controller.activity?.kind == ChatActivityKind.toolFailed;
+    return NotificationListener<SizeChangedLayoutNotification>(
+      onNotification: (_) {
+        _scheduleBottomDockMeasurement();
+        return true;
+      },
+      child: SizeChangedLayoutNotifier(
+        child: Material(
+          key: _bottomDockKey,
+          color: Colors.transparent,
+          child: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (_initialTimelinePositioned &&
+                    (_showJumpToStart || _showJumpToLatest)) ...<Widget>[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildTimelineNavigation(),
+                  ),
+                  const SizedBox(height: TsPhoneSpacing.small),
+                ],
+                if (showLiveRun)
+                  LiveRunStrip(
+                    activity: _controller.activity,
+                    canAbort:
+                        viewState.canAbort &&
+                        _controller.activity?.kind !=
+                            ChatActivityKind.toolFailed,
+                    aborting: _aborting,
+                    onAbort: _abort,
+                  ),
+                if (showLiveRun) const SizedBox(height: TsPhoneSpacing.small),
+                if (viewState.isHistorical)
+                  const _ReadOnlySessionBar()
+                else
+                  _buildComposer(context),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _scheduleBottomDockMeasurement() {
+    if (_bottomDockMeasureScheduled) return;
+    _bottomDockMeasureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bottomDockMeasureScheduled = false;
+      if (!mounted) return;
+      final renderObject = _bottomDockKey.currentContext?.findRenderObject();
+      if (renderObject is! RenderBox || !renderObject.hasSize) return;
+      final height = renderObject.size.height;
+      if ((height - _bottomDockHeight).abs() <= 0.5) return;
+      setState(() => _bottomDockHeight = height);
+    });
   }
 
   Widget _buildMessagesForState(Widget timeline) {
@@ -710,9 +763,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           ),
         ),
         if (positioningInitialTimeline) const _SessionConnectingView(),
-        if (!positioningInitialTimeline &&
-            (_showJumpToStart || _showJumpToLatest))
-          Positioned(right: 12, bottom: 12, child: _buildTimelineNavigation()),
       ],
     );
   }
@@ -724,7 +774,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       elevated: true,
       blurSigma: 14,
       borderRadius: BorderRadius.circular(24),
-      child: Column(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (_showJumpToStart)
@@ -737,9 +787,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             ),
           if (_showJumpToStart && _showJumpToLatest)
             SizedBox(
-              width: 24,
-              child: Divider(
-                height: 0.5,
+              height: 24,
+              child: VerticalDivider(
+                width: 0.5,
                 thickness: 0.5,
                 color: Theme.of(context).colorScheme.outlineVariant,
               ),
@@ -779,100 +829,84 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             )
           : const Icon(Icons.arrow_upward_rounded, size: 21),
     );
-    return TsGlassBar(
-      edge: TsGlassBarEdge.top,
-      child: Material(
-        color: Colors.transparent,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-          child: AnimatedBuilder(
-            animation: _composerFocus,
-            builder: (context, _) {
-              final focused = _composerFocus.hasFocus && viewState.canCompose;
-              return AnimatedContainer(
-                key: const ValueKey<String>('chat-composer'),
-                duration: TsPhoneMotion.resolve(context, TsPhoneMotion.quick),
-                curve: Curves.easeOut,
-                padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(TsPhoneRadii.composer),
-                  border: Border.all(
-                    color: focused
-                        ? colors.primary.withValues(alpha: 0.5)
-                        : colors.outlineVariant,
-                    width: focused ? 1 : 0.6,
+    return Material(
+      color: Colors.transparent,
+      child: AnimatedBuilder(
+        animation: _composerFocus,
+        builder: (context, _) {
+          final focused = _composerFocus.hasFocus && viewState.canCompose;
+          final glass = TsPhoneGlassTheme.resolve(context);
+          return TsGlassSurface(
+            key: const ValueKey<String>('chat-composer'),
+            elevated: true,
+            blurSigma: glass.floatingBlurSigma,
+            borderRadius: BorderRadius.circular(26),
+            borderColor: focused
+                ? colors.primary.withValues(alpha: 0.58)
+                : null,
+            padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _composer,
+                    focusNode: _composerFocus,
+                    enabled: viewState.canCompose,
+                    minLines: 1,
+                    maxLines: 7,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    textCapitalization: TextCapitalization.sentences,
+                    autocorrect: true,
+                    enableSuggestions: true,
+                    cursorColor: colors.primary,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontSize: 16,
+                      height: 1.32,
+                    ),
+                    onTapOutside: (_) => _composerFocus.unfocus(),
+                    decoration: InputDecoration(
+                      hintText: _composerHint(),
+                      hintMaxLines: 2,
+                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.3,
+                      ),
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.fromLTRB(12, 9, 6, 9),
+                    ),
                   ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        controller: _composer,
-                        focusNode: _composerFocus,
-                        enabled: viewState.canCompose,
-                        minLines: 1,
-                        maxLines: 7,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        textCapitalization: TextCapitalization.sentences,
-                        autocorrect: true,
-                        enableSuggestions: true,
-                        cursorColor: colors.primary,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontSize: 16,
-                          height: 1.32,
-                        ),
-                        onTapOutside: (_) => _composerFocus.unfocus(),
-                        decoration: InputDecoration(
-                          hintText: _composerHint(),
-                          hintMaxLines: 2,
-                          hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                            color: colors.onSurfaceVariant,
-                            height: 1.3,
-                          ),
-                          isDense: true,
-                          filled: false,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            12,
-                            9,
-                            6,
-                            9,
-                          ),
-                        ),
-                      ),
+                const SizedBox(width: TsPhoneSpacing.xSmall),
+                SizedBox.square(
+                  key: const ValueKey<String>('composer-action-slot'),
+                  dimension: 44,
+                  child: AnimatedSwitcher(
+                    duration: TsPhoneMotion.resolve(
+                      context,
+                      TsPhoneMotion.quick,
                     ),
-                    const SizedBox(width: TsPhoneSpacing.xSmall),
-                    SizedBox.square(
-                      key: const ValueKey<String>('composer-action-slot'),
-                      dimension: 44,
-                      child: AnimatedSwitcher(
-                        duration: TsPhoneMotion.resolve(
-                          context,
-                          TsPhoneMotion.quick,
-                        ),
-                        child: _hasDraft || _sending
-                            ? SizedBox.square(
-                                key: const ValueKey<String>('composer-send'),
-                                dimension: 44,
-                                child: sendButton,
-                              )
-                            : const SizedBox.shrink(
-                                key: ValueKey<String>('composer-action-empty'),
-                              ),
-                      ),
-                    ),
-                  ],
+                    child: _hasDraft || _sending
+                        ? SizedBox.square(
+                            key: const ValueKey<String>('composer-send'),
+                            dimension: 44,
+                            child: sendButton,
+                          )
+                        : const SizedBox.shrink(
+                            key: ValueKey<String>('composer-action-empty'),
+                          ),
+                  ),
                 ),
-              );
-            },
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -913,10 +947,13 @@ class _ReadOnlySessionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return TsGlassBar(
-      edge: TsGlassBarEdge.top,
+    final glass = TsPhoneGlassTheme.resolve(context);
+    return TsGlassSurface(
+      key: const ValueKey<String>('chat-read-only-bar'),
+      elevated: true,
+      blurSigma: glass.floatingBlurSigma,
+      borderRadius: BorderRadius.circular(24),
       child: ConstrainedBox(
-        key: const ValueKey<String>('chat-read-only-bar'),
         constraints: const BoxConstraints(minHeight: 48),
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -1391,6 +1428,8 @@ class _MessageTimeline extends StatelessWidget {
     required this.onLoadEarlier,
     required this.onLoadAll,
     required this.onSelectBranch,
+    required this.bottomContentInset,
+    this.header,
   });
 
   final ChatController controller;
@@ -1404,6 +1443,8 @@ class _MessageTimeline extends StatelessWidget {
   final Future<void> Function() onLoadEarlier;
   final Future<void> Function() onLoadAll;
   final Future<void> Function(String branchId) onSelectBranch;
+  final double bottomContentInset;
+  final Widget? header;
 
   @override
   Widget build(BuildContext context) {
@@ -1424,6 +1465,7 @@ class _MessageTimeline extends StatelessWidget {
             controller.loadingEarlierMessages;
         final historyOffset = showEarlier ? 1 : 0;
         return _list(
+          context: context,
           itemCount: messages.length + 1 + historyOffset,
           itemBuilder: (context, index) {
             if (showEarlier && index == 0) {
@@ -1458,6 +1500,7 @@ class _MessageTimeline extends StatelessWidget {
           totalTurnCount: controller.timelineTurnCount,
         );
         return _list(
+          context: context,
           itemCount: groups.length + 2,
           itemBuilder: (context, index) {
             if (index == 0) {
@@ -1482,9 +1525,12 @@ class _MessageTimeline extends StatelessWidget {
   }
 
   Widget _list({
+    required BuildContext context,
     required int itemCount,
     required NullableIndexedWidgetBuilder itemBuilder,
   }) {
+    final headerOffset = header == null ? 0 : 1;
+    final viewPadding = MediaQuery.viewPaddingOf(context);
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: onScrollMetricsNotification,
       child: NotificationListener<ScrollNotification>(
@@ -1493,9 +1539,17 @@ class _MessageTimeline extends StatelessWidget {
           key: const ValueKey<String>('chat-message-list'),
           controller: scrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: itemCount,
-          itemBuilder: itemBuilder,
+          padding: EdgeInsets.fromLTRB(
+            0,
+            viewPadding.top + _chatToolbarHeight + 8,
+            0,
+            bottomContentInset + 8,
+          ),
+          itemCount: itemCount + headerOffset,
+          itemBuilder: (context, index) {
+            if (header != null && index == 0) return header!;
+            return itemBuilder(context, index - headerOffset);
+          },
         ),
       ),
     );

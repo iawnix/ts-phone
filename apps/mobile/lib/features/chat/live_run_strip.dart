@@ -81,78 +81,113 @@ class _LiveRunStripState extends State<LiveRunStrip> {
         ? null
         : context.l10n.timelineDuration(_formatElapsed(elapsed));
     final accent = failed ? colors.error : status.connected;
+    final glass = TsPhoneGlassTheme.resolve(context);
+    final tint = Color.alphaBlend(
+      accent.withValues(alpha: failed ? 0.12 : 0.07),
+      glass.elevatedSurface,
+    );
 
     return Semantics(
       liveRegion: true,
       label: label,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLow,
-          border: Border(
-            top: BorderSide(color: colors.outlineVariant, width: 0.5),
-          ),
-        ),
+      child: TsGlassSurface(
+        key: const ValueKey<String>('live-run-strip'),
+        elevated: true,
+        blurSigma: glass.floatingBlurSigma,
+        tint: tint,
+        borderColor: failed
+            ? colors.error.withValues(alpha: 0.48)
+            : glass.strongBorder,
+        borderRadius: BorderRadius.circular(20),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Row(
-            children: <Widget>[
-              const SizedBox(width: TsPhoneSpacing.large),
-              TsStatusDot(color: accent, size: 8, pulsing: !failed),
-              const SizedBox(width: TsPhoneSpacing.small),
-              Icon(
-                failed
-                    ? Icons.error_outline_rounded
-                    : Icons.hourglass_top_rounded,
-                size: 18,
-                color: accent,
-              ),
-              const SizedBox(width: TsPhoneSpacing.small),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: TsPhoneMotion.resolve(context, TsPhoneMotion.quick),
-                  child: Text(
-                    key: ValueKey<String>(label),
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colors.onSurface,
-                      fontWeight: FontWeight.w600,
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      Icon(
+                        failed
+                            ? Icons.error_outline_rounded
+                            : Icons.hourglass_top_rounded,
+                        size: 18,
+                        color: accent,
+                      ),
+                      if (!failed)
+                        Positioned(
+                          right: 3,
+                          bottom: 3,
+                          child: TsStatusDot(
+                            color: accent,
+                            size: 6,
+                            pulsing: true,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: TsPhoneMotion.resolve(
+                      context,
+                      TsPhoneMotion.quick,
+                    ),
+                    child: Column(
+                      key: ValueKey<String>(label),
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          label,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (elapsedLabel != null)
+                          Text(
+                            elapsedLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-              if (elapsedLabel != null) ...<Widget>[
-                const SizedBox(width: TsPhoneSpacing.small),
-                Text(
-                  elapsedLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colors.onSurfaceVariant,
+                if (!failed &&
+                    (widget.canAbort || widget.aborting)) ...<Widget>[
+                  const SizedBox(width: TsPhoneSpacing.xSmall),
+                  IconButton(
+                    key: const ValueKey<String>('live-run-stop'),
+                    onPressed: widget.canAbort && !widget.aborting
+                        ? widget.onAbort
+                        : null,
+                    tooltip: widget.aborting
+                        ? context.l10n.aborting
+                        : context.l10n.abortGeneration,
+                    color: colors.error,
+                    icon: widget.aborting
+                        ? const SizedBox.square(
+                            dimension: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.stop_circle_outlined, size: 21),
+                    visualDensity: VisualDensity.compact,
                   ),
-                ),
+                ],
               ],
-              if (!failed && (widget.canAbort || widget.aborting)) ...<Widget>[
-                const SizedBox(width: TsPhoneSpacing.xSmall),
-                IconButton(
-                  key: const ValueKey<String>('live-run-stop'),
-                  onPressed: widget.canAbort && !widget.aborting
-                      ? widget.onAbort
-                      : null,
-                  tooltip: widget.aborting
-                      ? context.l10n.aborting
-                      : context.l10n.abortGeneration,
-                  color: colors.error,
-                  icon: widget.aborting
-                      ? const SizedBox.square(
-                          dimension: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.stop_circle_outlined, size: 21),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ] else
-                const SizedBox(width: TsPhoneSpacing.large),
-            ],
+            ),
           ),
         ),
       ),

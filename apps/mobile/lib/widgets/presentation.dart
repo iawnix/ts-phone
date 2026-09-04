@@ -91,26 +91,43 @@ class TsGlassSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final glass = TsPhoneGlassTheme.resolve(context);
-    final fill = tint ?? (elevated ? glass.elevatedSurface : glass.surface);
+    final highContrast = MediaQuery.highContrastOf(context);
+    final requestedFill =
+        tint ?? (elevated ? glass.elevatedSurface : glass.surface);
+    final fill = highContrast
+        ? Color.alphaBlend(requestedFill, theme.colorScheme.surfaceContainerLow)
+        : requestedFill;
+    final effectiveBorder = highContrast
+        ? theme.colorScheme.outline
+        : borderColor ?? (elevated ? glass.strongBorder : glass.border);
+    final effectiveBlur = highContrast ? 0.0 : blurSigma;
     final content = DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color.alphaBlend(glass.highlight, fill), fill],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color.alphaBlend(glass.highlight, fill), fill, fill],
+          stops: const <double>[0, 0.28, 1],
         ),
         borderRadius: borderRadius,
-        border: Border.all(color: borderColor ?? glass.border, width: 0.6),
+        border: Border.all(
+          color: effectiveBorder,
+          width: highContrast ? 1 : 0.7,
+        ),
       ),
       child: padding == null ? child : Padding(padding: padding!, child: child),
     );
     final clipped = ClipRRect(
       borderRadius: borderRadius,
-      child: blurSigma <= 0
+      child: effectiveBlur <= 0
           ? content
           : BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+              filter: ImageFilter.blur(
+                sigmaX: effectiveBlur,
+                sigmaY: effectiveBlur,
+              ),
               child: content,
             ),
     );
@@ -122,8 +139,9 @@ class TsGlassSurface extends StatelessWidget {
           boxShadow: <BoxShadow>[
             BoxShadow(
               color: glass.shadow,
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+              blurRadius: 24,
+              spreadRadius: -3,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -145,35 +163,40 @@ class TsGlassBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final glass = TsPhoneGlassTheme.resolve(context);
+    final highContrast = MediaQuery.highContrastOf(context);
+    final fill = highContrast
+        ? theme.colorScheme.surfaceContainerLowest
+        : glass.surface;
     final borderSide = BorderSide(
-      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
-      width: 0.5,
+      color: highContrast ? theme.colorScheme.outline : glass.border,
+      width: highContrast ? 1 : 0.6,
+    );
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color.alphaBlend(glass.highlight, fill), fill, fill],
+          stops: const <double>[0, 0.22, 1],
+        ),
+        border: switch (edge) {
+          TsGlassBarEdge.top => Border(top: borderSide),
+          TsGlassBarEdge.bottom => Border(bottom: borderSide),
+        },
+      ),
+      child: child,
     );
     return RepaintBoundary(
       child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: glass.blurSigma,
-            sigmaY: glass.blurSigma,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  Color.alphaBlend(glass.highlight, glass.surface),
-                  glass.surface,
-                ],
+        child: highContrast
+            ? content
+            : BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: glass.blurSigma,
+                  sigmaY: glass.blurSigma,
+                ),
+                child: content,
               ),
-              border: switch (edge) {
-                TsGlassBarEdge.top => Border(top: borderSide),
-                TsGlassBarEdge.bottom => Border(bottom: borderSide),
-              },
-            ),
-            child: child,
-          ),
-        ),
       ),
     );
   }
@@ -204,10 +227,37 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final glass = TsPhoneGlassTheme.resolve(context);
+    final wrappedLeading = leading == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: TsGlassSurface(
+              elevated: true,
+              blurSigma: glass.blurSigma,
+              tint: glass.controlSurface,
+              borderRadius: BorderRadius.circular(24),
+              child: leading!,
+            ),
+          );
+    final wrappedActions = actions == null || actions!.isEmpty
+        ? null
+        : <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TsGlassSurface(
+                elevated: true,
+                blurSigma: glass.blurSigma,
+                tint: glass.controlSurface,
+                borderRadius: BorderRadius.circular(24),
+                child: Row(mainAxisSize: MainAxisSize.min, children: actions!),
+              ),
+            ),
+          ];
     return AppBar(
-      leading: leading,
+      leading: wrappedLeading,
       title: title,
-      actions: actions,
+      actions: wrappedActions,
       toolbarHeight: toolbarHeight,
       centerTitle: centerTitle,
       titleSpacing: titleSpacing,

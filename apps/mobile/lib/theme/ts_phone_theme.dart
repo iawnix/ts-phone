@@ -134,30 +134,41 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
   const TsPhoneGlassTheme({
     required this.surface,
     required this.elevatedSurface,
+    required this.controlSurface,
     required this.border,
+    required this.strongBorder,
     required this.highlight,
     required this.shadow,
     required this.blurSigma,
+    required this.floatingBlurSigma,
   });
 
   final Color surface;
   final Color elevatedSurface;
+  final Color controlSurface;
   final Color border;
+  final Color strongBorder;
   final Color highlight;
   final Color shadow;
   final double blurSigma;
+  final double floatingBlurSigma;
 
   factory TsPhoneGlassTheme.forBrightness(Brightness brightness) {
     final isLight = brightness == Brightness.light;
     return TsPhoneGlassTheme(
-      surface: isLight ? const Color(0xC7F7F7FA) : const Color(0xC20B0F14),
+      surface: isLight ? const Color(0xBDF7F9FC) : const Color(0xBA10161D),
       elevatedSurface: isLight
-          ? const Color(0xE8FFFFFF)
-          : const Color(0xE0141A20),
-      border: isLight ? const Color(0xE0FFFFFF) : const Color(0x30FFFFFF),
-      highlight: isLight ? const Color(0x80FFFFFF) : const Color(0x12FFFFFF),
-      shadow: isLight ? const Color(0x1815222B) : const Color(0x52000000),
-      blurSigma: 18,
+          ? const Color(0xD9FFFFFF)
+          : const Color(0xD9161D25),
+      controlSurface: isLight
+          ? const Color(0xA8FFFFFF)
+          : const Color(0xA326303A),
+      border: isLight ? const Color(0xB8FFFFFF) : const Color(0x3DFFFFFF),
+      strongBorder: isLight ? const Color(0xF2FFFFFF) : const Color(0x66FFFFFF),
+      highlight: isLight ? const Color(0xA6FFFFFF) : const Color(0x26FFFFFF),
+      shadow: isLight ? const Color(0x24142633) : const Color(0x78000000),
+      blurSigma: 22,
+      floatingBlurSigma: 28,
     );
   }
 
@@ -171,18 +182,24 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
   TsPhoneGlassTheme copyWith({
     Color? surface,
     Color? elevatedSurface,
+    Color? controlSurface,
     Color? border,
+    Color? strongBorder,
     Color? highlight,
     Color? shadow,
     double? blurSigma,
+    double? floatingBlurSigma,
   }) {
     return TsPhoneGlassTheme(
       surface: surface ?? this.surface,
       elevatedSurface: elevatedSurface ?? this.elevatedSurface,
+      controlSurface: controlSurface ?? this.controlSurface,
       border: border ?? this.border,
+      strongBorder: strongBorder ?? this.strongBorder,
       highlight: highlight ?? this.highlight,
       shadow: shadow ?? this.shadow,
       blurSigma: blurSigma ?? this.blurSigma,
+      floatingBlurSigma: floatingBlurSigma ?? this.floatingBlurSigma,
     );
   }
 
@@ -195,10 +212,14 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
     return TsPhoneGlassTheme(
       surface: Color.lerp(surface, other.surface, t)!,
       elevatedSurface: Color.lerp(elevatedSurface, other.elevatedSurface, t)!,
+      controlSurface: Color.lerp(controlSurface, other.controlSurface, t)!,
       border: Color.lerp(border, other.border, t)!,
+      strongBorder: Color.lerp(strongBorder, other.strongBorder, t)!,
       highlight: Color.lerp(highlight, other.highlight, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,
       blurSigma: blurSigma + (other.blurSigma - blurSigma) * t,
+      floatingBlurSigma:
+          floatingBlurSigma + (other.floatingBlurSigma - floatingBlurSigma) * t,
     );
   }
 }
@@ -217,10 +238,10 @@ abstract final class TsPhoneTheme {
       statusBarIconBrightness: iconBrightness,
       statusBarBrightness: scheme.brightness,
       systemStatusBarContrastEnforced: true,
-      systemNavigationBarColor: scheme.surface,
+      systemNavigationBarColor: Colors.transparent,
       systemNavigationBarIconBrightness: iconBrightness,
-      systemNavigationBarDividerColor: scheme.surface,
-      systemNavigationBarContrastEnforced: true,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarContrastEnforced: false,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,8 @@ import 'package:ts_phone/app.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/data/settings_store.dart';
 import 'package:ts_phone/features/chat/timeline_widgets.dart';
+import 'package:ts_phone/features/chat/chat_controller.dart';
+import 'package:ts_phone/features/chat/live_run_strip.dart';
 import 'package:ts_phone/features/connection/connection_page.dart';
 import 'package:ts_phone/features/settings/settings_page.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
@@ -185,10 +188,7 @@ void main() {
       darkOverlay.value.systemNavigationBarIconBrightness,
       Brightness.light,
     );
-    expect(
-      darkOverlay.value.systemNavigationBarColor,
-      TsPhoneTheme.dark().colorScheme.surface,
-    );
+    expect(darkOverlay.value.systemNavigationBarColor, Colors.transparent);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(TsPhoneApp(settingsStore: store));
@@ -302,6 +302,75 @@ void main() {
 
     expect(find.byType(TsStatusDot), findsOneWidget);
     expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('glass surfaces become opaque in high contrast mode', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        home: MediaQuery(
+          data: const MediaQueryData(highContrast: true),
+          child: Scaffold(
+            appBar: const TsGlassAppBar(title: Text('High contrast')),
+            body: Center(
+              child: TsGlassSurface(
+                blurSigma: 24,
+                child: SizedBox.square(dimension: 44),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(TsGlassSurface), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('live glass status preserves a long tool name at large text', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: LiveRunStrip(
+            activity: const ChatActivity(
+              ChatActivityKind.runningTool,
+              toolName: 'ts_workspace_decision_draft',
+            ),
+            canAbort: true,
+            onAbort: () {},
+          ),
+        ),
+      ),
+    );
+
+    final label = find.textContaining('Ts workspace decision draft');
+    expect(label, findsOneWidget);
+    expect(
+      tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
+      isFalse,
+    );
+    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -425,7 +494,7 @@ void main() {
 
       expect(find.byType(TsGlassAppBar), findsOneWidget);
       expect(find.byType(TsContentSurface), findsOneWidget);
-      expect(find.byType(TsGlassSurface), findsNothing);
+      expect(find.byType(TsGlassSurface), findsOneWidget);
       expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -476,7 +545,7 @@ void main() {
     expect(find.byType(TsSettingsSection), findsNWidgets(2));
     expect(find.byType(TsGlassAppBar), findsOneWidget);
     expect(find.byType(TsContentSurface), findsNWidgets(2));
-    expect(find.byType(TsGlassSurface), findsNothing);
+    expect(find.byType(TsGlassSurface), findsOneWidget);
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(
       find.byWidgetPredicate(
@@ -770,19 +839,19 @@ void main() {
     expect(light.statusBarColor, Colors.transparent);
     expect(light.statusBarIconBrightness, Brightness.dark);
     expect(light.statusBarBrightness, Brightness.light);
-    expect(light.systemNavigationBarColor, lightTheme.colorScheme.surface);
+    expect(light.systemNavigationBarColor, Colors.transparent);
     expect(light.systemNavigationBarIconBrightness, Brightness.dark);
     expect(light.systemStatusBarContrastEnforced, isTrue);
-    expect(light.systemNavigationBarContrastEnforced, isTrue);
+    expect(light.systemNavigationBarContrastEnforced, isFalse);
     expect(lightTheme.appBarTheme.systemOverlayStyle, light);
 
     expect(dark.statusBarColor, Colors.transparent);
     expect(dark.statusBarIconBrightness, Brightness.light);
     expect(dark.statusBarBrightness, Brightness.dark);
-    expect(dark.systemNavigationBarColor, darkTheme.colorScheme.surface);
+    expect(dark.systemNavigationBarColor, Colors.transparent);
     expect(dark.systemNavigationBarIconBrightness, Brightness.light);
     expect(dark.systemStatusBarContrastEnforced, isTrue);
-    expect(dark.systemNavigationBarContrastEnforced, isTrue);
+    expect(dark.systemNavigationBarContrastEnforced, isFalse);
     expect(darkTheme.appBarTheme.systemOverlayStyle, dark);
   });
 
