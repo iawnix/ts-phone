@@ -7,9 +7,11 @@ TS Phone separates scientific state, conversation history, and transport state:
 3. TS Phone owns authentication, live bridge registration, bounded event
    journals, command fencing, and transient recovery state.
 
-The phone never supplies a path, process command, environment override, or raw
-Pi RPC record. The server never starts Pi. The TSPi launcher starts each visible
-Pi process and loads the package-owned ts-phone-bridge extension.
+The phone API has no dedicated field for a filesystem path, process command,
+environment override, or raw Pi RPC record. Natural-language messages can still
+contain sensitive or operational text. The server never starts Pi. The TSPi
+launcher starts each visible Pi process and loads the package-owned
+ts-phone-bridge extension.
 
 ~~~text
 Flutter -> HTTPS/SSE -> TS Phone broker -> Unix socket -> visible TSPi/Pi

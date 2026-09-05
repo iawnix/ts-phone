@@ -63,12 +63,14 @@ directories, malformed records, and mismatched headers. Reads use
 `O_NOFOLLOW`; raw JSONL lines are never returned.
 
 The same message projection boundary is applied to Bridge and disk messages. It
-exposes only user, assistant, and tool-result display fields and drops thinking
-and model-provider internals. Structured TS custom records pass through a
-separate allowlisted activity projector: only category, status, bounded labels,
-node references, duration/token totals, retry status, and a bounded reference
-may be returned. Raw custom payloads, action digests, provider data, prompts,
-credentials, and unknown nested fields are never serialized to the phone.
+exposes only selected user, assistant, tool-call, and tool-result display fields
+and drops thinking and model-provider internals. Structured TS custom records
+pass through a separate allowlisted activity projector: only category, status,
+bounded labels, node references, duration/token totals, retry status, and a
+bounded reference may be returned. Raw custom payloads, action digests,
+provider data, and unknown nested fields are not serialized to the phone. This
+is not a general secret-redaction layer: visible text, tool arguments, and tool
+results may still contain sensitive content.
 
 Individual text and references are bounded, and every response page is capped
 at 500 items and six MiB. Pagination and branch selection accept only stable
