@@ -476,6 +476,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         SnackBar(
           content: Text(message),
           duration: const Duration(milliseconds: 1400),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(
+            TsPhoneSpacing.medium,
+            0,
+            TsPhoneSpacing.medium,
+            _bottomDockHeight + TsPhoneSpacing.small,
+          ),
         ),
       );
   }
@@ -556,7 +563,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       builder: (context, child) {
         final viewState = SessionViewState.fromController(_controller);
         return Scaffold(
-          extendBody: true,
+          resizeToAvoidBottomInset: true,
           appBar: TsGlassAppBar(
             toolbarHeight: _chatToolbarHeight,
             centerTitle: true,
@@ -602,8 +609,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               ),
             ],
           ),
-          body: TsPageBackdrop(child: child!),
-          bottomNavigationBar: _buildBottomDock(context, viewState),
+          body: TsPageBackdrop(
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                child!,
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _buildBottomDock(context, viewState),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

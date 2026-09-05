@@ -1094,6 +1094,92 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('soft keyboard keeps the multiline composer visible', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    final gateway = UiFakeGateway(
+      snapshot: TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        messages: <Object?>[
+          userMessage('Keep the composer above the keyboard'),
+        ],
+        lastEventId: 'epoch:0',
+      ),
+    );
+    const workspace = WorkspaceSummary(
+      id: 'ts_001',
+      name: 'ts_001',
+      runtimeState: RuntimeState.idle,
+      isStreaming: false,
+      liveSessionCount: 1,
+      sessionCount: 1,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: workspace,
+          session: controllerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final textField = find.byType(TextField);
+    await tester.tap(textField);
+    await tester.pump();
+    final closedComposerBottom = tester
+        .getRect(find.byKey(const ValueKey<String>('chat-composer')))
+        .bottom;
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await tester.pumpAndSettle();
+
+    const keyboardTop = 700.0 - 280.0;
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey<String>('chat-composer')))
+          .bottom,
+      lessThanOrEqualTo(keyboardTop),
+    );
+
+    await tester.enterText(textField, '第一行\n第二行\n第三行');
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey<String>('chat-composer')))
+          .bottom,
+      lessThanOrEqualTo(keyboardTop),
+    );
+    expect(tester.getRect(textField).bottom, lessThanOrEqualTo(keyboardTop));
+    expect(tester.widget<TextField>(textField).focusNode!.hasFocus, isTrue);
+    expect(
+      tester.widget<TextField>(textField).controller!.text,
+      contains('\n'),
+    );
+
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey<String>('chat-composer')))
+          .bottom,
+      closedComposerBottom,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authentication failure points to connection settings', (
     WidgetTester tester,
   ) async {
@@ -1670,6 +1756,12 @@ void main() {
 
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('该授权请求已过期'), findsOneWidget);
+    expect(
+      tester.getRect(find.text('该授权请求已过期')).bottom,
+      lessThanOrEqualTo(
+        tester.getRect(find.byKey(const ValueKey<String>('chat-composer'))).top,
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 1400));
     await tester.pumpAndSettle();
 
