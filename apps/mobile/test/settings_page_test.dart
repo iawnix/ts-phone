@@ -72,8 +72,45 @@ void main() {
     );
     expect(
       tester.getSize(find.byType(TsSettingsSection).first).height,
-      lessThan(240),
+      lessThan(180),
     );
+    expect(
+      tester.getSize(find.byType(TsContentSurface).first).height,
+      lessThan(128),
+    );
+    for (final control
+        in find
+            .byWidgetPredicate(
+              (widget) => widget is CupertinoSlidingSegmentedControl,
+            )
+            .evaluate()) {
+      expect(tester.getSize(find.byWidget(control.widget)).height, 44);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('connection actions use one icon per action', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        connection: ConnectionSettings(
+          serverUrl: 'https://tsphone.iawnix.xyz',
+          token: token,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final diagnostics = find.byKey(
+      const ValueKey('run-connection-diagnostics'),
+    );
+    final details = find.byKey(const ValueKey('connection-details-toggle'));
+    expect(tester.getSize(diagnostics).height, lessThanOrEqualTo(52));
+    expect(tester.getSize(details).height, lessThanOrEqualTo(48));
+    expect(find.byIcon(Icons.monitor_heart_outlined), findsNothing);
+    expect(find.byIcon(Icons.info_outline_rounded), findsNothing);
+    expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -142,7 +142,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final connection = widget.connectionSettings;
     final l10n = context.l10n;
-    final colors = Theme.of(context).colorScheme;
     final endpointSummary = connection?.serverUrl ?? l10n.notConfigured;
     final diagnostics = _diagnostics;
     final statusTheme = TsPhoneStatusTheme.resolve(context);
@@ -236,40 +235,16 @@ class _SettingsPageState extends State<SettingsPage> {
                           title: l10n.connection,
                           child: Column(
                             children: <Widget>[
-                              ListTile(
+                              _ConnectionServiceRow(
                                 key: const ValueKey<String>(
                                   'connection-service-edit',
                                 ),
+                                title: l10n.tsPhoneService,
+                                endpoint: endpointSummary,
                                 onTap: () {
                                   ActionFeedback.selection();
                                   widget.onEditConnection();
                                 },
-                                leading: Icon(
-                                  Icons.dns_outlined,
-                                  size: 22,
-                                  color: colors.onSurfaceVariant,
-                                ),
-                                title: Text(l10n.tsPhoneService),
-                                subtitle: TsMonoText(
-                                  endpointSummary,
-                                  key: const ValueKey<String>(
-                                    'connection-service-endpoint',
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                ),
-                                trailing: Icon(
-                                  Icons.edit_outlined,
-                                  key: const ValueKey<String>(
-                                    'connection-edit-affordance',
-                                  ),
-                                  size: 20,
-                                  color: colors.primary,
-                                ),
                               ),
                               const _SettingsDivider(),
                               _DiagnosticsActionRow(
@@ -305,7 +280,6 @@ class _SettingsPageState extends State<SettingsPage> {
                                   child: Column(
                                     children: <Widget>[
                                       _DiagnosticRow(
-                                        icon: Icons.link_rounded,
                                         label: l10n.endpoint,
                                         value:
                                             connection?.serverUrl ??
@@ -315,14 +289,12 @@ class _SettingsPageState extends State<SettingsPage> {
                                       ),
                                       const _SettingsDivider(),
                                       _DiagnosticRow(
-                                        icon: Icons.key_rounded,
                                         label: l10n.auth,
                                         value: authValue,
                                         valueColor: authColor,
                                       ),
                                       const _SettingsDivider(),
                                       _DiagnosticRow(
-                                        icon: Icons.lan_outlined,
                                         label: l10n.protocol,
                                         value: protocolValue,
                                       ),
@@ -362,8 +334,10 @@ class _SettingsDivider extends StatelessWidget {
     return Divider(
       height: 0.5,
       thickness: 0.5,
-      indent: 52,
-      color: Theme.of(context).colorScheme.outlineVariant,
+      indent: TsPhoneSpacing.large,
+      color: Theme.of(
+        context,
+      ).colorScheme.outlineVariant.withValues(alpha: 0.72),
     );
   }
 }
@@ -382,34 +356,135 @@ class _PreferenceControlRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    final labelWidget = Row(
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            TsPhoneSpacing.large,
-            10,
-            TsPhoneSpacing.large,
-            10,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: TsPhoneSpacing.small),
-              control,
-            ],
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-        if (saving) const LinearProgressIndicator(minHeight: 2),
+        if (saving) ...<Widget>[
+          const SizedBox(width: TsPhoneSpacing.small),
+          SizedBox.square(
+            dimension: 13,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ],
       ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scaledLabelSize = MediaQuery.textScalerOf(context).scale(13);
+        final useStacked = scaledLabelSize > 17 || constraints.maxWidth < 280;
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TsPhoneSpacing.medium,
+              vertical: TsPhoneSpacing.small,
+            ),
+            child: useStacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      labelWidget,
+                      const SizedBox(height: TsPhoneSpacing.small),
+                      control,
+                    ],
+                  )
+                : Row(
+                    children: <Widget>[
+                      SizedBox(width: 64, child: labelWidget),
+                      const SizedBox(width: TsPhoneSpacing.small),
+                      Expanded(child: control),
+                    ],
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ConnectionServiceRow extends StatelessWidget {
+  const _ConnectionServiceRow({
+    super.key,
+    required this.title,
+    required this.endpoint,
+    required this.onTap,
+  });
+
+  final String title;
+  final String endpoint;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 64),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TsPhoneSpacing.large,
+              vertical: 10,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: TsPhoneSpacing.xSmall),
+                      TsMonoText(
+                        endpoint,
+                        key: const ValueKey<String>(
+                          'connection-service-endpoint',
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
+                Icon(
+                  Icons.edit_outlined,
+                  key: const ValueKey<String>('connection-edit-affordance'),
+                  size: 19,
+                  color: colors.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -438,12 +513,6 @@ class _ConnectionDetailsToggle extends StatelessWidget {
             ),
             child: Row(
               children: <Widget>[
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 19,
-                  color: colors.onSurfaceVariant,
-                ),
-                const SizedBox(width: TsPhoneSpacing.medium),
                 Expanded(
                   child: Text(
                     context.l10n.connectionDetails,
@@ -522,7 +591,7 @@ class _AppIdentityFooter extends StatelessWidget {
             ),
           ),
           Text(
-            context.l10n.clientVersionBuild('0.12.0', '35'),
+            context.l10n.clientVersionBuild('0.12.1', '36'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -535,7 +604,6 @@ class _AppIdentityFooter extends StatelessWidget {
 
 class _DiagnosticRow extends StatelessWidget {
   const _DiagnosticRow({
-    required this.icon,
     required this.label,
     required this.value,
     this.valueColor,
@@ -543,7 +611,6 @@ class _DiagnosticRow extends StatelessWidget {
     this.selectable = false,
   });
 
-  final IconData icon;
   final String label;
   final String value;
   final Color? valueColor;
@@ -582,38 +649,16 @@ class _DiagnosticRow extends StatelessWidget {
           vertical: TsPhoneSpacing.small,
         ),
         child: useStacked
-            ? Row(
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Icon(
-                      icon,
-                      size: 17,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: TsPhoneSpacing.medium),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(label, style: theme.textTheme.bodyMedium),
-                        const SizedBox(height: TsPhoneSpacing.xSmall),
-                        valueWidget,
-                      ],
-                    ),
-                  ),
+                  Text(label, style: theme.textTheme.bodyMedium),
+                  const SizedBox(height: TsPhoneSpacing.xSmall),
+                  valueWidget,
                 ],
               )
             : Row(
                 children: <Widget>[
-                  Icon(
-                    icon,
-                    size: 17,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: TsPhoneSpacing.medium),
                   Expanded(
                     child: Text(label, style: theme.textTheme.bodyMedium),
                   ),
@@ -645,31 +690,15 @@ class _DiagnosticsActionRow extends StatelessWidget {
     final l10n = context.l10n;
     final status = TsPhoneStatusTheme.resolve(context);
     final problem = diagnostics?.problem;
-    final (label, color, statusIcon) = diagnosing
-        ? (
-            l10n.diagnosticsRunning,
-            theme.colorScheme.primary,
-            Icons.sync_rounded,
-          )
+    final (label, color) = diagnosing
+        ? (l10n.diagnosticsRunning, theme.colorScheme.primary)
         : !enabled
-        ? (
-            l10n.notConfigured,
-            theme.colorScheme.outline,
-            Icons.remove_circle_outline_rounded,
-          )
+        ? (l10n.notConfigured, theme.colorScheme.outline)
         : problem != null
-        ? (l10n.diagnosticFailed, status.error, Icons.error_outline_rounded)
+        ? (l10n.diagnosticFailed, status.error)
         : diagnostics != null
-        ? (
-            l10n.diagnosticVerified,
-            status.connected,
-            Icons.check_circle_outline_rounded,
-          )
-        : (
-            l10n.diagnosticNotChecked,
-            theme.colorScheme.onSurfaceVariant,
-            Icons.help_outline_rounded,
-          );
+        ? (l10n.diagnosticVerified, status.connected)
+        : (l10n.diagnosticNotChecked, theme.colorScheme.onSurfaceVariant);
     final motionDuration = TsPhoneMotion.resolve(
       context,
       TsPhoneMotion.standard,
@@ -681,57 +710,40 @@ class _DiagnosticsActionRow extends StatelessWidget {
         key: const ValueKey<String>('run-connection-diagnostics'),
         onTap: enabled && !diagnosing ? onTap : null,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56),
+          constraints: const BoxConstraints(minHeight: 50),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: TsPhoneSpacing.large,
-              vertical: TsPhoneSpacing.small,
+              vertical: 6,
             ),
             child: Row(
               children: <Widget>[
-                Icon(
-                  Icons.monitor_heart_outlined,
-                  size: 22,
-                  color: theme.colorScheme.onSurfaceVariant,
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    l10n.runDiagnostics,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
                 const SizedBox(width: TsPhoneSpacing.medium),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        l10n.runDiagnostics,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium,
+                Flexible(
+                  child: AnimatedSwitcher(
+                    duration: motionDuration,
+                    child: Text(
+                      key: ValueKey<String>(
+                        diagnosing ? 'diagnostics-running' : label,
                       ),
-                      const SizedBox(height: 2),
-                      AnimatedSwitcher(
-                        duration: motionDuration,
-                        child: Row(
-                          key: ValueKey<String>(
-                            diagnosing ? 'diagnostics-running' : label,
-                          ),
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Icon(statusIcon, size: 15, color: color),
-                            const SizedBox(width: TsPhoneSpacing.xSmall),
-                            Flexible(
-                              child: Text(
-                                label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: color,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: TsPhoneSpacing.small),
@@ -792,10 +804,10 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
             groupValue: groupValue,
             proportionalWidth: false,
             backgroundColor: colors.surfaceContainerHigh.withValues(
-              alpha: 0.68,
+              alpha: 0.42,
             ),
-            thumbColor: colors.surfaceContainerLowest,
-            padding: const EdgeInsets.all(3),
+            thumbColor: colors.surfaceContainerHighest.withValues(alpha: 0.9),
+            padding: const EdgeInsets.all(2),
             children: <T, Widget>{
               for (final entry in choices.entries)
                 entry.key: Center(

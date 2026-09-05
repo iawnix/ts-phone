@@ -131,14 +131,26 @@ void main() {
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
         home: const Scaffold(
-          body: ChatMessageView(
-            message: ChatMessage(
-              role: ChatRole.assistant,
-              text: '',
-              tools: <ToolDetail>[
-                ToolDetail(title: toolName, body: '{"valid": true}'),
-              ],
+          body: SingleChildScrollView(
+            child: ChatMessageView(
+              message: ChatMessage(
+                role: ChatRole.assistant,
+                text: '',
+                tools: <ToolDetail>[
+                  ToolDetail(
+                    title: toolName,
+                    body:
+                        '{"valid": true, "artifact": "outputs/remote/a-very-long-calculation-artifact-name.json"}',
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -150,6 +162,92 @@ void main() {
     expect(title.maxLines, isNull);
     expect(title.overflow, isNull);
     expect(find.text('就绪'), findsOneWidget);
+    expect(find.text('TSPi'), findsNothing);
+    expect(find.byKey(const ValueKey<String>('tool-raw-output')), findsNothing);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey<String>('tool-disclosure-row')))
+          .width,
+      greaterThan(240),
+    );
+
+    await tester.ensureVisible(find.byType(ExpansionTile));
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('tool-raw-output')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reveals terminal styling only for expanded raw tool output', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(
+          body: ChatMessageView(
+            message: ChatMessage(
+              role: ChatRole.tool,
+              text: '',
+              tools: <ToolDetail>[
+                ToolDetail(title: 'ts_calc', body: 'raw calculation output'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final disclosure = tester.widget<TsContentSurface>(
+      find.byKey(const ValueKey<String>('tool-disclosure-row')),
+    );
+    expect(
+      disclosure.backgroundColor,
+      TsPhoneTheme.light().colorScheme.surfaceContainerLow,
+    );
+    expect(find.text('TSPi'), findsNothing);
+    expect(find.text('raw calculation output'), findsNothing);
+
+    await tester.tap(find.text('ts_calc'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('tool-raw-output')),
+      findsOneWidget,
+    );
+    expect(find.text('raw calculation output'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps one TSPi attribution for narrative with tool details', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        home: const Scaffold(
+          body: ChatMessageView(
+            message: ChatMessage(
+              role: ChatRole.assistant,
+              text: 'Research result',
+              tools: <ToolDetail>[ToolDetail(title: 'ts_change', body: '{}')],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TSPi'), findsOneWidget);
+    expect(find.text('Research result'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -494,7 +592,14 @@ void main() {
 
       expect(find.byType(TsGlassAppBar), findsOneWidget);
       expect(find.byType(TsContentSurface), findsOneWidget);
-      expect(find.byType(TsGlassSurface), findsOneWidget);
+      expect(find.byType(TsGlassSurface), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(TsGlassAppBar),
+          matching: find.byType(BackdropFilter),
+        ),
+        findsOneWidget,
+      );
       expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -545,7 +650,14 @@ void main() {
     expect(find.byType(TsSettingsSection), findsNWidgets(2));
     expect(find.byType(TsGlassAppBar), findsOneWidget);
     expect(find.byType(TsContentSurface), findsNWidgets(2));
-    expect(find.byType(TsGlassSurface), findsOneWidget);
+    expect(find.byType(TsGlassSurface), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(TsGlassAppBar),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(
       find.byWidgetPredicate(

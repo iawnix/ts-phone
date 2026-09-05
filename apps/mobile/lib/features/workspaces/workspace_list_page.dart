@@ -251,8 +251,14 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
                 ),
               ],
             )
-          : ListView.builder(
-              padding: const EdgeInsets.only(bottom: TsPhoneSpacing.xLarge),
+          : ListView.separated(
+              key: const ValueKey<String>('workspace-list'),
+              padding: const EdgeInsets.fromLTRB(
+                TsPhoneSpacing.large,
+                TsPhoneSpacing.medium,
+                TsPhoneSpacing.large,
+                TsPhoneSpacing.xLarge,
+              ),
               itemCount: _workspaces!.length,
               itemBuilder: (context, index) {
                 final workspace = _workspaces![index];
@@ -263,6 +269,8 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
                   onTap: () => _open(workspace),
                 );
               },
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: TsPhoneSpacing.small),
             ),
     );
     if (_problem == null) return list;
@@ -329,51 +337,113 @@ class _WorkspaceTile extends StatelessWidget {
     final latencyLabel = latency == null
         ? '—'
         : '${latency!.inMilliseconds} ms';
-    final folderIcon = switch (workspace.runtimeState) {
-      RuntimeState.offline ||
-      RuntimeState.recoveryRequired => Icons.folder_rounded,
-      RuntimeState.connecting ||
-      RuntimeState.idle ||
-      RuntimeState.running => Icons.folder_open_rounded,
-    };
-    return TsStatusListTile(
-      statusColor: stateColor,
-      icon: folderIcon,
-      iconColor: colors.primary,
-      title: workspace.name,
-      titleMonospace: workspace.name == workspace.id,
-      titleTrailing: TsInlineStatus(
-        label: stateLabel,
-        color: stateColor,
-        pulsing:
-            workspace.runtimeState == RuntimeState.running ||
-            workspace.runtimeState == RuntimeState.connecting,
+    final title = workspace.name == workspace.id
+        ? TsMonoText(
+            workspace.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall,
+          )
+        : Text(
+            workspace.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall,
+          );
+    return Material(
+      key: ValueKey<String>('workspace-row-${workspace.id}'),
+      color: colors.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
+        side: BorderSide(color: colors.outlineVariant, width: 0.5),
       ),
-      subtitle: workspace.runtimeState.localizedLabel(l10n),
-      details: Wrap(
-        spacing: TsPhoneSpacing.medium,
-        runSpacing: 5,
-        children: <Widget>[
-          if (workspace.liveSessionCount > 0)
-            TsMetadataItem(
-              icon: Icons.sensors_rounded,
-              text: l10n.statusLive(workspace.liveSessionCount),
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 76),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              TsPhoneSpacing.medium,
+              TsPhoneSpacing.medium,
+              TsPhoneSpacing.small,
+              TsPhoneSpacing.medium,
             ),
-          TsMetadataItem(
-            icon: Icons.speed_rounded,
-            text: '${l10n.tsPhoneService} · $latencyLabel',
-            tooltip: l10n.latency,
-            maxLines: 3,
+            child: Row(
+              children: <Widget>[
+                ExcludeSemantics(
+                  child: SizedBox.square(
+                    dimension: 28,
+                    child: Icon(
+                      Icons.folder_outlined,
+                      size: 21,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: TsPhoneSpacing.small),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Wrap(
+                        spacing: TsPhoneSpacing.small,
+                        runSpacing: TsPhoneSpacing.xSmall,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: <Widget>[
+                          title,
+                          TsInlineStatus(
+                            label: stateLabel,
+                            color: stateColor,
+                            pulsing:
+                                workspace.runtimeState ==
+                                    RuntimeState.running ||
+                                workspace.runtimeState ==
+                                    RuntimeState.connecting,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: TsPhoneSpacing.medium,
+                        runSpacing: 5,
+                        children: <Widget>[
+                          if (workspace.liveSessionCount > 0)
+                            TsMetadataItem(
+                              icon: Icons.sensors_rounded,
+                              text: l10n.statusLive(workspace.liveSessionCount),
+                            ),
+                          TsMetadataItem(
+                            icon: Icons.speed_rounded,
+                            text: '${l10n.tsPhoneService} · $latencyLabel',
+                            tooltip: l10n.latency,
+                            maxLines: 3,
+                          ),
+                          TsMetadataItem(
+                            icon: Icons.sync_rounded,
+                            text: '${l10n.lastSync} · $syncLabel',
+                            tooltip: l10n.lastSync,
+                            maxLines: 3,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TsPhoneSpacing.xSmall),
+                ExcludeSemantics(
+                  child: Icon(
+                    Icons.chevron_right,
+                    size: 21,
+                    color: colors.outline,
+                  ),
+                ),
+              ],
+            ),
           ),
-          TsMetadataItem(
-            icon: Icons.sync_rounded,
-            text: '${l10n.lastSync} · $syncLabel',
-            tooltip: l10n.lastSync,
-            maxLines: 3,
-          ),
-        ],
+        ),
       ),
-      onTap: onTap,
     );
   }
 }

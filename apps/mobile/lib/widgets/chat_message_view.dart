@@ -18,13 +18,14 @@ class ChatMessageView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == ChatRole.user;
+    final hasNarrative = message.text.trim().isNotEmpty;
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: isUser
           ? CrossAxisAlignment.start
           : CrossAxisAlignment.stretch,
       children: <Widget>[
-        if (message.text.isNotEmpty) MarkdownMessage(data: message.text),
+        if (hasNarrative) MarkdownMessage(data: message.text),
         for (final tool in message.tools) _ToolDetailView(detail: tool),
       ],
     );
@@ -37,6 +38,8 @@ class ChatMessageView extends StatelessWidget {
         origin: message.origin,
         timestamp: message.timestamp,
         deliveryState: message.deliveryState,
+        showAssistantAttribution:
+            !isUser && (hasNarrative || message.tools.isEmpty),
         child: content,
       ),
       builder: (context, value, child) => Opacity(
@@ -147,6 +150,7 @@ class _MessageFrame extends StatelessWidget {
     this.origin,
     this.timestamp,
     this.deliveryState,
+    this.showAssistantAttribution = true,
   });
 
   final bool isUser;
@@ -155,6 +159,7 @@ class _MessageFrame extends StatelessWidget {
   final String? origin;
   final DateTime? timestamp;
   final ChatDeliveryState? deliveryState;
+  final bool showAssistantAttribution;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +170,7 @@ class _MessageFrame extends StatelessWidget {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
+        width: isUser ? null : double.infinity,
         constraints: BoxConstraints(maxWidth: maxWidth),
         margin: const EdgeInsets.symmetric(
           horizontal: TsPhoneSpacing.large,
@@ -197,7 +203,7 @@ class _MessageFrame extends StatelessWidget {
                 deliveryState: deliveryState,
               ),
               const SizedBox(height: TsPhoneSpacing.xSmall),
-            ] else ...<Widget>[
+            ] else if (showAssistantAttribution) ...<Widget>[
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
@@ -304,59 +310,73 @@ class _ToolDetailView extends StatelessWidget {
         ? context.l10n.statusError
         : context.l10n.statusReady;
     return Padding(
-      padding: const EdgeInsets.only(top: TsPhoneSpacing.small),
+      padding: const EdgeInsets.only(top: TsPhoneSpacing.xSmall),
       child: TsContentSurface(
-        backgroundColor: terminal.terminalBackground,
+        key: const ValueKey<String>('tool-disclosure-row'),
+        backgroundColor: theme.colorScheme.surfaceContainerLow,
         borderColor: detail.isError
-            ? terminal.error.withValues(alpha: 0.52)
-            : terminal.terminalMuted.withValues(alpha: 0.34),
+            ? terminal.error.withValues(alpha: 0.42)
+            : theme.colorScheme.outlineVariant.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
         child: ExpansionTile(
           dense: true,
+          visualDensity: VisualDensity.compact,
           shape: const Border(),
           collapsedShape: const Border(),
-          textColor: terminal.terminalForeground,
-          collapsedTextColor: terminal.terminalForeground,
+          backgroundColor: Colors.transparent,
+          collapsedBackgroundColor: Colors.transparent,
+          tilePadding: const EdgeInsets.symmetric(
+            horizontal: TsPhoneSpacing.medium,
+          ),
+          textColor: theme.colorScheme.onSurface,
+          collapsedTextColor: theme.colorScheme.onSurface,
           iconColor: stateColor,
-          collapsedIconColor: terminal.terminalMuted,
+          collapsedIconColor: theme.colorScheme.onSurfaceVariant,
           leading: Icon(
-            detail.isError ? Icons.error_outline : Icons.terminal_rounded,
-            size: 19,
-            color: stateColor,
+            detail.isError
+                ? Icons.error_outline_rounded
+                : Icons.terminal_rounded,
+            size: 18,
+            color: detail.isError
+                ? stateColor
+                : theme.colorScheme.onSurfaceVariant,
           ),
-          title: TsMonoText(
-            title,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: terminal.terminalForeground,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          subtitle: Text(
-            stateLabel,
-            maxLines: 1,
-            style: theme.textTheme.labelSmall?.copyWith(color: stateColor),
-          ),
-          childrenPadding: const EdgeInsets.fromLTRB(
-            TsPhoneSpacing.medium,
-            0,
-            TsPhoneSpacing.medium,
-            TsPhoneSpacing.medium,
-          ),
-          children: <Widget>[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SelectableText(
-                  detail.body,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: terminal.terminalForeground,
-                    fontFamily: 'monospace',
-                    letterSpacing: 0,
-                    height: 1.45,
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
+              const SizedBox(width: TsPhoneSpacing.small),
+              Text(
+                stateLabel,
+                maxLines: 1,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: detail.isError
+                      ? stateColor
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(
+            TsPhoneSpacing.small,
+            TsPhoneSpacing.xSmall,
+            TsPhoneSpacing.small,
+            TsPhoneSpacing.small,
+          ),
+          children: <Widget>[
+            TsTerminalBlock(
+              key: const ValueKey<String>('tool-raw-output'),
+              body: detail.body,
+              isError: detail.isError,
             ),
           ],
         ),

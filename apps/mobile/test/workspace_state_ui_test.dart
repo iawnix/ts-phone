@@ -61,6 +61,21 @@ const historySession = SessionSummary(
   canPrompt: false,
 );
 
+const longSessionId =
+    'session-history-0123456789abcdef0123456789abcdef0123456789abcdef'
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+const longHistorySession = SessionSummary(
+  sessionId: longSessionId,
+  sessionRevision: '33333333-3333-4333-8333-333333333333',
+  runtimeState: RuntimeState.offline,
+  isStreaming: false,
+  accessMode: SessionAccessMode.observer,
+  historyAvailable: true,
+  historyOnly: true,
+  canPrompt: false,
+);
+
 void main() {
   testWidgets('offline workspace shows the TSPi waiting state', (
     WidgetTester tester,
@@ -96,8 +111,10 @@ void main() {
   ) async {
     tester.view.physicalSize = const Size(320, 700);
     tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final gateway = UiFakeGateway();
     final session = SessionSummary(
       sessionId: 'session-test',
@@ -151,6 +168,14 @@ void main() {
     expect(find.text('78,214 / 128,000'), findsOneWidget);
     expect(find.text('49,786 · 39%'), findsOneWidget);
     expect(find.text('Pi 估算'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('session-identity-group')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('session-runtime-group')),
+      findsOneWidget,
+    );
     expect(find.textContaining('https://'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -359,13 +384,7 @@ void main() {
     expect(find.byType(TextField), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('chat-read-only-bar')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .getSize(find.byKey(const ValueKey<String>('chat-read-only-bar')))
-          .height,
-      greaterThanOrEqualTo(48),
+      findsNothing,
     );
     expect(find.byKey(const ValueKey<String>('chat-sync')), findsOneWidget);
     expect(
@@ -375,7 +394,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('history lock remains readable at 320px and 2x text', (
+  testWidgets('history state remains in navigation at 320px and 2x text', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(320, 640);
@@ -383,9 +402,9 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final gateway = UiFakeGateway(
-      sessions: const <SessionSummary>[historySession],
+      sessions: const <SessionSummary>[longHistorySession],
       snapshot: const TsPhoneMessageSnapshot(
-        sessionId: 'session-history',
+        sessionId: longSessionId,
         sessionRevision: '33333333-3333-4333-8333-333333333333',
         messages: <Object?>[],
         lastEventId: 'history:0',
@@ -407,25 +426,26 @@ void main() {
         home: ChatPage(
           settings: _settings,
           workspace: offlineWorkspace,
-          session: historySession,
+          session: longHistorySession,
           gateway: gateway,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    final lockMessage = find.text('History is read-only');
-    expect(lockMessage, findsOneWidget);
+    final historyStatus = find.byKey(
+      const ValueKey<String>('chat-history-status'),
+    );
+    expect(historyStatus, findsOneWidget);
+    expect(
+      tester.widget<Semantics>(historyStatus).properties.label,
+      'History · Read-only',
+    );
+    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     expect(
-      tester.renderObject<RenderParagraph>(lockMessage).didExceedMaxLines,
-      isFalse,
-    );
-    expect(
-      tester
-          .getSize(find.byKey(const ValueKey<String>('chat-read-only-bar')))
-          .height,
-      greaterThanOrEqualTo(48),
+      find.byKey(const ValueKey<String>('chat-read-only-bar')),
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });
@@ -454,9 +474,9 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final gateway = UiFakeGateway(
-      sessions: const <SessionSummary>[historySession],
+      sessions: const <SessionSummary>[longHistorySession],
       snapshot: const TsPhoneMessageSnapshot(
-        sessionId: 'session-history',
+        sessionId: longSessionId,
         sessionRevision: '33333333-3333-4333-8333-333333333333',
         messages: <Object?>[],
         lastEventId: 'history:0',
@@ -472,7 +492,7 @@ void main() {
         home: ChatPage(
           settings: _settings,
           workspace: offlineWorkspace,
-          session: historySession,
+          session: longHistorySession,
           gateway: gateway,
         ),
       ),
@@ -485,7 +505,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('此会话未保存运行时快照。'), findsOneWidget);
-    expect(find.text('session-…'), findsOneWidget);
+    expect(find.text(longSessionId), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('session-runtime-unavailable')),
+      findsOneWidget,
+    );
     expect(find.text('模型'), findsNothing);
     expect(find.text('Provider'), findsNothing);
     expect(find.text('上下文'), findsNothing);
@@ -501,7 +525,7 @@ void main() {
     expect(find.byTooltip('会话 ID 已复制'), findsOneWidget);
     expect(
       (await Clipboard.getData(Clipboard.kTextPlain))?.text,
-      'session-history',
+      longSessionId,
     );
     expect(tester.takeException(), isNull);
   });
@@ -574,94 +598,132 @@ void main() {
     expect(find.text('0 在线'), findsNothing);
     expect(find.text('研究目录'), findsNothing);
     expect(find.text('tsphone.example.test'), findsNothing);
-    expect(find.byIcon(Icons.folder_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
     expect(find.textContaining('无法连接 TS Phone'), findsNothing);
     expect(find.byType(TsGlassAppBar), findsOneWidget);
-    expect(find.byType(TsStatusListTile), findsOneWidget);
+    final row = find.byKey(const ValueKey<String>('workspace-row-ts_001'));
+    expect(row, findsOneWidget);
+    final rowRect = tester.getRect(row);
+    expect(rowRect.left, TsPhoneSpacing.large);
     expect(
-      find.descendant(
-        of: find.byType(TsStatusListTile),
-        matching: find.byType(BackdropFilter),
-      ),
+      rowRect.right,
+      tester.view.physicalSize.width / tester.view.devicePixelRatio -
+          TsPhoneSpacing.large,
+    );
+    expect(
+      tester
+          .widget<InkWell>(
+            find.descendant(of: row, matching: find.byType(InkWell)),
+          )
+          .onTap,
+      isNotNull,
+    );
+    expect(
+      find.descendant(of: row, matching: find.byType(BackdropFilter)),
       findsNothing,
-    );
-    expect(find.byType(BackdropFilter), findsNWidgets(2));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('workspace status rows preserve state at 320px with large text', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final gateway = UiFakeGateway(
-      workspaces: const <WorkspaceSummary>[
-        WorkspaceSummary(
-          id: 'live-workspace',
-          name: 'Long active research workspace',
-          runtimeState: RuntimeState.running,
-          isStreaming: true,
-          liveSessionCount: 2,
-          sessionCount: 4,
-        ),
-        offlineWorkspace,
-      ],
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: TsPhoneTheme.light(),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: const TextScaler.linear(1.4)),
-          child: child!,
-        ),
-        home: WorkspaceListPage(
-          settings: _settings,
-          onOpenSettings: () {},
-          gatewayBuilder: (_) => gateway,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byIcon(Icons.folder_open_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.folder_rounded), findsOneWidget);
-    expect(find.text('CONNECTED'), findsNothing);
-    expect(find.textContaining('RUNNING', findRichText: true), findsOneWidget);
-    expect(find.text('2 LIVE'), findsOneWidget);
-    final offlineStatus = find.textContaining(
-      'TSPi not running',
-      findRichText: true,
-    );
-    expect(offlineStatus, findsOneWidget);
-    expect(find.text('0 LIVE'), findsNothing);
-    final tiles = tester.widgetList<TsStatusListTile>(
-      find.byType(TsStatusListTile),
-    );
-    expect(tiles, hasLength(2));
-    expect(tiles.every((tile) => !tile.showStatusIndicator), isTrue);
-    expect(tiles.every((tile) => tile.titleTrailing is TsInlineStatus), isTrue);
-    expect(find.byType(TsStatusBadge), findsNothing);
-    expect(
-      tester.getTopLeft(offlineStatus).dy,
-      greaterThan(tester.getTopLeft(find.text('ts_001')).dy),
     );
     expect(
       find.descendant(
-        of: find.byType(TsStatusListTile),
+        of: find.byType(TsGlassAppBar),
         matching: find.byType(BackdropFilter),
       ),
-      findsNothing,
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'workspace list uses consistent inset rows at 320px with large text',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = UiFakeGateway(
+        workspaces: const <WorkspaceSummary>[
+          WorkspaceSummary(
+            id: 'live-workspace',
+            name: 'Long active research workspace',
+            runtimeState: RuntimeState.running,
+            isStreaming: true,
+            liveSessionCount: 2,
+            sessionCount: 4,
+          ),
+          offlineWorkspace,
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          theme: TsPhoneTheme.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.4)),
+            child: child!,
+          ),
+          home: WorkspaceListPage(
+            settings: _settings,
+            onOpenSettings: () {},
+            gatewayBuilder: (_) => gateway,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.folder_outlined), findsNWidgets(2));
+      expect(find.text('CONNECTED'), findsNothing);
+      expect(
+        find.textContaining('RUNNING', findRichText: true),
+        findsOneWidget,
+      );
+      expect(find.text('2 LIVE'), findsOneWidget);
+      final offlineStatus = find.textContaining(
+        'TSPi not running',
+        findRichText: true,
+      );
+      expect(offlineStatus, findsOneWidget);
+      expect(find.text('0 LIVE'), findsNothing);
+      final liveRow = find.byKey(
+        const ValueKey<String>('workspace-row-live-workspace'),
+      );
+      final offlineRow = find.byKey(
+        const ValueKey<String>('workspace-row-ts_001'),
+      );
+      expect(liveRow, findsOneWidget);
+      expect(offlineRow, findsOneWidget);
+      final liveRect = tester.getRect(liveRow);
+      final offlineRect = tester.getRect(offlineRow);
+      expect(liveRect.left, TsPhoneSpacing.large);
+      expect(offlineRect.left, TsPhoneSpacing.large);
+      expect(liveRect.width, offlineRect.width);
+      expect(offlineRect.top - liveRect.bottom, TsPhoneSpacing.small);
+      expect(
+        find.descendant(of: liveRow, matching: find.byType(TsInlineStatus)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: offlineRow, matching: find.byType(TsInlineStatus)),
+        findsOneWidget,
+      );
+      expect(find.byType(TsStatusBadge), findsNothing);
+      expect(
+        tester.renderObject<RenderParagraph>(offlineStatus).didExceedMaxLines,
+        isFalse,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('workspace-list')),
+          matching: find.byType(BackdropFilter),
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('workspace rows fit dark mode at 320px and 2x text', (
     WidgetTester tester,
@@ -988,7 +1050,7 @@ void main() {
       find.byKey(const ValueKey<String>('chat-message-list')),
     );
     final messagePadding = messageList.padding! as EdgeInsets;
-    expect(messageListRect.top, lessThan(appBarRect.bottom));
+    expect(messageListRect.top, greaterThanOrEqualTo(appBarRect.bottom));
     expect(messageListRect.bottom, greaterThan(idleComposerRect.top));
     expect(messagePadding.bottom, greaterThan(idleComposerRect.height));
 
@@ -1408,9 +1470,9 @@ void main() {
       expect(find.byType(TextField), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('chat-read-only-bar')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.text('历史视图为只读'), findsOneWidget);
+      expect(find.text('历史 · 只读'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

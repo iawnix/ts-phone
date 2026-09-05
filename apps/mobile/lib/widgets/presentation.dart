@@ -227,45 +227,31 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final glass = TsPhoneGlassTheme.resolve(context);
-    final wrappedLeading = leading == null
-        ? null
-        : Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: TsGlassSurface(
-              elevated: true,
-              blurSigma: glass.blurSigma,
-              tint: glass.controlSurface,
-              borderRadius: BorderRadius.circular(24),
-              child: leading!,
-            ),
-          );
-    final wrappedActions = actions == null || actions!.isEmpty
-        ? null
-        : <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TsGlassSurface(
-                elevated: true,
-                blurSigma: glass.blurSigma,
-                tint: glass.controlSurface,
-                borderRadius: BorderRadius.circular(24),
-                child: Row(mainAxisSize: MainAxisSize.min, children: actions!),
-              ),
-            ),
-          ];
+    final highContrast = MediaQuery.highContrastOf(context);
+    final scrolledUnderFill = highContrast
+        ? theme.colorScheme.surfaceContainerLowest
+        : glass.elevatedSurface;
     return AppBar(
-      leading: wrappedLeading,
+      leading: leading,
+      leadingWidth: 52,
       title: title,
-      actions: wrappedActions,
+      actions: actions,
+      actionsPadding: const EdgeInsetsDirectional.only(end: 4),
       toolbarHeight: toolbarHeight,
       centerTitle: centerTitle,
       titleSpacing: titleSpacing,
       titleTextStyle: titleTextStyle,
       elevation: 0,
       scrolledUnderElevation: 0,
-      backgroundColor: Colors.transparent,
+      backgroundColor: WidgetStateColor.resolveWith((states) {
+        return states.contains(WidgetState.scrolledUnder)
+            ? scrolledUnderFill
+            : Colors.transparent;
+      }),
       surfaceTintColor: Colors.transparent,
+      animateColor: !MediaQuery.disableAnimationsOf(context),
       flexibleSpace: const TsGlassBar(edge: TsGlassBarEdge.bottom),
     );
   }
