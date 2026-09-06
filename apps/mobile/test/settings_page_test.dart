@@ -63,21 +63,25 @@ void main() {
     await tester.pumpWidget(_settingsApp());
     await tester.pumpAndSettle();
 
-    final segmentedControls = find.byWidgetPredicate(
-      (widget) => widget is TsSegmentedControl,
+    expect(
+      find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
+      findsNothing,
     );
-    expect(segmentedControls, findsNWidgets(2));
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Language'), findsOneWidget);
     expect(
       tester.getSize(find.byType(TsSettingsSection).first).height,
-      lessThan(180),
+      lessThan(220),
     );
     expect(
       tester.getSize(find.byType(TsContentSurface).first).height,
-      lessThan(128),
+      lessThan(168),
     );
-    for (final control in segmentedControls.evaluate()) {
-      expect(tester.getSize(find.byWidget(control.widget)).height, 44);
-    }
+    expect(find.text('Dark'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('appearance-setting')));
+    await tester.pumpAndSettle();
+    expect(find.text('Dark'), findsOneWidget);
+    expect(find.text('Light'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -98,7 +102,7 @@ void main() {
       const ValueKey('run-connection-diagnostics'),
     );
     final details = find.byKey(const ValueKey('connection-details-toggle'));
-    expect(tester.getSize(diagnostics).height, lessThanOrEqualTo(52));
+    expect(tester.getSize(diagnostics).height, inInclusiveRange(48, 76));
     expect(tester.getSize(details).height, lessThanOrEqualTo(48));
     expect(find.byIcon(Icons.monitor_heart_outlined), findsNothing);
     expect(find.byIcon(Icons.info_outline_rounded), findsNothing);
@@ -126,6 +130,8 @@ void main() {
       find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
       findsNothing,
     );
+    await tester.tap(find.byKey(const ValueKey('appearance-setting')));
+    await tester.pumpAndSettle();
     final darkChoice = tester.widget<Semantics>(
       find.byWidgetPredicate(
         (widget) => widget is Semantics && widget.properties.label == 'Dark',
@@ -140,6 +146,85 @@ void main() {
 
     expect(selectedTheme, AppThemePreference.dark);
     expect(tester.takeException(), isNull);
+  });
+
+  for (final language in <String>['en', 'zh']) {
+    for (final scale in <double>[1, 1.3, 2]) {
+      testWidgets('preference choices are readable in $language at ${scale}x', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(393, 852);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        AppLocalePreference? selectedLocale;
+        await tester.pumpWidget(
+          _settingsApp(
+            locale: Locale(language),
+            onLocaleChanged: (value) async => selectedLocale = value,
+          ),
+        );
+        await tester.pumpAndSettle();
+        for (final key in ['appearance-setting', 'language-setting']) {
+          final texts = find.descendant(
+            of: find.byKey(ValueKey(key)),
+            matching: find.byType(Text),
+          );
+          for (final element in texts.evaluate()) {
+            final text = element.widget as Text;
+            expect(text.overflow, isNot(TextOverflow.ellipsis));
+            final box = tester.getRect(find.byWidget(text));
+            expect(box.left, greaterThanOrEqualTo(0));
+            expect(box.right, lessThanOrEqualTo(393));
+          }
+        }
+        await tester.tap(find.byKey(const ValueKey('language-setting')));
+        await tester.pumpAndSettle();
+        final l10n = await AppLocalizations.delegate.load(Locale(language));
+        final chinese = find.widgetWithText(ListTile, l10n.languageChinese);
+        await tester.ensureVisible(chinese);
+        await tester.tap(chinese);
+        await tester.pumpAndSettle();
+        expect(selectedLocale, AppLocalePreference.zh);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('connection details show the actual Host version', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        connection: ConnectionSettings(
+          serverUrl: 'https://phone.test',
+          token: token,
+        ),
+        gatewayBuilder: (settings) => TsPhoneApi(
+          settings,
+          client: MockClient(
+            (_) async => http.Response(
+              jsonEncode({
+                'apiVersion': 'ts-phone-api/4',
+                'data': {
+                  'apiVersion': 'ts-phone-api/4',
+                  'serviceVersion': '0.6.0',
+                },
+              }),
+              200,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('run-connection-diagnostics')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Server version'));
+    expect(find.text('0.6.0'), findsOneWidget);
   });
 
   testWidgets('diagnostics ignore results from a previous connection', (
@@ -233,13 +318,15 @@ void main() {
 
 Widget _settingsApp({
   Key? key,
+  Locale locale = const Locale('en'),
   ConnectionSettings? connection,
   VoidCallback? onEditConnection,
   Future<void> Function(AppThemePreference preference)? onThemeChanged,
+  Future<void> Function(AppLocalePreference preference)? onLocaleChanged,
   SettingsGatewayBuilder? gatewayBuilder,
 }) {
   return MaterialApp(
-    locale: const Locale('en'),
+    locale: locale,
     supportedLocales: AppLocalizations.supportedLocales,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     theme: TsPhoneTheme.light(),
@@ -249,7 +336,7 @@ Widget _settingsApp({
       themePreference: AppThemePreference.system,
       localePreference: AppLocalePreference.en,
       onThemeChanged: onThemeChanged ?? (_) async {},
-      onLocaleChanged: (_) async {},
+      onLocaleChanged: onLocaleChanged ?? (_) async {},
       onEditConnection: onEditConnection ?? () {},
       onClose: () {},
       gatewayBuilder: gatewayBuilder,

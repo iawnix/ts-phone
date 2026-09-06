@@ -68,6 +68,8 @@ extension TsPhoneProblemLocalizations on TsPhoneProblem {
     TsPhoneProblemCode.resourcesBusy => l10n.problemResourcesBusy,
     TsPhoneProblemCode.preflightUnavailable => l10n.problemPreflightUnavailable,
     TsPhoneProblemCode.managementCapacity => l10n.problemManagementCapacity,
+    TsPhoneProblemCode.managementUnsupported =>
+      l10n.problemManagementUnsupported,
     TsPhoneProblemCode.serviceUnavailable => l10n.problemServiceUnavailable,
     TsPhoneProblemCode.connectionFailed => l10n.problemConnectionFailed,
     TsPhoneProblemCode.requestTimeout => l10n.problemRequestTimeout,

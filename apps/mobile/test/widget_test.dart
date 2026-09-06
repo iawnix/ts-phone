@@ -325,6 +325,8 @@ void main() {
     expect(find.text('外观'), findsOneWidget);
     expect(find.text('https://tsphone.iawnix.xyz'), findsOneWidget);
 
+    await tester.tap(find.byKey(const ValueKey('appearance-setting')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('深色'));
     await tester.pumpAndSettle();
     expect(store.themePreference, AppThemePreference.dark);
@@ -693,6 +695,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('language-setting')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('English'));
     await tester.pumpAndSettle();
 
@@ -791,11 +795,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Language'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('language-setting')));
+    await tester.pumpAndSettle();
     expect(find.text('Chinese'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('settings use flat grouped sections and segmented controls', (
+  testWidgets('settings use grouped rows and full-label choice sheets', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -831,10 +838,20 @@ void main() {
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(
       find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
-      findsNWidgets(2),
+      findsNothing,
     );
-    for (final label in <String>['跟随系统', '浅色', '深色', '中文', 'English']) {
-      expect(tester.widget<Text>(find.text(label)).textAlign, TextAlign.center);
+    await tester.tap(find.byKey(const ValueKey('appearance-setting')));
+    await tester.pumpAndSettle();
+    final l10n = await AppLocalizations.delegate.load(const Locale('zh'));
+    for (final label in <String>[
+      l10n.themeSystem,
+      l10n.themeLight,
+      l10n.themeDark,
+    ]) {
+      final text =
+          tester.widget<ListTile>(find.widgetWithText(ListTile, label)).title!
+              as Text;
+      expect(text.overflow, isNot(TextOverflow.ellipsis));
     }
     expect(tester.takeException(), isNull);
   });
@@ -1053,7 +1070,11 @@ void main() {
         find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
         findsNothing,
       );
-      expect(find.byIcon(Icons.check_rounded), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('appearance-setting')), findsOneWidget);
+      expect(find.byKey(const ValueKey('language-setting')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('appearance-setting')));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

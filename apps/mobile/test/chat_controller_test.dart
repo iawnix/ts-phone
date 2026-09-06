@@ -1063,8 +1063,21 @@ void main() {
         'agentRunId': 'run-resume-1',
       });
       await Future<void>.delayed(Duration.zero);
-      api.failEventStream();
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final retrying = Completer<void>();
+      void observeRetry() {
+        if (!retrying.isCompleted &&
+            controller.problem?.code == TsPhoneProblemCode.networkRetrying) {
+          retrying.complete();
+        }
+      }
+
+      controller.addListener(observeRetry);
+      try {
+        api.failEventStream();
+        await retrying.future.timeout(const Duration(seconds: 2));
+      } finally {
+        controller.removeListener(observeRetry);
+      }
       expect(
         controller.eventConnectionState,
         EventConnectionState.reconnecting,

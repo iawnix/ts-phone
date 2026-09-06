@@ -115,6 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _diagnostics = _ConnectionDiagnostics(
           apiVersion: version['apiVersion'] as String?,
+          serviceVersion: version['serviceVersion'] as String?,
         );
       });
       ActionFeedback.selection();
@@ -180,40 +181,30 @@ class _SettingsPageState extends State<SettingsPage> {
                         title: l10n.preferences,
                         child: Column(
                           children: <Widget>[
-                            _PreferenceControlRow(
+                            _PreferenceRow<AppThemePreference>(
+                              key: const ValueKey('appearance-setting'),
                               label: l10n.appearance,
                               saving: _savingTheme,
-                              control:
-                                  _AdaptiveChoiceControl<AppThemePreference>(
-                                    groupValue: widget.themePreference,
-                                    choices: <AppThemePreference, String>{
-                                      AppThemePreference.system:
-                                          l10n.themeSystem,
-                                      AppThemePreference.light: l10n.themeLight,
-                                      AppThemePreference.dark: l10n.themeDark,
-                                    },
-                                    onValueChanged: (value) =>
-                                        unawaited(_changeTheme(value)),
-                                  ),
+                              value: widget.themePreference,
+                              choices: <AppThemePreference, String>{
+                                AppThemePreference.system: l10n.themeSystem,
+                                AppThemePreference.light: l10n.themeLight,
+                                AppThemePreference.dark: l10n.themeDark,
+                              },
+                              onChanged: _changeTheme,
                             ),
                             const _SettingsDivider(),
-                            _PreferenceControlRow(
+                            _PreferenceRow<AppLocalePreference>(
+                              key: const ValueKey('language-setting'),
                               label: l10n.language,
                               saving: _savingLocale,
-                              control:
-                                  _AdaptiveChoiceControl<AppLocalePreference>(
-                                    groupValue: widget.localePreference,
-                                    choices: <AppLocalePreference, String>{
-                                      AppLocalePreference.system:
-                                          l10n.languageSystem,
-                                      AppLocalePreference.zh:
-                                          l10n.languageChinese,
-                                      AppLocalePreference.en:
-                                          l10n.languageEnglish,
-                                    },
-                                    onValueChanged: (value) =>
-                                        unawaited(_changeLocale(value)),
-                                  ),
+                              value: widget.localePreference,
+                              choices: <AppLocalePreference, String>{
+                                AppLocalePreference.system: l10n.languageSystem,
+                                AppLocalePreference.zh: l10n.languageChinese,
+                                AppLocalePreference.en: l10n.languageEnglish,
+                              },
+                              onChanged: _changeLocale,
                             ),
                           ],
                         ),
@@ -285,6 +276,13 @@ class _SettingsPageState extends State<SettingsPage> {
                                       label: l10n.protocol,
                                       value: protocolValue,
                                     ),
+                                    const _SettingsDivider(),
+                                    _DiagnosticRow(
+                                      label: l10n.hostVersion,
+                                      value:
+                                          diagnostics?.serviceVersion ??
+                                          l10n.diagnosticNotChecked,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -306,9 +304,14 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 class _ConnectionDiagnostics {
-  const _ConnectionDiagnostics({this.apiVersion, this.problem});
+  const _ConnectionDiagnostics({
+    this.apiVersion,
+    this.serviceVersion,
+    this.problem,
+  });
 
   final String? apiVersion;
+  final String? serviceVersion;
   final TsPhoneProblem? problem;
 }
 
@@ -327,76 +330,146 @@ class _SettingsDivider extends StatelessWidget {
   }
 }
 
-class _PreferenceControlRow extends StatelessWidget {
-  const _PreferenceControlRow({
+class _PreferenceRow<T extends Object> extends StatelessWidget {
+  const _PreferenceRow({
+    super.key,
     required this.label,
-    required this.control,
+    required this.value,
+    required this.choices,
+    required this.onChanged,
     required this.saving,
   });
 
   final String label;
-  final Widget control;
+  final T value;
+  final Map<T, String> choices;
+  final Future<void> Function(T) onChanged;
   final bool saving;
+
+  Future<void> _choose(BuildContext context) async {
+    ActionFeedback.selection();
+    final selected = await showModalBottomSheet<T>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(label, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: TsPhoneSpacing.large),
+              for (final entry in choices.entries)
+                Semantics(
+                  label: entry.value,
+                  checked: entry.key == value,
+                  inMutuallyExclusiveGroup: true,
+                  excludeSemantics: true,
+                  onTap: () => Navigator.of(context).pop(entry.key),
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(entry.value),
+                    trailing: entry.key == value
+                        ? Icon(
+                            Icons.check_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
+                        : null,
+                    onTap: () => Navigator.of(context).pop(entry.key),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (context.mounted && selected != null) await onChanged(selected);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final labelWidget = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+    return Semantics(
+      button: true,
+      enabled: !saving,
+      child: InkWell(
+        onTap: saving ? null : () => _choose(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final labelText = Text(
+                      label,
+                      style: theme.textTheme.bodyMedium,
+                    );
+                    final valueText = Text(
+                      choices[value]!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                    // Measure the actual strings, including the user's text scale.
+                    // Neither a fixed label column nor clipped segment labels fit
+                    // reliably across languages and accessibility sizes.
+                    double widthOf(String text) {
+                      final painter = TextPainter(
+                        text: TextSpan(
+                          text: text,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        textDirection: Directionality.of(context),
+                        textScaler: MediaQuery.textScalerOf(context),
+                      )..layout();
+                      final width = painter.width;
+                      painter.dispose();
+                      return width;
+                    }
+
+                    final stacked =
+                        widthOf(label) + widthOf(choices[value]!) + 24 >
+                        constraints.maxWidth;
+                    return stacked
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              labelText,
+                              const SizedBox(height: 4),
+                              valueText,
+                            ],
+                          )
+                        : Row(
+                            children: <Widget>[
+                              labelText,
+                              const Spacer(),
+                              valueText,
+                            ],
+                          );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (saving)
+                const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: theme.colorScheme.outline,
+                ),
+            ],
           ),
         ),
-        if (saving) ...<Widget>[
-          const SizedBox(width: TsPhoneSpacing.small),
-          SizedBox.square(
-            dimension: 13,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-        ],
-      ],
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final scaledLabelSize = MediaQuery.textScalerOf(context).scale(13);
-        final useStacked = scaledLabelSize > 17 || constraints.maxWidth < 280;
-        return ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 52),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: TsPhoneSpacing.medium,
-              vertical: TsPhoneSpacing.small,
-            ),
-            child: useStacked
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      labelWidget,
-                      const SizedBox(height: TsPhoneSpacing.small),
-                      control,
-                    ],
-                  )
-                : Row(
-                    children: <Widget>[
-                      SizedBox(width: 64, child: labelWidget),
-                      const SizedBox(width: TsPhoneSpacing.small),
-                      Expanded(child: control),
-                    ],
-                  ),
-          ),
-        );
-      },
+      ),
     );
   }
 }
@@ -437,8 +510,6 @@ class _ConnectionServiceRow extends StatelessWidget {
                     children: <Widget>[
                       Text(
                         title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -449,8 +520,6 @@ class _ConnectionServiceRow extends StatelessWidget {
                         key: const ValueKey<String>(
                           'connection-service-endpoint',
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colors.onSurfaceVariant,
                         ),
@@ -704,31 +773,27 @@ class _DiagnosticsActionRow extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 Expanded(
-                  flex: 2,
-                  child: Text(
-                    l10n.runDiagnostics,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-                const SizedBox(width: TsPhoneSpacing.medium),
-                Flexible(
-                  child: AnimatedSwitcher(
-                    duration: motionDuration,
-                    child: Text(
-                      key: ValueKey<String>(
-                        diagnosing ? 'diagnostics-running' : label,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        l10n.runDiagnostics,
+                        style: theme.textTheme.bodyMedium,
                       ),
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: motionDuration,
+                        child: Text(
+                          key: ValueKey<String>(
+                            diagnosing ? 'diagnostics-running' : label,
+                          ),
+                          label,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: color,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: TsPhoneSpacing.small),
@@ -757,109 +822,6 @@ class _DiagnosticsActionRow extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
-  const _AdaptiveChoiceControl({
-    required this.groupValue,
-    required this.choices,
-    required this.onValueChanged,
-  });
-
-  final T groupValue;
-  final Map<T, String> choices;
-  final ValueChanged<T?> onValueChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final scaledLabelSize = MediaQuery.textScalerOf(context).scale(13);
-        final useRows = scaledLabelSize > 17 || constraints.maxWidth < 180;
-        if (useRows) return _buildRows(context);
-
-        return SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: TsSegmentedControl<T>(
-            selected: groupValue,
-            segments: <ButtonSegment<T>>[
-              for (final entry in choices.entries)
-                ButtonSegment<T>(
-                  value: entry.key,
-                  label: Text(
-                    entry.value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-            ],
-            onChanged: onValueChanged,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildRows(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final entries = choices.entries.toList(growable: false);
-    return Column(
-      children: <Widget>[
-        for (var index = 0; index < entries.length; index++) ...<Widget>[
-          if (index > 0)
-            Divider(
-              height: 0.5,
-              thickness: 0.5,
-              indent: TsPhoneSpacing.large,
-              color: colors.outlineVariant,
-            ),
-          Semantics(
-            label: entries[index].value,
-            checked: entries[index].key == groupValue,
-            inMutuallyExclusiveGroup: true,
-            excludeSemantics: true,
-            onTap: () => onValueChanged(entries[index].key),
-            child: InkWell(
-              onTap: () => onValueChanged(entries[index].key),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TsPhoneSpacing.large,
-                    vertical: TsPhoneSpacing.small,
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      const SizedBox(width: 24),
-                      Expanded(
-                        child: Text(
-                          entries[index].value,
-                          maxLines: 2,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(
-                        width: 24,
-                        child: entries[index].key == groupValue
-                            ? Icon(
-                                Icons.check_rounded,
-                                size: 20,
-                                color: colors.primary,
-                              )
-                            : null,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
     );
   }
 }

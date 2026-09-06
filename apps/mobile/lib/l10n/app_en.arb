@@ -92,6 +92,8 @@
   "problemManagementChanged": "This project or session has changed. Refresh and try again.",
   "problemResourcesBusy": "A session is still active or work remains unresolved. Finish it before continuing.",
   "problemPreflightUnavailable": "TSPi could not verify this operation. Check the Host's TSPi configuration and try again.",
+  "problemManagementUnsupported": "This Phone service does not support creating projects or sessions yet. Update the server installation; updating the app alone is not enough.",
+  "hostVersion": "Server version",
   "problemManagementCapacity": "Project and session storage is full. Remove unneeded items before adding more.",
   "remoteCalculations": "Remote calculations",
   "pendingApprovals": "Pending approvals",

@@ -632,6 +632,18 @@ abstract class AppLocalizations {
   /// **'TSPi could not verify this operation. Check the Host\'s TSPi configuration and try again.'**
   String get problemPreflightUnavailable;
 
+  /// No description provided for @problemManagementUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This Phone service does not support creating projects or sessions yet. Update the server installation; updating the app alone is not enough.'**
+  String get problemManagementUnsupported;
+
+  /// No description provided for @hostVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Server version'**
+  String get hostVersion;
+
   /// No description provided for @problemManagementCapacity.
   ///
   /// In en, this message translates to:

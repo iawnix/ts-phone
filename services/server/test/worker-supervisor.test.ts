@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,18 +7,22 @@ import { WorkerSupervisor } from "../src/runtime/worker-supervisor.js";
 import { HttpError } from "../src/errors.js";
 import { writeFakeTspi } from "./fake-tspi.js";
 
-test("worker supervisor binds exact sessions and explicit bridge configuration", async () => {
+test("worker supervisor preserves the installation symlink for Workers and lifecycle checks", async () => {
   const root = await mkdtemp(join(tmpdir(), "ts-phone-worker-"));
   const executable = join(root, "TSPi");
+  const release = join(root, "release");
+  await mkdir(release);
+  const target = join(release, "TSPi");
   const capture = join(root, "capture.json");
-  await writeFile(executable, `#!/usr/bin/env node
+  await writeFile(target, `#!/usr/bin/env node
 import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 const capture = ${JSON.stringify(capture)};
 const args = process.argv.slice(2);
 if (args.includes("--lifecycle-preflight")) {
   process.stdout.write(JSON.stringify({
     schema_version: "ts-phone-project-preflight/2",
-    workspace_root: ${JSON.stringify(join(root, "ts_007"))},
+    workspace_root: join(dirname(process.argv[1]), "ts_007"),
     root_agent_active: true,
     remote_calculations: 2,
     unresolved_remote_effects: 1,
@@ -26,6 +30,7 @@ if (args.includes("--lifecycle-preflight")) {
   process.exit(0);
 }
 writeFileSync(capture, JSON.stringify({
+  launcher: process.argv[1],
   args,
   socket: process.env.TS_PHONE_BRIDGE_SOCKET,
   secret: process.env.TS_PHONE_BRIDGE_SECRET_FILE,
@@ -33,7 +38,8 @@ writeFileSync(capture, JSON.stringify({
 process.on("SIGTERM", () => process.exit(0));
 setInterval(() => {}, 1000);
 `);
-  await chmod(executable, 0o700);
+  await chmod(target, 0o700);
+  await symlink(target, executable);
   const supervisor = new WorkerSupervisor(
     executable,
     1_000,
@@ -50,6 +56,7 @@ setInterval(() => {}, 1000);
     });
     assert.equal(supervisor.owns("ts_007", "session_4"), true);
     const record = await waitForJson(capture);
+    assert.equal(record.launcher, executable);
     assert.deepEqual(record.args, [
       "--workspace", "ts_007",
       "--phone-worker",

@@ -16,6 +16,67 @@ void main() {
     token: token,
   );
 
+  test('old Host creation endpoints produce an upgrade message', () async {
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'error': {
+              'code': 'not_found',
+              'message': 'API endpoint was not found',
+            },
+          }),
+          404,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    for (final action in <Future<Object> Function()>[
+      () => api.createWorkspace('New project'),
+      () =>
+          api.createSession('ts_001', accessMode: SessionAccessMode.controller),
+    ]) {
+      try {
+        await action();
+        fail('Old Host must not appear to create a resource');
+      } on TsPhoneApiException catch (error) {
+        expect(
+          describeTsPhoneProblem(error).code,
+          TsPhoneProblemCode.managementUnsupported,
+        );
+      }
+    }
+  });
+
+  test('missing workspace is not misreported as an outdated Host', () async {
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'error': {
+              'code': 'workspace_not_found',
+              'message': 'Workspace missing',
+            },
+          }),
+          404,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    await expectLater(
+      api.createSession('ts_001', accessMode: SessionAccessMode.controller),
+      throwsA(
+        isA<TsPhoneApiException>().having(
+          (error) => error.code,
+          'error code',
+          'workspace_not_found',
+        ),
+      ),
+    );
+  });
+
   test('parses workspace envelopes and sends Bearer authentication', () async {
     final api = TsPhoneApi(
       settings,

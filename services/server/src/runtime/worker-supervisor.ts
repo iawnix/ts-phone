@@ -144,7 +144,9 @@ export class WorkerSupervisor {
     const stat = await lstat(target);
     await access(target, constants.X_OK);
     if (!stat.isFile()) throw new Error("TS_PHONE_TSPI must resolve to an executable file");
-    return target;
+    // TSPi derives its installation root from the invoked launcher location.
+    // Validate the target, but preserve the stable installation symlink.
+    return path;
   }
 }
 

@@ -91,6 +91,8 @@
   "problemManagementChanged": "项目或会话已发生变化，请刷新后重试。",
   "problemResourcesBusy": "仍有运行中的会话或未处理的任务，请完成后再继续。",
   "problemPreflightUnavailable": "TSPi 暂时无法核验此操作，请检查 Host 的 TSPi 配置后重试。",
+  "problemManagementUnsupported": "当前 Phone 服务尚不支持创建项目或会话。请更新服务端安装；只更新手机 App 不够。",
+  "hostVersion": "服务端版本",
   "problemManagementCapacity": "项目和会话管理存储已满，请清理不再需要的内容后重试。",
   "remoteCalculations": "远程计算",
   "pendingApprovals": "待确认操作",

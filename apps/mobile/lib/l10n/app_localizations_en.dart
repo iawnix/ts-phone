@@ -291,6 +291,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'TSPi could not verify this operation. Check the Host\'s TSPi configuration and try again.';
 
   @override
+  String get problemManagementUnsupported =>
+      'This Phone service does not support creating projects or sessions yet. Update the server installation; updating the app alone is not enough.';
+
+  @override
+  String get hostVersion => 'Server version';
+
+  @override
   String get problemManagementCapacity =>
       'Project and session storage is full. Remove unneeded items before adding more.';
 

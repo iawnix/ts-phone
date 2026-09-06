@@ -23,11 +23,21 @@ the protocol versions in this table:
 | --- | ---: | --- |
 | TS Phone server | 0.7.0 | API v4, Events v3, Bridge v3, persistent management and lifecycle guards |
 | TSPi package | 0.13.0 | Bridge v3, exact session Workers, preflight/2 and guard/1 |
-| Mobile app | 0.14.0+38 | API v4, project/session management and accessible status icons |
+| Mobile app | 0.14.1+39 | API v4, project/session management and accessible status icons |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in
 `artifacts.md`. Each release is bound to its manifest's protocol set.
+
+App 0.14.1 replaces the cramped inline Settings segments with full-label choice
+sheets. Connection details also show the actual Host version. An older Host can
+still serve API v4 history while lacking the new creation endpoints; a successful
+health check alone is not proof that project/session management is installed.
+
+Keep `TS_PHONE_TSPI` pointed at the stable installation launcher, for example
+`/home/iaw/TS-pi-agent/TSPi`, not its resolved release target. TSPi uses the invoked
+launcher's directory as the installation root. The Host validates the real target
+without replacing that entrypoint when starting Workers or lifecycle checks.
 
 ## 1. Build The TS Phone Component
 

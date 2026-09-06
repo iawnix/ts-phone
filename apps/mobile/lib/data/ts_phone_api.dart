@@ -43,6 +43,7 @@ enum TsPhoneProblemCode {
   resourcesBusy,
   preflightUnavailable,
   managementCapacity,
+  managementUnsupported,
 }
 
 class TsPhoneProblem {
@@ -66,6 +67,12 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
     );
   }
   if (error is TsPhoneApiException) {
+    if (error.code == 'management_unsupported') {
+      return const TsPhoneProblem(
+        TsPhoneProblemKind.incompatible,
+        TsPhoneProblemCode.managementUnsupported,
+      );
+    }
     final managementCode = switch (error.code) {
       'workspace_management_changed' ||
       'session_management_changed' => TsPhoneProblemCode.managementChanged,
@@ -895,7 +902,21 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
       );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw _apiError(response.statusCode, response.body);
+      final error = _apiError(response.statusCode, response.body);
+      final creatingManagedResource =
+          method == 'POST' &&
+          (path == 'workspaces' ||
+              RegExp(r'^workspaces/[^/]+/sessions$').hasMatch(path));
+      if (creatingManagedResource &&
+          error.statusCode == 404 &&
+          error.code == 'not_found') {
+        throw const TsPhoneApiException(
+          'The Phone Host does not support project and session creation. Upgrade the Host.',
+          statusCode: 404,
+          code: 'management_unsupported',
+        );
+      }
+      throw error;
     }
     final payload = _asMap(jsonDecode(response.body), 'API response');
     if (payload['apiVersion'] != 'ts-phone-api/4') {

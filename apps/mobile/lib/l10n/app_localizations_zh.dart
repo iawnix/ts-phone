@@ -283,6 +283,13 @@ class AppLocalizationsZh extends AppLocalizations {
       'TSPi 暂时无法核验此操作，请检查 Host 的 TSPi 配置后重试。';
 
   @override
+  String get problemManagementUnsupported =>
+      '当前 Phone 服务尚不支持创建项目或会话。请更新服务端安装；只更新手机 App 不够。';
+
+  @override
+  String get hostVersion => '服务端版本';
+
+  @override
   String get problemManagementCapacity => '项目和会话管理存储已满，请清理不再需要的内容后重试。';
 
   @override
