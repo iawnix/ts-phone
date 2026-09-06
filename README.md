@@ -159,9 +159,9 @@ from another device.
 
 | Component | Current status |
 | --- | --- |
-| Broker | Source 0.6.0; API v4, Events v3, Bridge v3 |
-| Android | Source 0.13.0+37; Android 7.0 or newer. A release artifact has not yet been recorded. |
-| Last published Android artifact | App 0.12.1+36; API v3 and Bridge v2; not compatible with the current source set |
+| Broker | 0.6.0; API v4, Events v3, Bridge v3 |
+| Android | App 0.13.0+37; verified production-signed release; Android 7.0 or newer |
+| TSPi compatibility | TSPi 0.12.0; API v4 and Bridge v3 |
 | iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
 
 ## Documentation

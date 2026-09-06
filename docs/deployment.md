@@ -26,10 +26,10 @@ the protocol versions in this table:
 | TSPi package | 0.12.0 | Bridge v3, runtime metadata, and controller/observer launch policy |
 | Mobile app | 0.13.0+37 | API v4, adaptive navigation, accessible visual effects, and fenced Stop requests |
 
-This is the current source compatibility set. It is not deployable until a new
-signed APK and complete TSPi Package are built and recorded. The 0.12.1+36 APK
-listed in `artifacts.md` uses API v3 and Bridge v2 and is not compatible with
-this set. Do not mix components across the two sets.
+This is the current release compatibility set. The production-signed
+0.13.0+37 Android artifacts and the complete TSPi 0.12.0 Package are recorded
+in `artifacts.md`. Each release remains valid only with its manifest-bound
+protocol set; do not mix components from different sets.
 
 ## 1. Build The TS Phone Component
 

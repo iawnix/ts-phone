@@ -1,9 +1,9 @@
 # Build Artifacts
 
-The records below describe the last published Android release, 0.12.1+36. It
-uses API v3 and Bridge v2. The current source tree has advanced to 0.13.0+37,
-API v4, and Bridge v3; no new signed artifact or digest is recorded here yet.
-Do not relabel the 0.12.1 APK as a current-source build.
+The records below describe Android release 0.13.0+37, built on 2026-09-06 from
+commit `cbeed20645327abc19ec4dfdab867ba940f61ea7`. Its source snapshot SHA-256 is
+`806a92797f308c726b0a7f5f47bba3ddecb39e515ee384d6bab71d7bf2550475`.
+The release uses API v4, Events v3, and Bridge v3.
 
 ## TSPi Component Release
 
@@ -25,11 +25,19 @@ manifest. The source-tree
 systemd unit is not included because live service configuration belongs to the
 installation, not to an immutable component release.
 
+The recorded Phone component release is
+`0.6.0-mobile-0.13.0-build37-source-78a142e947b7491d-sha256-c0755b995c836f01`.
+Its archive is 10,493,644 bytes with SHA-256
+`c0755b995c836f01c5f04c0e03d303a04857b2c482b8317afccc37d0cd77daba`.
+It is included in TSPi Package
+`0.12.0-sha256-350faa25d47c9e28`, whose 11,258,016-byte archive has SHA-256
+`350faa25d47c9e28f7930eaf3bf3d45e018d728aa1944770cb6d86d9b4a9d7e3`.
+
 ## Android Release
 
 - App: TS Phone
-- App version: 0.12.1
-- Build number: 36
+- App version: 0.13.0
+- Build number: 37
 - Package: xyz.iawnix.ts_phone
 - Minimum Android SDK: 24
 - Target Android SDK: 36
@@ -71,13 +79,13 @@ installation, not to an immutable component release.
 
 | Artifact | ABI / purpose | Version code | Size (bytes) | SHA-256 |
 | --- | --- | ---: | ---: | --- |
-| `ts-phone-v0.12.1-build36-arm64-v8a-release.apk` | arm64-v8a phones | 2036 | 21396055 | `99aa5d6699be10d3d21bf6ad33dfbe0da6bf802daf4f463a004a33fae19c7677` |
-| `ts-phone-v0.12.1-build36-armeabi-v7a-release.apk` | 32-bit ARM phones | 1036 | 19152821 | `31210086e476c8bf6e9946f335c7210db15c7f9b27d5a0d5f41eff7666efe7ff` |
-| `ts-phone-v0.12.1-build36-x86_64-release.apk` | x86_64 emulator/device | 4036 | 22853174 | `c07f4ca9e45b211dddce6cff2b37540a7a4b519a9e58283e333f843034d2490e` |
-| `ts-phone-v0.12.1-build36-release.aab` | Store bundle | 36 | 58175794 | `f27876fdaab383c07415dafbd7ea3d226b1afeed371de3cbcd7fb469d3986add` |
+| `ts-phone-v0.13.0-build37-arm64-v8a-release.apk` | arm64-v8a phones | 2037 | 21527493 | `68d6d6319d89e03834164e3676dca45e6810dc1aad626f9d286cafd302e2df18` |
+| `ts-phone-v0.13.0-build37-armeabi-v7a-release.apk` | 32-bit ARM phones | 1037 | 19300647 | `367ac628b7f8f6bd45ca6271542c7ecc04633df5820e26b7fccb552507a1f88f` |
+| `ts-phone-v0.13.0-build37-x86_64-release.apk` | x86_64 emulator/device | 4037 | 23050148 | `1fe6f9c28e2e2426be4373ced61046f3954eecb1ce001c8f99d982c9c43e389c` |
+| `ts-phone-v0.13.0-build37-release.aab` | Store bundle | 37 | 58545915 | `eda16c8266ff92bfd49fd2cf5651a885b2c929a8b88f3064dbbeea823c7f6ba9` |
 
 Flutter adds an ABI-specific prefix to split APK version codes. All artifacts
-still represent app version `0.12.1+36`. The APK manifests are not debuggable.
+still represent app version `0.13.0+37`. The APK manifests are not debuggable.
 They request only `android.permission.INTERNET` and Android's package-scoped
 dynamic-receiver permission. No microphone, Bluetooth, or speech-recognition
 declaration is present.
@@ -86,11 +94,11 @@ Validation commands:
 
 ~~~bash
 apps/mobile/tool/build_release_android.sh
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/android-current/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/android-current/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/android-current/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
-/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/android-current/ts-phone-v0.12.1-build36-release.aab
-sha256sum dist/android-current/ts-phone-v0.12.1-build36-*
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/android-current/ts-phone-v0.13.0-build37-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/android-current/ts-phone-v0.13.0-build37-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/android-current/ts-phone-v0.13.0-build37-arm64-v8a-release.apk
+/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/android-current/ts-phone-v0.13.0-build37-release.aab
+sha256sum dist/android-current/ts-phone-v0.13.0-build37-*
 ~~~
 
 The generated Flutter outputs and archived artifacts were compared byte for
@@ -100,18 +108,18 @@ Install the `arm64-v8a` APK on typical current Android phones. A previous
 debug/profile installation must be uninstalled first because its signing
 certificate differs; uninstalling clears its local token and settings.
 
-The APK manifest reports version `0.12.1` and the expected ABI-prefixed version
+The APK manifest reports version `0.13.0` and the expected ABI-prefixed version
 code. All split APKs passed v2 signature verification. The AAB is signed by the
-same release certificate and `jarsigner -verify` exited successfully; JDK 21
-reported the expected self-signed/no-timestamp warnings and JarInputStream
-consistency warnings for the Android bundle layout. Standalone `bundletool
+same release certificate and passed the release script's strict `jarsigner`
+policy; JDK 21 reported the expected self-signed/no-timestamp warnings and
+JarInputStream consistency warnings for the Android bundle layout. Standalone `bundletool
 validate` was not run because only Gradle's non-executable bundletool library
 jar is available locally. The Gradle `bundleRelease` task completed normally.
 
 The previous production-signed `0.8.2`, `0.8.3`, `0.8.4`, `0.8.5`, `0.9.0`,
-`0.9.1`, `0.9.2`, `0.9.3`, `0.10.0`, `0.10.1`, `0.11.0`, and `0.12.0`
-artifacts remain in `dist/` for rollback. No debug or profile artifact was
-produced for `0.12.1`.
+`0.9.1`, `0.9.2`, `0.9.3`, `0.10.0`, `0.10.1`, `0.11.0`, `0.12.0`, and
+`0.12.1` artifacts remain in `dist/` for rollback. No debug or profile artifact
+was produced for `0.13.0`.
 
 ## iOS
 
