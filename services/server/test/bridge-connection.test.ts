@@ -11,7 +11,7 @@ test("a close listener added after an early socket close still runs once", () =>
   const socket = new Socket();
   socket.destroy();
   const registration: BridgeRegisterRecord = {
-    protocolVersion: "ts-phone-bridge/2",
+    protocolVersion: "ts-phone-bridge/3",
     type: "bridge.register",
     workspaceId: "ts_001",
     sessionId: "session-1",
@@ -34,7 +34,7 @@ test("a close listener added after an early socket close still runs once", () =>
 
 test("bridge runtime snapshots accept Pi estimates and reject unknown fields", () => {
   const record = {
-    protocolVersion: "ts-phone-bridge/2",
+    protocolVersion: "ts-phone-bridge/3",
     type: "session.snapshot",
     workspaceId: "ts_001",
     sessionId: "session-1",
@@ -70,5 +70,39 @@ test("bridge runtime snapshots accept Pi estimates and reject unknown fields", (
       },
     }),
     /unsupported fields/,
+  );
+});
+
+test("bridge v3 binds running snapshots to one agent run and rejects bridge v2", () => {
+  const base = {
+    protocolVersion: "ts-phone-bridge/3",
+    type: "session.snapshot",
+    workspaceId: "ts_001",
+    sessionId: "session-1",
+    instanceEpoch: "11111111-1111-4111-8111-111111111111",
+    sessionGeneration: 1,
+    sequence: 1,
+    snapshot: {
+      sessionId: "session-1",
+      isStreaming: true,
+      messages: [],
+    },
+  };
+
+  assert.throws(
+    () => parseBridgeClientRecord({ ...base, protocolVersion: "ts-phone-bridge/2" }),
+    /Unsupported bridge protocol version/,
+  );
+  assert.throws(() => parseBridgeClientRecord(base), /snapshot\.agentRunId/);
+  assert.equal(parseBridgeClientRecord({
+    ...base,
+    snapshot: { ...base.snapshot, agentRunId: "run-1-1" },
+  }).type, "session.snapshot");
+  assert.throws(
+    () => parseBridgeClientRecord({
+      ...base,
+      snapshot: { ...base.snapshot, isStreaming: false, agentRunId: "run-1-1" },
+    }),
+    /only valid while streaming/,
   );
 });

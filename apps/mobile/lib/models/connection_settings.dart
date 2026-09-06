@@ -22,7 +22,7 @@ class ConnectionSettings {
 
   Uri endpoint(String path) {
     final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
-    return Uri.parse(serverUrl).replace(path: '/api/v3/$normalizedPath');
+    return Uri.parse(serverUrl).replace(path: '/api/v4/$normalizedPath');
   }
 
   static String normalizeServerUrl(String value) {

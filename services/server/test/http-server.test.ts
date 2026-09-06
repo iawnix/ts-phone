@@ -13,20 +13,21 @@ const ZERO_REVISION = "00000000-0000-0000-0000-000000000000";
 test("HTTP API keeps an offline workspace read-only until its TSPi bridge connects", async () => {
   const fixture = await startFixture();
   try {
-    const unauthorized = await fetch(`${fixture.baseUrl}/api/v3/workspaces`);
+    const unauthorized = await fetch(`${fixture.baseUrl}/api/v4/workspaces`);
     assert.equal(unauthorized.status, 401);
 
-    const versionResponse = await api(fixture, "/api/v3/version");
+    const versionResponse = await api(fixture, "/api/v4/version");
     assert.equal(versionResponse.status, 200);
     const version = await versionResponse.json() as {
       data: { apiVersion: string; serviceVersion: string };
     };
     assert.deepEqual(version.data, {
-      apiVersion: "ts-phone-api/3",
-      serviceVersion: "0.5.1",
+      apiVersion: "ts-phone-api/4",
+      serviceVersion: "0.6.0",
     });
+    assert.equal((await api(fixture, "/api/v3/version")).status, 404);
 
-    const offline = await api(fixture, "/api/v3/workspaces");
+    const offline = await api(fixture, "/api/v4/workspaces");
     assert.equal(offline.status, 200);
     assert.match(await offline.text(), /offline/);
 
@@ -35,7 +36,7 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
 
     fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
     await waitForState(fixture, "idle");
-    const sessions = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const sessions = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
     const sessionsPayload = await sessions.json() as {
       data: Array<SessionListItem & {
         runtime?: {
@@ -49,7 +50,7 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     assert.equal(sessionsPayload.data[0]?.runtime?.context?.limitTokens, 128_000);
     fixture.bridge.publishSnapshot(false, false);
     await waitFor(async () => {
-      const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+      const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
       const payload = await response.json() as { data: Array<{ runtime?: unknown }> };
       return payload.data[0]?.runtime === undefined;
     }, true);
@@ -87,7 +88,7 @@ test("service restart restores disk history as a read-only session", async () =>
   ]);
   await restartFixture(fixture);
   try {
-    const sessionsResponse = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const sessionsResponse = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
     assert.equal(sessionsResponse.status, 200);
     const sessionsPayload = await sessionsResponse.json() as {
       data: Array<SessionListItem & {
@@ -115,7 +116,7 @@ test("service restart restores disk history as a read-only session", async () =>
 
     const snapshotResponse = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/messages`,
     );
     assert.equal(snapshotResponse.status, 200);
     const snapshotText = await snapshotResponse.text();
@@ -125,7 +126,7 @@ test("service restart restores disk history as a read-only session", async () =>
 
     const timelineResponse = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/timeline?limit=1`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/timeline?limit=1`,
     );
     assert.equal(timelineResponse.status, 200);
     const timelinePayload = await timelineResponse.json() as {
@@ -147,14 +148,14 @@ test("service restart restores disk history as a read-only session", async () =>
 
     const invalidTimelineQuery = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/timeline?unknown=true`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/timeline?unknown=true`,
     );
     assert.equal(invalidTimelineQuery.status, 400);
     assert.match(await invalidTimelineQuery.text(), /invalid_timeline_query/);
 
     const promptResponse = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/messages`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,7 +170,7 @@ test("service restart restores disk history as a read-only session", async () =>
     assert.match(await promptResponse.text(), /session_offline/);
 
     await rm(sessionFile);
-    const afterDelete = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const afterDelete = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
     const afterDeletePayload = await afterDelete.json() as { data: unknown[] };
     assert.deepEqual(afterDeletePayload.data, []);
   } finally {
@@ -211,7 +212,7 @@ test("a live timeline exposes commands only on its active branch", async () => {
 
     const activeResponse = await api(
       fixture,
-      "/api/v3/workspaces/ts_001/sessions/session-test/timeline",
+      "/api/v4/workspaces/ts_001/sessions/session-test/timeline",
     );
     assert.equal(activeResponse.status, 200);
     const active = await activeResponse.json() as {
@@ -223,7 +224,7 @@ test("a live timeline exposes commands only on its active branch", async () => {
 
     const inactiveResponse = await api(
       fixture,
-      "/api/v3/workspaces/ts_001/sessions/session-test/timeline?branch=00000002",
+      "/api/v4/workspaces/ts_001/sessions/session-test/timeline?branch=00000002",
     );
     assert.equal(inactiveResponse.status, 200);
     const inactive = await inactiveResponse.json() as {
@@ -250,7 +251,7 @@ test("message history pages use stable Pi entry cursors", async () => {
   try {
     const latest = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?limit=3`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/messages?limit=3`,
     );
     assert.equal(latest.status, 200);
     const latestPayload = await latest.json() as {
@@ -263,7 +264,7 @@ test("message history pages use stable Pi entry cursors", async () => {
 
     const earlier = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?before=000001f6&limit=2`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/messages?before=000001f6&limit=2`,
     );
     assert.equal(earlier.status, 200);
     const earlierPayload = await earlier.json() as {
@@ -274,14 +275,14 @@ test("message history pages use stable Pi entry cursors", async () => {
 
     const unknown = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?before=ffffffff`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/messages?before=ffffffff`,
     );
     assert.equal(unknown.status, 409);
     assert.match(await unknown.text(), /session_history_cursor_invalid/);
 
     const malformed = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages?before=not-a-cursor`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/messages?before=not-a-cursor`,
     );
     assert.equal(malformed.status, 400);
     assert.match(await malformed.text(), /invalid_message_cursor/);
@@ -302,7 +303,7 @@ test("a live bridge takes over the matching disk-history session", async () => {
       accessMode: "controller",
     });
     await waitFor(async () => {
-      const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+      const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
       const payload = await response.json() as {
         data: Array<SessionListItem & { canPrompt: boolean; historyOnly: boolean }>;
       };
@@ -310,7 +311,7 @@ test("a live bridge takes over the matching disk-history session", async () => {
     }, true);
     const liveSnapshot = await api(
       fixture,
-      `/api/v3/workspaces/ts_001/sessions/${sessionId}/messages`,
+      `/api/v4/workspaces/ts_001/sessions/${sessionId}/messages`,
     );
     assert.equal(liveSnapshot.status, 200);
     assert.match(await liveSnapshot.text(), /existing/);
@@ -335,7 +336,7 @@ test("SSE publishes CLI input and replays only events after Last-Event-ID", asyn
       source: "interactive",
       origin: "local",
     });
-    const replay = await fetch(`${fixture.baseUrl}/api/v3/workspaces/ts_001/sessions/session-test/events`, {
+    const replay = await fetch(`${fixture.baseUrl}/api/v4/workspaces/ts_001/sessions/session-test/events`, {
       headers: { ...fixture.headers, "Last-Event-ID": firstId },
     });
     const replayReader = replay.body!.getReader();
@@ -354,7 +355,7 @@ test("message snapshots checkpoint completed assistant and tool messages before 
   try {
     fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
     await waitForState(fixture, "idle");
-    fixture.bridge.publish("agent_start", { type: "agent_start" });
+    fixture.bridge.publish("agent_start", { type: "agent_start", agentRunId: "run-1-11" });
     fixture.bridge.publish("message_end", {
       type: "message_end",
       message: assistantMessage("checkpoint reply"),
@@ -386,7 +387,7 @@ test("message snapshots remain bounded while a long turn is still running", asyn
   try {
     fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
     await waitForState(fixture, "idle");
-    fixture.bridge.publish("agent_start", { type: "agent_start" });
+    fixture.bridge.publish("agent_start", { type: "agent_start", agentRunId: "run-1-12" });
     for (let index = 0; index < 510; index += 1) {
       fixture.bridge.publish("message_end", {
         type: "message_end",
@@ -457,7 +458,7 @@ test("SSE subscribes before replay so an event at the replay boundary is deliver
       return replay;
     };
 
-    const response = await fetch(`${fixture.baseUrl}/api/v3/workspaces/ts_001/sessions/session-test/events`, {
+    const response = await fetch(`${fixture.baseUrl}/api/v4/workspaces/ts_001/sessions/session-test/events`, {
       headers: { ...fixture.headers, "Last-Event-ID": snapshot.lastEventId },
       signal: AbortSignal.timeout(2_000),
     });
@@ -502,7 +503,7 @@ test("phone approval responses are fenced to a live workspace session", async ()
       expiresAt: (approvalEvent?.payload as { expiresAt: string }).expiresAt,
     });
     await waitFor(async () => {
-      const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions/session-test/approvals/approval-1", {
+      const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions/session-test/approvals/approval-1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approved: true, sessionRevision: await currentRevision(fixture) }),
@@ -513,7 +514,7 @@ test("phone approval responses are fenced to a live workspace session", async ()
       fixture.bridge.receivedCommands.some((item) => item.type === "approval.respond" && item.approved === true),
       true,
     );
-    const replay = await api(fixture, "/api/v3/workspaces/ts_001/sessions/session-test/approvals/approval-1", {
+    const replay = await api(fixture, "/api/v4/workspaces/ts_001/sessions/session-test/approvals/approval-1", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ approved: true, sessionRevision: await currentRevision(fixture) }),
@@ -530,11 +531,11 @@ test("disconnecting during a running turn requires recovery", async () => {
   try {
     fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
     await waitForState(fixture, "idle");
-    fixture.bridge.publish("agent_start", { type: "agent_start" });
+    fixture.bridge.publish("agent_start", { type: "agent_start", agentRunId: "run-1-13" });
     await waitForState(fixture, "running");
     await fixture.bridge.close();
     await waitForState(fixture, "recovery_required");
-    const sessions = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const sessions = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
     const payload = await sessions.json() as {
       data: Array<{ runtime?: { model: { id: string }; updatedAt: string } }>;
     };
@@ -542,6 +543,149 @@ test("disconnecting during a running turn requires recovery", async () => {
     assert.equal(payload.data[0]?.runtime?.updatedAt, "2026-08-31T06:32:18.000Z");
   } finally {
     await fixture.application.close();
+  }
+});
+
+test("abort is fenced to the exact active agent run", async () => {
+  const fixture = await startFixture();
+  try {
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
+    await waitForState(fixture, "idle");
+    const sessionRevision = await currentRevision(fixture);
+    const abortPath = "/api/v4/workspaces/ts_001/sessions/session-test/abort";
+
+    const missingRun = await api(fixture, abortPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionRevision }),
+    });
+    assert.equal(missingRun.status, 400);
+    assert.match(await missingRun.text(), /invalid_abort/);
+
+    const extraField = await api(fixture, abortPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionRevision, agentRunId: "run-1-20", force: true }),
+    });
+    assert.equal(extraField.status, 400);
+    assert.match(await extraField.text(), /invalid_abort/);
+
+    const idle = await api(fixture, abortPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionRevision, agentRunId: "run-1-20" }),
+    });
+    assert.equal(idle.status, 409);
+    assert.match(await idle.text(), /agent_not_running/);
+    assert.equal(fixture.bridge.receivedCommands.some((item) => item.type === "command.abort"), false);
+
+    const replacedAgentRunId = "run-1-20";
+    fixture.bridge.publish("agent_start", {
+      type: "agent_start",
+      agentRunId: replacedAgentRunId,
+    });
+    await waitForState(fixture, "running");
+    fixture.bridge.publish("agent_settled", {
+      type: "agent_settled",
+      agentRunId: replacedAgentRunId,
+    });
+    await waitForState(fixture, "idle");
+
+    const agentRunId = "run-1-21";
+    fixture.bridge.publish("agent_start", { type: "agent_start", agentRunId });
+    await waitForState(fixture, "running");
+    const sessionsResponse = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
+    const sessions = await sessionsResponse.json() as {
+      data: Array<{ activeAgentRunId: string | null }>;
+    };
+    assert.equal(sessions.data[0]?.activeAgentRunId, agentRunId);
+    const activeSnapshot = await readSnapshot(fixture);
+    assert.equal(activeSnapshot.activeAgentRunId, agentRunId);
+    const activeJournal = await fixture.application.hub.journal("ts_001", "session-test");
+    assert.equal(
+      activeJournal.since(activeSnapshot.lastEventId).some((event) => (
+        event.type === "agent_start" || event.type === "agent_settled"
+      )),
+      false,
+    );
+    const timelineResponse = await api(
+      fixture,
+      "/api/v4/workspaces/ts_001/sessions/session-test/timeline",
+    );
+    assert.equal(timelineResponse.status, 200);
+    const timeline = await timelineResponse.json() as {
+      data: { activeAgentRunId: string | null };
+    };
+    assert.equal(timeline.data.activeAgentRunId, agentRunId);
+
+    const stale = await api(fixture, abortPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionRevision, agentRunId: replacedAgentRunId }),
+    });
+    assert.equal(stale.status, 409);
+    assert.match(await stale.text(), /agent_run_stale/);
+    assert.equal(fixture.bridge.receivedCommands.some((item) => item.type === "command.abort"), false);
+
+    const accepted = await api(fixture, abortPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionRevision, agentRunId }),
+    });
+    assert.equal(accepted.status, 200);
+    await waitForState(fixture, "idle");
+    const command = fixture.bridge.receivedCommands.find((item) => item.type === "command.abort");
+    assert.equal(command?.agentRunId, agentRunId);
+    assert.equal((await readSnapshot(fixture)).activeAgentRunId, null);
+
+    const journal = await fixture.application.hub.journal("ts_001", "session-test");
+    const runEvents = journal.since(undefined).filter((event) => (
+      event.type === "agent_start" || event.type === "agent_settled"
+    ));
+    assert.deepEqual(
+      runEvents.map((event) => (event.payload as { agentRunId?: string }).agentRunId),
+      [replacedAgentRunId, replacedAgentRunId, agentRunId, agentRunId],
+    );
+    const stateEvents = journal.since(undefined).filter((event) => event.type === "session_state");
+    assert.equal(stateEvents.some((event) => (
+      (event.payload as { activeAgentRunId?: string | null }).activeAgentRunId === agentRunId
+    )), true);
+  } finally {
+    await fixture.bridge?.close();
+    await fixture.application.close();
+  }
+});
+
+test("bridge abort rejections retain their conflict codes", async () => {
+  for (const errorCode of ["agent_not_running", "agent_run_stale"] as const) {
+    const fixture = await startFixture();
+    try {
+      fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, {
+        abortErrorCode: errorCode,
+      });
+      await waitForState(fixture, "idle");
+      const agentRunId = `run-1-${errorCode === "agent_not_running" ? 31 : 32}`;
+      fixture.bridge.publish("agent_start", { type: "agent_start", agentRunId });
+      await waitForState(fixture, "running");
+
+      const response = await api(
+        fixture,
+        "/api/v4/workspaces/ts_001/sessions/session-test/abort",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionRevision: await currentRevision(fixture),
+            agentRunId,
+          }),
+        },
+      );
+      assert.equal(response.status, 409);
+      assert.match(await response.text(), new RegExp(errorCode));
+    } finally {
+      await fixture.bridge?.close();
+      await fixture.application.close();
+    }
   }
 });
 
@@ -555,7 +699,7 @@ test("deleting a persisted Pi session removes its disconnected broker record", a
     assert.equal(live[0]?.sessionId, "session-test");
 
     await fixture.bridge.close();
-    const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
     assert.equal(response.status, 200);
     const payload = await response.json() as { data: SessionListItem[] };
     assert.deepEqual(payload.data, []);
@@ -571,12 +715,12 @@ test("deleting and recreating a workspace cannot revive stale broker sessions", 
     await waitForState(fixture, "idle");
 
     await rm(fixture.workspace, { recursive: true });
-    const removedResponse = await api(fixture, "/api/v3/workspaces");
+    const removedResponse = await api(fixture, "/api/v4/workspaces");
     const removed = await removedResponse.json() as { data: unknown[] };
     assert.deepEqual(removed.data, []);
 
     await mkdir(fixture.workspace, { recursive: true });
-    const recreatedResponse = await api(fixture, "/api/v3/workspaces");
+    const recreatedResponse = await api(fixture, "/api/v4/workspaces");
     const recreated = await recreatedResponse.json() as {
       data: Array<{ sessionCount: number; liveSessionCount: number }>;
     };
@@ -612,7 +756,7 @@ test("one workspace isolates multiple live sessions and keeps one controller", a
     const observerSession = sessions.find((session) => session.sessionId === "session-observer")!;
     const response = await api(
       fixture,
-      "/api/v3/workspaces/ts_001/sessions/session-observer/messages",
+      "/api/v4/workspaces/ts_001/sessions/session-observer/messages",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -629,11 +773,11 @@ test("one workspace isolates multiple live sessions and keeps one controller", a
 
     const stale = await api(
       fixture,
-      "/api/v3/workspaces/ts_001/sessions/session-observer/abort",
+      "/api/v4/workspaces/ts_001/sessions/session-observer/abort",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionRevision: ZERO_REVISION }),
+        body: JSON.stringify({ sessionRevision: ZERO_REVISION, agentRunId: "run-1-stale" }),
       },
     );
     assert.equal(stale.status, 409);
@@ -651,7 +795,7 @@ test("one workspace isolates multiple live sessions and keeps one controller", a
     await controller.close();
     controller = undefined;
     await waitForState(fixture, "idle");
-    const workspaceResponse = await api(fixture, "/api/v3/workspaces");
+    const workspaceResponse = await api(fixture, "/api/v4/workspaces");
     const workspacePayload = await workspaceResponse.json() as {
       data: Array<{ liveSessionCount: number }>;
     };
@@ -666,9 +810,9 @@ test("one workspace isolates multiple live sessions and keeps one controller", a
 test("HTTP boundary rejects path, direct-command, and malformed-id attacks", async () => {
   const fixture = await startFixture(256);
   try {
-    const escaped = await api(fixture, "/api/v3/workspaces/ts_001%2F..%2Fother/sessions/session-test/messages");
+    const escaped = await api(fixture, "/api/v4/workspaces/ts_001%2F..%2Fother/sessions/session-test/messages");
     assert.equal(escaped.status, 400);
-    const unsupported = await api(fixture, "/api/v3/workspaces/ts_001/sessions/session-test/messages", {
+    const unsupported = await api(fixture, "/api/v4/workspaces/ts_001/sessions/session-test/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -772,7 +916,7 @@ function api(fixture: Fixture, path: string, init: RequestInit = {}): Promise<Re
 
 async function sendPrompt(fixture: Fixture, clientMessageId: string, message: string): Promise<Response> {
   const sessionRevision = await currentRevision(fixture);
-  return api(fixture, "/api/v3/workspaces/ts_001/sessions/session-test/messages", {
+  return api(fixture, "/api/v4/workspaces/ts_001/sessions/session-test/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ clientMessageId, sessionRevision, message }),
@@ -780,7 +924,7 @@ async function sendPrompt(fixture: Fixture, clientMessageId: string, message: st
 }
 
 async function currentRevision(fixture: Fixture): Promise<string> {
-  const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+  const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
   if (!response.ok) return ZERO_REVISION;
   const payload = await response.json() as { data?: Array<{ sessionRevision?: string }> };
   return payload.data?.find((session) => session.sessionRevision)?.sessionRevision || ZERO_REVISION;
@@ -795,7 +939,7 @@ interface SessionListItem {
 async function waitForSessionCount(fixture: Fixture, expectedCount: number): Promise<SessionListItem[]> {
   let sessions: SessionListItem[] = [];
   await waitFor(async () => {
-    const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions");
+    const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions");
     const payload = await response.json() as { data: SessionListItem[] };
     sessions = payload.data;
     return sessions.length;
@@ -805,7 +949,7 @@ async function waitForSessionCount(fixture: Fixture, expectedCount: number): Pro
 
 async function waitForState(fixture: Fixture, expected: string): Promise<void> {
   await waitFor(async () => {
-    const response = await api(fixture, "/api/v3/workspaces");
+    const response = await api(fixture, "/api/v4/workspaces");
     const payload = await response.json() as { data: Array<{ runtimeState: string }> };
     return payload.data[0]?.runtimeState;
   }, expected);
@@ -813,7 +957,7 @@ async function waitForState(fixture: Fixture, expected: string): Promise<void> {
 
 async function waitForMessages(fixture: Fixture, expected: string): Promise<void> {
   await waitFor(async () => {
-    const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions/session-test/messages");
+    const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions/session-test/messages");
     return (await response.text()).includes(expected);
   }, true);
 }
@@ -821,12 +965,13 @@ async function waitForMessages(fixture: Fixture, expected: string): Promise<void
 interface MessageSnapshotResponse {
   sessionId: string;
   sessionRevision: string;
+  activeAgentRunId: string | null;
   messages: unknown[];
   lastEventId: string;
 }
 
 async function readSnapshot(fixture: Fixture): Promise<MessageSnapshotResponse> {
-  const response = await api(fixture, "/api/v3/workspaces/ts_001/sessions/session-test/messages");
+  const response = await api(fixture, "/api/v4/workspaces/ts_001/sessions/session-test/messages");
   assert.equal(response.status, 200);
   const payload = await response.json() as { data: MessageSnapshotResponse };
   return payload.data;

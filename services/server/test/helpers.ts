@@ -29,6 +29,7 @@ export async function connectFakeBridge(
     sessionId?: string;
     accessMode?: "controller" | "observer";
     instanceEpoch?: string;
+    abortErrorCode?: "agent_not_running" | "agent_run_stale";
   } = {},
 ): Promise<FakeBridge> {
   const socket = createConnection(config.bridgeSocketPath);
@@ -55,6 +56,8 @@ export async function connectFakeBridge(
   const messages: unknown[] = [userMessage("existing")];
   const receivedCommands: Array<Record<string, unknown>> = [];
   let sequence = 0;
+  let agentRunSequence = 0;
+  let activeAgentRunId: string | undefined;
   let buffer = "";
   let didRegister = false;
   let registeredResolve: (() => void) | undefined;
@@ -68,7 +71,7 @@ export async function connectFakeBridge(
   });
 
   const envelope = () => ({
-    protocolVersion: "ts-phone-bridge/2",
+    protocolVersion: "ts-phone-bridge/3",
     workspaceId,
     sessionId,
     instanceEpoch,
@@ -76,10 +79,22 @@ export async function connectFakeBridge(
   });
   const write = (record: Record<string, unknown>) => socket.write(`${JSON.stringify(record)}\n`);
   const publish = (eventType: string, payload: unknown) => {
+    if (eventType === "agent_start") {
+      activeAgentRunId = readAgentRunId(payload, eventType);
+    } else if (eventType === "agent_settled") {
+      const settledAgentRunId = readAgentRunId(payload, eventType);
+      if (settledAgentRunId !== activeAgentRunId) {
+        throw new Error("Fake bridge cannot settle a run that is not active");
+      }
+    }
     sequence += 1;
     write({ ...envelope(), type: "event.publish", sequence, eventType, payload });
+    if (eventType === "agent_settled") activeAgentRunId = undefined;
   };
   const publishSnapshot = (isStreaming = false, includeRuntime = true) => {
+    if (isStreaming && !activeAgentRunId) {
+      throw new Error("Fake bridge cannot publish a running snapshot without an active run");
+    }
     sequence += 1;
     const firstIndex = Math.max(0, messages.length - 500);
     const boundedMessages = messages.slice(firstIndex);
@@ -108,6 +123,7 @@ export async function connectFakeBridge(
           },
         } : {}),
         isStreaming,
+        ...(isStreaming ? { agentRunId: activeAgentRunId } : {}),
         messages: boundedMessages,
         messageIds,
         hasMore,
@@ -115,11 +131,12 @@ export async function connectFakeBridge(
       },
     });
   };
-  const acknowledge = (requestId: unknown, ok = true) => write({
+  const acknowledge = (requestId: unknown, ok = true, errorCode?: string) => write({
     ...envelope(),
     type: "command.ack",
     requestId,
     ok,
+    ...(errorCode ? { errorCode } : {}),
   });
 
   socket.on("data", (chunk: string | Buffer) => {
@@ -149,7 +166,9 @@ export async function connectFakeBridge(
           clientMessageId: record.clientMessageId,
         });
         acknowledge(record.requestId);
-        publish("agent_start", { type: "agent_start" });
+        agentRunSequence += 1;
+        const agentRunId = `run-1-${agentRunSequence}`;
+        publish("agent_start", { type: "agent_start", agentRunId });
         publish("message_start", { type: "message_start", message: { role: "assistant", content: [] } });
         publish("message_update", {
           type: "message_update",
@@ -158,11 +177,20 @@ export async function connectFakeBridge(
         const assistant = assistantMessage(`reply:${message}`);
         messages.push(assistant);
         publish("message_end", { type: "message_end", message: assistant });
-        publish("agent_settled", { type: "agent_settled" });
+        publish("agent_settled", { type: "agent_settled", agentRunId });
         publishSnapshot();
       } else if (record.type === "command.abort") {
+        const commandAgentRunId = String(record.agentRunId || "");
+        const rejection = options.abortErrorCode
+          || (!activeAgentRunId
+            ? "agent_not_running"
+            : (commandAgentRunId !== activeAgentRunId ? "agent_run_stale" : undefined));
+        if (rejection) {
+          acknowledge(record.requestId, false, rejection);
+          continue;
+        }
         acknowledge(record.requestId);
-        publish("agent_settled", { type: "agent_settled" });
+        publish("agent_settled", { type: "agent_settled", agentRunId: activeAgentRunId });
         publishSnapshot();
       } else if (record.type === "approval.respond") {
         acknowledge(record.requestId);
@@ -199,6 +227,17 @@ export async function connectFakeBridge(
     },
     close: () => closeSocket(socket),
   };
+}
+
+function readAgentRunId(payload: unknown, eventType: string): string {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(`Fake ${eventType} payload must be an object`);
+  }
+  const agentRunId = (payload as Record<string, unknown>).agentRunId;
+  if (typeof agentRunId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(agentRunId)) {
+    throw new Error(`Fake ${eventType} payload must include agentRunId`);
+  }
+  return agentRunId;
 }
 
 function userMessage(text: string): unknown {

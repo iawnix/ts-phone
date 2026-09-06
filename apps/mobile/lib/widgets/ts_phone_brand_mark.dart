@@ -11,11 +11,14 @@ class TsPhoneBrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cacheSize = (size * MediaQuery.devicePixelRatioOf(context)).ceil();
     return ExcludeSemantics(
       child: Image.asset(
         color == null ? _colorMarkAsset : _monochromeMarkAsset,
         width: size,
         height: size,
+        cacheWidth: cacheSize,
+        cacheHeight: cacheSize,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.high,
         isAntiAlias: true,
@@ -33,19 +36,25 @@ class TsPhoneBrandBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (size < 24) {
+      return TsPhoneBrandMark(size: size, color: theme.colorScheme.primary);
+    }
     return SizedBox.square(
       dimension: size,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: theme.colorScheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(size * 0.23),
           border: Border.all(
-            color: const Color(0xFF0D1726).withValues(alpha: 0.10),
+            color: theme.colorScheme.outlineVariant,
             width: 0.8,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: const Color(0xFF126CD6).withValues(alpha: 0.14),
+              color: theme.colorScheme.primary.withValues(
+                alpha: theme.brightness == Brightness.light ? 0.14 : 0.20,
+              ),
               blurRadius: size * 0.24,
               offset: Offset(0, size * 0.06),
             ),

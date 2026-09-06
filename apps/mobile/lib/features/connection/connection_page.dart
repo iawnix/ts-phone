@@ -36,6 +36,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   late final TextEditingController _tokenController;
   bool _obscureToken = true;
   bool _connecting = false;
+  bool _committing = false;
   String? _error;
 
   @override
@@ -78,6 +79,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
           api.close();
         }
       }
+      if (!mounted) return;
+      setState(() => _committing = true);
       await widget.onConnected(settings);
     } on Object catch (error) {
       if (!mounted) return;
@@ -86,7 +89,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
         _error = describeTsPhoneProblem(error).localizedMessage(context.l10n);
       });
     } finally {
-      if (mounted) setState(() => _connecting = false);
+      if (mounted) {
+        setState(() {
+          _connecting = false;
+          _committing = false;
+        });
+      }
     }
   }
 
@@ -95,28 +103,19 @@ class _ConnectionPageState extends State<ConnectionPage> {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     return PopScope<void>(
-      canPop: widget.onBack == null,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) widget.onBack?.call();
-      },
+      canPop: !_committing,
       child: Scaffold(
         appBar: TsGlassAppBar(
           leading: widget.onBack == null
               ? null
-              : IconButton(
-                  onPressed: () {
-                    ActionFeedback.selection();
-                    widget.onBack!();
-                  },
-                  tooltip: l10n.back,
-                  icon: const Icon(Icons.arrow_back),
-                ),
+              : BackButton(onPressed: _committing ? null : widget.onBack),
           title: Text(
             widget.onBack == null ? l10n.appTitle : l10n.connectionSettings,
           ),
           actions: <Widget>[
             if (widget.onOpenSettings != null)
               IconButton(
+                key: const ValueKey<String>('connection-settings'),
                 onPressed: () {
                   ActionFeedback.selection();
                   widget.onOpenSettings!();
@@ -248,7 +247,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           if (_error case final message?) ...<Widget>[
                             const SizedBox(height: TsPhoneSpacing.medium),
                             TsInfoBand(
-                              icon: Icons.error_outline,
+                              icon: Icons.error_outline_rounded,
                               message: message,
                               tone: TsInfoTone.error,
                             ),
@@ -259,7 +258,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               key: const ValueKey<String>('connect-action'),
                               onPressed: _connecting ? null : _connect,
                               icon: AnimatedSwitcher(
-                                duration: TsPhoneMotion.quick,
+                                duration: TsPhoneMotion.resolve(
+                                  context,
+                                  TsPhoneMotion.quick,
+                                ),
                                 child: _connecting
                                     ? const SizedBox.square(
                                         key: ValueKey<String>('connecting'),
@@ -269,7 +271,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                         ),
                                       )
                                     : const Icon(
-                                        Icons.link,
+                                        Icons.link_rounded,
                                         key: ValueKey<String>('connect'),
                                       ),
                               ),

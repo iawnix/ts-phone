@@ -54,11 +54,14 @@ from its local Bridge and refuses a second controller.
 
 - Node.js 22.19 or newer and npm for the broker
 - Flutter 3.44 or newer with Dart `>=3.12.0 <4.0.0` for mobile development
-- A compatible TSPi installation; version 0.11.1 is tested with Bridge v2
+- A compatible TSPi installation; source version 0.12.0 uses Bridge v3
 - An HTTPS origin reachable from the phone for remote use
 
 The broker listens only on `127.0.0.1` or `::1`. A reverse proxy must terminate
 TLS because the mobile app rejects plain HTTP for non-loopback addresses.
+Stopping generation is fenced by both the current session revision and the
+exact Bridge-issued agent run ID, so a delayed phone request cannot stop a
+newer run.
 
 ## Run from source
 
@@ -156,8 +159,9 @@ from another device.
 
 | Component | Current status |
 | --- | --- |
-| Broker | 0.5.1; API v3, Events v3, Bridge v2 |
-| Android | App 0.12.1+36; verified release build; Android 7.0 or newer |
+| Broker | Source 0.6.0; API v4, Events v3, Bridge v3 |
+| Android | Source 0.13.0+37; Android 7.0 or newer. A release artifact has not yet been recorded. |
+| Last published Android artifact | App 0.12.1+36; API v3 and Bridge v2; not compatible with the current source set |
 | iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
 
 ## Documentation

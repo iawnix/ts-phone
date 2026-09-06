@@ -47,6 +47,8 @@ The TSPi launcher and broker enforce complementary controls:
 - duplicate live registration of the same sessionId is rejected;
 - command and event identity includes workspaceId and sessionId;
 - mutable commands also require the current sessionRevision;
+- abort additionally requires the current Bridge-issued agentRunId, checked by
+  both broker and Bridge immediately before Pi is interrupted;
 - commands are bound to the exact connection, generation, session, and
   revision.
 
@@ -107,6 +109,14 @@ tokens in Nginx, FRP, screenshots, shell history, chat, or source control.
 The Markdown renderer does not fetch remote images automatically. External
 images and links open only after an explicit tap, only over HTTPS, and never
 receive the TS Phone Bearer token.
+
+This is a user-consent boundary, not network isolation. An HTTPS hostname can
+still resolve to a private or link-local address, and the current mobile HTTP
+stack does not pin a validated DNS answer through the TLS connection. The
+preview therefore shows the destination host before loading; do not open image
+links from untrusted model output. Private-address blocking should only be
+claimed after the client owns DNS resolution, socket selection, redirects, and
+TLS hostname verification as one tested path.
 
 TS Phone does not request microphone access and does not record, persist,
 upload, or proxy audio. A system keyboard may independently provide dictation;

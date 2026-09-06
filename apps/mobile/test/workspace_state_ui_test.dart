@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/features/chat/chat_page.dart';
+import 'package:ts_phone/features/chat/timeline_widgets.dart';
 import 'package:ts_phone/features/sessions/session_list_page.dart';
 import 'package:ts_phone/features/workspaces/workspace_list_page.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
@@ -156,7 +157,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('已连接 · 可发送'), findsOneWidget);
+    final compactStatus = tester.widget<Semantics>(
+      find.byKey(const ValueKey<String>('chat-compact-status')),
+    );
+    expect(compactStatus.properties.label, '已连接 · 可发送');
+    expect(find.text('已连接 · 可发送'), findsNothing);
+    expect(find.byIcon(Icons.check_circle_outline_rounded), findsOneWidget);
+    expect(find.text('测试会话'), findsOneWidget);
+    final appBarRect = tester.getRect(find.byType(AppBar));
+    expect(
+      appBarRect.contains(tester.getRect(find.text('测试会话')).center),
+      isTrue,
+    );
+    expect(
+      appBarRect.contains(
+        tester
+            .getRect(find.byKey(const ValueKey<String>('chat-compact-status')))
+            .center,
+      ),
+      isTrue,
+    );
     expect(find.textContaining('gpt-5.6-sol'), findsNothing);
     await tester.tap(
       find.byKey(const ValueKey<String>('chat-session-details')),
@@ -1094,6 +1114,164 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a pending send can finish after the chat page is disposed', (
+    WidgetTester tester,
+  ) async {
+    final sendResponse = Completer<void>();
+    final gateway = UiFakeGateway()..nextSend = sendResponse.future;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: controllerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'finish after leaving');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('composer-send')));
+    await tester.pump();
+
+    expect(gateway.sentMessages, isEmpty);
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    sendResponse.complete();
+    await tester.pumpAndSettle();
+
+    expect(gateway.sentMessages, <String>['finish after leaving']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('stop generation requires explicit confirmation', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = UiFakeGateway();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: controllerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    gateway.addWorkspaceState(RuntimeState.running);
+    await tester.pumpAndSettle();
+
+    final requestStop = tester
+        .widget<IconButton>(find.byKey(const ValueKey<String>('live-run-stop')))
+        .onPressed!;
+    requestStop();
+    requestStop();
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+      find.text(
+        'Stop the current generation? The partial response may be incomplete.',
+      ),
+      findsOneWidget,
+    );
+    expect(gateway.abortCalls, 0);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Keep generating'));
+    await tester.pumpAndSettle();
+    expect(gateway.abortCalls, 0);
+    expect(find.byType(AlertDialog), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('live-run-stop')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Stop generation'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.abortCalls, 1);
+    expect(gateway.lastAbortAgentRunId, 'run-ui-1');
+    expect(find.text('Abort request sent'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('stop confirmation cannot abort a later agent run', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = UiFakeGateway();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: controllerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    gateway.addAgentLifecycleEvent('agent_start');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey<String>('live-run-stop')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    gateway.addAgentLifecycleEvent('agent_settled');
+    await tester.pumpAndSettle();
+    gateway.addAgentLifecycleEvent('agent_start');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Stop generation'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.abortCalls, 0);
+    expect(find.text('Abort request sent'), findsNothing);
+    expect(
+      find.text('The active generation changed. Nothing was stopped.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('soft keyboard keeps the multiline composer visible', (
     WidgetTester tester,
   ) async {
@@ -1177,6 +1355,72 @@ void main() {
       closedComposerBottom,
     );
 
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keyboard keeps a large live composer above its controls', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final gateway = UiFakeGateway(
+      snapshot: TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        messages: <Object?>[userMessage('Keep every live control visible')],
+        lastEventId: 'epoch:0',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: controllerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    gateway.addWorkspaceState(RuntimeState.running);
+    await tester.pumpAndSettle();
+
+    final textField = find.byType(TextField);
+    await tester.tap(textField);
+    await tester.enterText(
+      textField,
+      'one\ntwo\nthree\nfour\nfive\nsix\nseven',
+    );
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await tester.pumpAndSettle();
+
+    const keyboardTop = 700.0 - 280.0;
+    final composer = tester.getRect(
+      find.byKey(const ValueKey<String>('chat-composer')),
+    );
+    final appBar = tester.getRect(find.byType(AppBar));
+    final stop = tester.getRect(
+      find.byKey(const ValueKey<String>('live-run-stop')),
+    );
+    expect(composer.top, greaterThanOrEqualTo(appBar.bottom));
+    expect(composer.bottom, lessThanOrEqualTo(keyboardTop));
+    expect(tester.getRect(textField).bottom, lessThanOrEqualTo(keyboardTop));
+    expect(stop.top, greaterThanOrEqualTo(appBar.bottom));
+    expect(stop.bottom, lessThanOrEqualTo(composer.top));
     expect(tester.takeException(), isNull);
   });
 
@@ -1529,9 +1773,29 @@ void main() {
       expect(find.textContaining('42 tokens'), findsNothing);
       expect(find.text('加载全部历史'), findsNothing);
       expect(
+        find.byKey(const ValueKey<String>('timeline-view-filter')),
+        findsOneWidget,
+      );
+      expect(find.text('Turn 80 · 1 条活动'), findsOneWidget);
+      expect(
         find.byKey(const ValueKey<String>('timeline-history-menu')),
         findsOneWidget,
       );
+
+      await tester.tap(find.text('活动'));
+      await tester.pumpAndSettle();
+      expect(find.text('当前研究请求'), findsNothing);
+      expect(find.text('Compute · Inspect'), findsOneWidget);
+      expect(find.text('Turn 80 · 1 条活动'), findsOneWidget);
+
+      await tester.tap(find.text('消息'));
+      await tester.pumpAndSettle();
+      expect(find.text('当前研究请求'), findsOneWidget);
+      expect(find.text('Compute · Inspect'), findsNothing);
+      expect(find.text('Turn 80'), findsOneWidget);
+
+      await tester.tap(find.text('全部'));
+      await tester.pumpAndSettle();
 
       await tester.tap(
         find.byKey(
@@ -1562,6 +1826,154 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  test('timeline filters preserve original turn numbering', () {
+    final groups = groupTimelineItems(<SessionTimelineItem>[
+      TimelineMessageItem(
+        id: '00000010',
+        turnId: 'turn-a',
+        message: ChatMessage.fromJson(userMessage('message-only')),
+      ),
+      const TimelineActivityItem(
+        id: '00000011',
+        turnId: 'turn-b',
+        activity: TimelineActivity(
+          category: TimelineActivityCategory.research,
+          status: TimelineActivityStatus.completed,
+          title: 'activity-only',
+        ),
+      ),
+      TimelineMessageItem(
+        id: '00000012',
+        turnId: 'turn-c',
+        message: ChatMessage.fromJson(userMessage('mixed-turn')),
+      ),
+      const TimelineActivityItem(
+        id: '00000013',
+        turnId: 'turn-c',
+        activity: TimelineActivity(
+          category: TimelineActivityCategory.review,
+          status: TimelineActivityStatus.recorded,
+          title: 'mixed-turn-review',
+        ),
+      ),
+    ], totalTurnCount: 8);
+
+    expect(groups.map((group) => group.number), <int>[6, 7, 8]);
+    expect(
+      filterTimelineGroups(
+        groups,
+        TimelineViewFilter.messages,
+      ).map((group) => group.number),
+      <int>[6, 8],
+    );
+    expect(
+      filterTimelineGroups(
+        groups,
+        TimelineViewFilter.activities,
+      ).map((group) => group.number),
+      <int>[7, 8],
+    );
+  });
+
+  testWidgets('empty timeline filter remains recoverable', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = UiFakeGateway(
+      timelineResponder: ({before, branch}) async => TsPhoneTimelineSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        items: <SessionTimelineItem>[
+          TimelineMessageItem(
+            id: '00000001',
+            turnId: 'turn-a',
+            message: ChatMessage.fromJson(userMessage('Only message')),
+          ),
+        ],
+        history: const TimelineHistorySummary(
+          totalItems: 1,
+          messageCount: 1,
+          activityCount: 0,
+          turnCount: 1,
+          activeBranchId: '00000001',
+          selectedBranchId: '00000001',
+          branches: <TimelineBranchSummary>[
+            TimelineBranchSummary(
+              id: '00000001',
+              active: true,
+              itemCount: 1,
+              messageCount: 1,
+              activityCount: 0,
+              turnCount: 1,
+            ),
+          ],
+        ),
+        hasMore: false,
+        lastEventId: 'epoch:0',
+        capabilities: const <String>{timelineCapability},
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'ts_001',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: const SessionSummary(
+            sessionId: 'session-test',
+            sessionRevision: '11111111-1111-4111-8111-111111111111',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            accessMode: SessionAccessMode.controller,
+            historyAvailable: true,
+            capabilities: <String>{timelineCapability},
+          ),
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('timeline-view-filter')),
+      findsOneWidget,
+    );
+    expect(find.text('Only message'), findsOneWidget);
+    expect(find.text('Turn 1'), findsOneWidget);
+
+    await tester.tap(find.text('Activity'));
+    await tester.pumpAndSettle();
+    expect(find.text('Only message'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('timeline-filter-empty')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('timeline-view-filter')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+    expect(find.text('Only message'), findsOneWidget);
+    expect(find.text('Turn 1'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('positions initial timeline before revealing history', (
     WidgetTester tester,
@@ -1674,6 +2086,26 @@ void main() {
     expect(find.text('Transition-state workspace'), findsOneWidget);
     expect(find.text('bash'), findsOneWidget);
     expect(find.textContaining('command: pwd'), findsOneWidget);
+    final bottomSheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+    expect(bottomSheet.enableDrag, isFalse);
+    expect(bottomSheet.showDragHandle, isFalse);
+    final readableSurface = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('approval-readable-surface')),
+    );
+    final readableSurfaceContext = tester.element(
+      find.byKey(const ValueKey<String>('approval-readable-surface')),
+    );
+    expect(
+      readableSurface.color,
+      Theme.of(readableSurfaceContext).colorScheme.surfaceContainerLowest,
+    );
+    final approveButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey<String>('approval-approve')),
+    );
+    expect(
+      approveButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      Theme.of(readableSurfaceContext).colorScheme.onTertiary,
+    );
 
     await tester.tap(find.text('Approve once'));
     await tester.pump();
@@ -1689,6 +2121,72 @@ void main() {
     expect(find.text('Confirmation required'), findsNothing);
     expect(gateway.approvalDecisions, <bool>[true, true]);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('approval countdown only announces urgency thresholds', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+    final gateway = UiFakeGateway();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(supportsAnnounce: true),
+          child: child!,
+        ),
+        home: ChatPage(
+          settings: _settings,
+          workspace: const WorkspaceSummary(
+            id: 'ts_001',
+            name: 'Transition-state workspace',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            liveSessionCount: 1,
+            sessionCount: 1,
+          ),
+          session: controllerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    gateway.addApproval(
+      expiresAt: DateTime.now().add(const Duration(seconds: 32)),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+    tester.takeAnnouncements();
+
+    final countdown = tester.widget<Semantics>(
+      find.byKey(const ValueKey<String>('approval-countdown')),
+    );
+    expect(countdown.properties.liveRegion, isFalse);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeAnnouncements(), isEmpty);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      tester.takeAnnouncements(),
+      contains(isAccessibilityAnnouncement('Expires in 30s')),
+    );
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeAnnouncements(), isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey<String>('approval-reject')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 
   testWidgets('system back explicitly rejects an approval', (
@@ -1889,6 +2387,7 @@ class UiFakeGateway implements TsPhoneGateway {
   })?
   timelineResponder;
   final List<String> sentMessages = <String>[];
+  Future<void>? nextSend;
   final List<bool> approvalDecisions = <bool>[];
   final List<Object> approvalErrors = <Object>[];
   final StreamController<TsPhoneEvent> _events =
@@ -1896,6 +2395,10 @@ class UiFakeGateway implements TsPhoneGateway {
   int _sequence = 0;
   int listWorkspacesCalls = 0;
   int listSessionsCalls = 0;
+  int abortCalls = 0;
+  int _agentRunSequence = 0;
+  String? _activeAgentRunId;
+  String? lastAbortAgentRunId;
 
   void addApproval({
     String id = 'approval-1',
@@ -1970,7 +2473,38 @@ class UiFakeGateway implements TsPhoneGateway {
     );
   }
 
+  void addAgentLifecycleEvent(String type) {
+    assert(type == 'agent_start' || type == 'agent_settled');
+    if (type == 'agent_start') {
+      _agentRunSequence += 1;
+      _activeAgentRunId = 'run-ui-$_agentRunSequence';
+    }
+    final agentRunId = _activeAgentRunId;
+    assert(agentRunId != null);
+    _sequence += 1;
+    _events.add(
+      TsPhoneEvent(
+        id: 'epoch:$_sequence',
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        instanceEpoch: 'instance-1',
+        sessionGeneration: 1,
+        type: type,
+        payload: <String, Object?>{'type': type, 'agentRunId': agentRunId},
+        at: DateTime.utc(2026, 8, 16),
+      ),
+    );
+    if (type == 'agent_settled') _activeAgentRunId = null;
+  }
+
   void addWorkspaceState(RuntimeState state) {
+    if (state == RuntimeState.running && _activeAgentRunId == null) {
+      _agentRunSequence += 1;
+      _activeAgentRunId = 'run-ui-$_agentRunSequence';
+    } else if (state != RuntimeState.running) {
+      _activeAgentRunId = null;
+    }
     _sequence += 1;
     _events.add(
       TsPhoneEvent(
@@ -1990,6 +2524,7 @@ class UiFakeGateway implements TsPhoneGateway {
             RuntimeState.recoveryRequired => 'recovery_required',
           },
           'isStreaming': state == RuntimeState.running,
+          if (_activeAgentRunId != null) 'activeAgentRunId': _activeAgentRunId,
         },
         at: DateTime.utc(2026, 8, 15),
       ),
@@ -2046,9 +2581,13 @@ class UiFakeGateway implements TsPhoneGateway {
   @override
   Future<void> abort(
     String workspaceId,
-    String sessionId,
-    String sessionRevision,
-  ) async {}
+    String sessionId, {
+    required String sessionRevision,
+    required String agentRunId,
+  }) async {
+    abortCalls += 1;
+    lastAbortAgentRunId = agentRunId;
+  }
 
   @override
   void close() {
@@ -2128,6 +2667,9 @@ class UiFakeGateway implements TsPhoneGateway {
     String message, {
     required String clientMessageId,
   }) async {
+    final pending = nextSend;
+    nextSend = null;
+    if (pending != null) await pending;
     sentMessages.add(message);
   }
 

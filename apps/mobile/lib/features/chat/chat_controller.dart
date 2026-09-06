@@ -101,6 +101,7 @@ class ChatController extends ChangeNotifier {
     required this.accessMode,
     String? initialSessionTitle,
     SessionRuntimeSnapshot? initialSessionRuntime,
+    String? initialActiveAgentRunId,
     bool initialHistoryAvailable = false,
     bool? initialCanPrompt,
     Set<String> initialCapabilities = const <String>{},
@@ -118,7 +119,8 @@ class ChatController extends ChangeNotifier {
        _capabilities = Set<String>.unmodifiable(initialCapabilities),
        _sessionRevision = initialSessionRevision,
        _sessionTitle = initialSessionTitle,
-       _sessionRuntime = initialSessionRuntime;
+       _sessionRuntime = initialSessionRuntime,
+       _activeAgentRunId = initialActiveAgentRunId;
 
   final TsPhoneGateway api;
   final String workspaceId;
@@ -155,6 +157,7 @@ class ChatController extends ChangeNotifier {
   String _sessionRevision;
   String? _sessionTitle;
   SessionRuntimeSnapshot? _sessionRuntime;
+  String? _activeAgentRunId;
   bool _historyAvailable;
   bool _canPrompt;
   bool _commandInFlight = false;
@@ -200,6 +203,7 @@ class ChatController extends ChangeNotifier {
   String? get sessionTitle => _sessionTitle;
   SessionRuntimeSnapshot? get sessionRuntime => _sessionRuntime;
   String get sessionRevision => _sessionRevision;
+  String? get activeAgentRunId => _activeAgentRunId;
   bool get commandInFlight => _commandInFlight;
   bool get historyAvailable => _historyAvailable;
   bool get historyOnly =>
@@ -289,10 +293,12 @@ class ChatController extends ChangeNotifier {
           throw const FormatException('Timeline belongs to another session');
         }
         final revisionChanged = snapshot.sessionRevision != _sessionRevision;
+        _applySnapshotAgentRun(snapshot.activeAgentRunId);
         _applyTimelineSnapshot(snapshot, reset: revisionChanged);
         _sessionRevision = snapshot.sessionRevision;
         _lastEventId = snapshot.lastEventId;
         await _loadAutomaticTimelineHistory();
+        if (_disposed) return;
       } else {
         final snapshot = await _awaitSnapshot(
           api.getMessages(workspaceId, sessionId),
@@ -302,6 +308,7 @@ class ChatController extends ChangeNotifier {
           throw const FormatException('Snapshot belongs to another session');
         }
         final revisionChanged = snapshot.sessionRevision != _sessionRevision;
+        _applySnapshotAgentRun(snapshot.activeAgentRunId);
         _applyMessageSnapshot(snapshot, reset: revisionChanged);
         _sessionRevision = snapshot.sessionRevision;
         _lastEventId = snapshot.lastEventId;
@@ -518,6 +525,7 @@ class ChatController extends ChangeNotifier {
         message,
         clientMessageId: clientMessageId,
       );
+      if (_disposed) return true;
       if (!_receivedPhoneMessageIdentities.contains(messageIdentity)) {
         _updateOutgoingDelivery(
           clientMessageId,
@@ -526,6 +534,7 @@ class ChatController extends ChangeNotifier {
       }
       return true;
     } on Object catch (error) {
+      if (_disposed) return false;
       if (_receivedPhoneMessageIdentities.contains(messageIdentity)) {
         return true;
       }
@@ -538,8 +547,48 @@ class ChatController extends ChangeNotifier {
     }
   }
 
-  Future<void> abort() =>
-      _runCommand(() => api.abort(workspaceId, sessionId, _sessionRevision));
+  Future<bool> abort({
+    required String expectedSessionRevision,
+    required String expectedAgentRunId,
+  }) async {
+    if (_commandInFlight ||
+        !canSend ||
+        _runtimeState != RuntimeState.running ||
+        _sessionRevision != expectedSessionRevision ||
+        _activeAgentRunId != expectedAgentRunId) {
+      return false;
+    }
+    _commandInFlight = true;
+    _operationProblem = null;
+    _notify();
+    try {
+      await api.abort(
+        workspaceId,
+        sessionId,
+        sessionRevision: expectedSessionRevision,
+        agentRunId: expectedAgentRunId,
+      );
+      return true;
+    } on Object catch (error) {
+      final problem = describeTsPhoneProblem(error);
+      if (problem.code == TsPhoneProblemCode.agentRunChanged) {
+        // The broker has authoritative evidence that this run is no longer
+        // active. Retire the stale local identity before reconciling the
+        // replacement (or idle state) from a fresh REST checkpoint.
+        _activeAgentRunId = null;
+        if (_runtimeState.isAvailable) _runtimeState = RuntimeState.idle;
+        _operationProblem = null;
+        await _refreshMessages(allowUnavailable: true);
+      } else {
+        _operationProblem = problem;
+        _notify();
+      }
+      return false;
+    } finally {
+      _commandInFlight = false;
+      _notify();
+    }
+  }
 
   Future<TsPhoneProblem?> respondToUi(
     ExtensionUiRequest request, {
@@ -568,21 +617,6 @@ class ChatController extends ChangeNotifier {
       return null;
     } on Object catch (error) {
       return describeTsPhoneProblem(error);
-    }
-  }
-
-  Future<void> _runCommand(Future<void> Function() command) async {
-    if (_commandInFlight || !canSend) return;
-    _commandInFlight = true;
-    _operationProblem = null;
-    _notify();
-    try {
-      await command();
-    } on Object catch (error) {
-      _setError(error);
-    } finally {
-      _commandInFlight = false;
-      _notify();
     }
   }
 
@@ -708,7 +742,11 @@ class ChatController extends ChangeNotifier {
     _lastEventId = event.id;
     _eventConnectionState = EventConnectionState.connected;
     _eventProblem = null;
-    _handleEvent(event);
+    try {
+      _handleEvent(event);
+    } on Object catch (error) {
+      _finishEventStream(generation, error);
+    }
   }
 
   void _resynchronizeChangedSession(int generation, String revision) {
@@ -722,7 +760,8 @@ class ChatController extends ChangeNotifier {
     _selectedBranchId = null;
     _latestTimelineItemIds = const <String>[];
     _snapshotReady = false;
-    _runtimeState = RuntimeState.connecting;
+    _activeAgentRunId = null;
+    _setRuntimeState(RuntimeState.connecting);
     _canPrompt = false;
     _clearStreamingText();
     _activity = null;
@@ -829,11 +868,17 @@ class ChatController extends ChangeNotifier {
     switch (event.type) {
       case 'session_state':
         final previous = _runtimeState;
+        late final RuntimeState nextState;
         try {
-          _runtimeState = RuntimeState.parse(payload?['state']);
+          nextState = RuntimeState.parse(payload?['state']);
         } on FormatException {
-          _runtimeState = RuntimeState.recoveryRequired;
+          nextState = RuntimeState.recoveryRequired;
         }
+        _applyRunState(
+          nextState,
+          payload?['activeAgentRunId'],
+          source: 'session_state',
+        );
         if (payload?['sessionName'] is String) {
           _sessionTitle = payload!['sessionName']! as String;
         }
@@ -864,6 +909,7 @@ class ChatController extends ChangeNotifier {
               TsPhoneMessageSnapshot(
                 sessionId: sessionId,
                 sessionRevision: _sessionRevision,
+                activeAgentRunId: payload?['activeAgentRunId'] as String?,
                 messages: messages.cast<Object?>(),
                 messageIds: _optionalMessageIds(
                   payload?['messageIds'],
@@ -885,9 +931,13 @@ class ChatController extends ChangeNotifier {
         if (payload?['sessionName'] is String) {
           _sessionTitle = payload!['sessionName']! as String;
         }
-        _runtimeState = payload?['isStreaming'] == true
-            ? RuntimeState.running
-            : RuntimeState.idle;
+        _applyRunState(
+          payload?['isStreaming'] == true
+              ? RuntimeState.running
+              : RuntimeState.idle,
+          payload?['activeAgentRunId'],
+          source: 'session.snapshot',
+        );
         if (payload?['historyAvailable'] is bool) {
           _historyAvailable = payload!['historyAvailable']! as bool;
         }
@@ -906,9 +956,23 @@ class ChatController extends ChangeNotifier {
           _applyInputEvent(event, payload!, text);
         }
       case 'agent_start':
-        _runtimeState = RuntimeState.running;
+        _applyRunState(
+          RuntimeState.running,
+          payload?['agentRunId'],
+          source: 'agent_start',
+        );
       case 'agent_settled':
-        _runtimeState = RuntimeState.idle;
+        final settledRunId = _requireAgentRunId(
+          payload?['agentRunId'],
+          'agent_settled',
+        );
+        if (_activeAgentRunId != null && _activeAgentRunId != settledRunId) {
+          throw const FormatException(
+            'agent_settled belongs to another agent run',
+          );
+        }
+        _activeAgentRunId = null;
+        _setRuntimeState(RuntimeState.idle);
         _clearStreamingText();
         _activity = null;
         if (usesStructuredTimeline) unawaited(refreshMessages());
@@ -993,6 +1057,44 @@ class ChatController extends ChangeNotifier {
         TsPhoneProblemCode.invalidHistoryMessage,
       );
     }
+  }
+
+  void _setRuntimeState(RuntimeState nextState) {
+    _runtimeState = nextState;
+    if (nextState != RuntimeState.running) _activeAgentRunId = null;
+  }
+
+  void _applySnapshotAgentRun(String? agentRunId) {
+    _activeAgentRunId = agentRunId;
+    if (agentRunId != null) {
+      _runtimeState = RuntimeState.running;
+    } else if (_runtimeState.isAvailable) {
+      _runtimeState = RuntimeState.idle;
+    }
+  }
+
+  void _applyRunState(
+    RuntimeState nextState,
+    Object? rawAgentRunId, {
+    required String source,
+  }) {
+    if (nextState == RuntimeState.running) {
+      _activeAgentRunId = _requireAgentRunId(rawAgentRunId, source);
+    } else {
+      if (rawAgentRunId != null) {
+        throw FormatException('$source exposed an agent run while idle');
+      }
+      _activeAgentRunId = null;
+    }
+    _runtimeState = nextState;
+  }
+
+  static String _requireAgentRunId(Object? value, String source) {
+    if (value is! String ||
+        !RegExp(r'^[A-Za-z0-9._:-]{1,160}$').hasMatch(value)) {
+      throw FormatException('$source did not include a valid agentRunId');
+    }
+    return value;
   }
 
   static bool _isLiveContentEvent(String type) => switch (type) {

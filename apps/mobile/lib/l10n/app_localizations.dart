@@ -404,6 +404,12 @@ abstract class AppLocalizations {
   /// **'Refreshing'**
   String get refreshing;
 
+  /// No description provided for @opening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening'**
+  String get opening;
+
   /// No description provided for @researchDirectoriesRefreshed.
   ///
   /// In en, this message translates to:
@@ -764,6 +770,12 @@ abstract class AppLocalizations {
   /// **'Abort request sent'**
   String get abortRequested;
 
+  /// No description provided for @abortTargetChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The active generation changed. Nothing was stopped.'**
+  String get abortTargetChanged;
+
   /// No description provided for @approvalTitle.
   ///
   /// In en, this message translates to:
@@ -907,6 +919,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stop generation'**
   String get abortGeneration;
+
+  /// No description provided for @abortGenerationConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the current generation? The partial response may be incomplete.'**
+  String get abortGenerationConfirmation;
+
+  /// No description provided for @keepGenerating.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep generating'**
+  String get keepGenerating;
 
   /// No description provided for @composerSynchronizing.
   ///
@@ -1196,6 +1220,30 @@ abstract class AppLocalizations {
   /// **'{count} activities'**
   String timelineActivities(int count);
 
+  /// No description provided for @timelineFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get timelineFilterAll;
+
+  /// No description provided for @timelineFilterMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get timelineFilterMessages;
+
+  /// No description provided for @timelineFilterActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get timelineFilterActivities;
+
+  /// No description provided for @timelineFilterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No items in this view'**
+  String get timelineFilterEmpty;
+
   /// No description provided for @timelineBranches.
   ///
   /// In en, this message translates to:
@@ -1364,17 +1412,35 @@ abstract class AppLocalizations {
   /// **'[Blocked a non-HTTPS image]'**
   String get blockedNonHttpsImage;
 
-  /// No description provided for @openImageWithAlt.
+  /// No description provided for @previewImage.
   ///
   /// In en, this message translates to:
-  /// **'Open image in browser: {alt}'**
-  String openImageWithAlt(String alt);
+  /// **'Preview image'**
+  String get previewImage;
 
-  /// No description provided for @openImage.
+  /// No description provided for @loadingImage.
   ///
   /// In en, this message translates to:
-  /// **'Open image in browser'**
-  String get openImage;
+  /// **'Loading image'**
+  String get loadingImage;
+
+  /// No description provided for @imageLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be loaded'**
+  String get imageLoadFailed;
+
+  /// No description provided for @openInBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser'**
+  String get openInBrowser;
+
+  /// No description provided for @settingsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load settings from this device. Try again.'**
+  String get settingsLoadFailed;
 
   /// No description provided for @problemIncompatible.
   ///
@@ -1399,6 +1465,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The session changed. Synchronize again'**
   String get problemSessionChanged;
+
+  /// No description provided for @problemAgentRunChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The active generation changed before it could be stopped'**
+  String get problemAgentRunChanged;
 
   /// No description provided for @problemServiceUnavailable.
   ///

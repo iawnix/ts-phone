@@ -5,7 +5,7 @@ import type {
   SessionSnapshot,
 } from "../types.js";
 
-export const BRIDGE_PROTOCOL_VERSION = "ts-phone-bridge/2" as const;
+export const BRIDGE_PROTOCOL_VERSION = "ts-phone-bridge/3" as const;
 export const BRIDGE_WORKSPACE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 export const BRIDGE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/;
 
@@ -33,7 +33,11 @@ export interface BridgeHeartbeatRecord extends BridgeEnvelope {
 export interface BridgeSnapshotRecord extends BridgeEnvelope {
   type: "session.snapshot";
   sequence: number;
-  snapshot: SessionSnapshot;
+  snapshot: BridgeSessionSnapshot;
+}
+
+export interface BridgeSessionSnapshot extends SessionSnapshot {
+  agentRunId?: string;
 }
 
 export interface BridgeEventRecord extends BridgeEnvelope {
@@ -97,6 +101,7 @@ export interface BridgeAbortCommand {
   instanceEpoch: string;
   sessionGeneration: number;
   requestId: string;
+  agentRunId: string;
 }
 
 export interface BridgeApprovalResponse {
@@ -190,12 +195,34 @@ export function parseBridgeClientRecord(value: unknown): BridgeClientRecord {
   }
 }
 
-function parseSnapshot(value: unknown): SessionSnapshot {
+function parseSnapshot(value: unknown): BridgeSessionSnapshot {
   const snapshot = asObject(value, "snapshot");
+  assertOnlyKeys(
+    snapshot,
+    [
+      "sessionId",
+      "sessionName",
+      "model",
+      "runtime",
+      "thinkingLevel",
+      "isStreaming",
+      "agentRunId",
+      "messages",
+      "messageIds",
+      "hasMore",
+      "nextBefore",
+    ],
+    "snapshot",
+  );
   const sessionId = requiredId(snapshot.sessionId, "sessionId");
   const isStreaming = requiredBoolean(snapshot.isStreaming, "isStreaming");
   if (!Array.isArray(snapshot.messages)) throw new Error("snapshot.messages must be an array");
-  const parsed: SessionSnapshot = { sessionId, isStreaming, messages: snapshot.messages };
+  const parsed: BridgeSessionSnapshot = { sessionId, isStreaming, messages: snapshot.messages };
+  if (isStreaming) {
+    parsed.agentRunId = requiredId(snapshot.agentRunId, "snapshot.agentRunId");
+  } else if (snapshot.agentRunId !== undefined) {
+    throw new Error("snapshot.agentRunId is only valid while streaming");
+  }
   if (snapshot.messageIds !== undefined) {
     if (!Array.isArray(snapshot.messageIds) || snapshot.messageIds.length !== snapshot.messages.length) {
       throw new Error("snapshot.messageIds must align with snapshot.messages");

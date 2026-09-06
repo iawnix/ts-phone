@@ -12,7 +12,7 @@ void main() {
     expect(settings.serverUrl, 'https://tsphone.iawnix.xyz');
     expect(
       settings.endpoint('workspaces').toString(),
-      'https://tsphone.iawnix.xyz/api/v3/workspaces',
+      'https://tsphone.iawnix.xyz/api/v4/workspaces',
     );
   });
 

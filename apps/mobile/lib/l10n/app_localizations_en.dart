@@ -168,6 +168,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refreshing => 'Refreshing';
 
   @override
+  String get opening => 'Opening';
+
+  @override
   String get researchDirectoriesRefreshed => 'Research workspaces refreshed';
 
   @override
@@ -386,6 +389,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get abortRequested => 'Abort request sent';
 
   @override
+  String get abortTargetChanged =>
+      'The active generation changed. Nothing was stopped.';
+
+  @override
   String get approvalTitle => 'Confirmation required';
 
   @override
@@ -469,6 +476,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get abortGeneration => 'Stop generation';
+
+  @override
+  String get abortGenerationConfirmation =>
+      'Stop the current generation? The partial response may be incomplete.';
+
+  @override
+  String get keepGenerating => 'Keep generating';
 
   @override
   String get composerSynchronizing => 'Syncing...';
@@ -631,6 +645,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get timelineFilterAll => 'All';
+
+  @override
+  String get timelineFilterMessages => 'Messages';
+
+  @override
+  String get timelineFilterActivities => 'Activity';
+
+  @override
+  String get timelineFilterEmpty => 'No items in this view';
+
+  @override
   String get timelineBranches => 'Session branches';
 
   @override
@@ -725,12 +751,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get blockedNonHttpsImage => '[Blocked a non-HTTPS image]';
 
   @override
-  String openImageWithAlt(String alt) {
-    return 'Open image in browser: $alt';
-  }
+  String get previewImage => 'Preview image';
 
   @override
-  String get openImage => 'Open image in browser';
+  String get loadingImage => 'Loading image';
+
+  @override
+  String get imageLoadFailed => 'The image could not be loaded';
+
+  @override
+  String get openInBrowser => 'Open in browser';
+
+  @override
+  String get settingsLoadFailed =>
+      'Could not load settings from this device. Try again.';
 
   @override
   String get problemIncompatible =>
@@ -745,6 +779,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemSessionChanged => 'The session changed. Synchronize again';
+
+  @override
+  String get problemAgentRunChanged =>
+      'The active generation changed before it could be stopped';
 
   @override
   String get problemServiceUnavailable =>

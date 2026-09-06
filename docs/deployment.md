@@ -12,9 +12,9 @@ The application and FRP data ports remain on loopback. The Aliyun security
 group must not expose 22113; only Nginx 443 is public. FRP's control port should
 be restricted to known clients.
 
-Server version 0.5.1 restores validated disk sessions, serves both compatible
+Server version 0.6.0 restores validated disk sessions, serves both compatible
 message history and a capability-advertised structured research timeline, and
-validates bounded Root Agent runtime snapshots. Mobile version 0.12.1 displays
+validates bounded Root Agent runtime snapshots. Mobile version 0.13.0 displays
 bounded TS activities, Pi branches, the active model, and Pi-estimated context
 usage, and switches to live capabilities when the matching Bridge reconnects.
 Mobile and server release numbers are independent; compatibility is governed by
@@ -22,11 +22,14 @@ the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.5.1 | API v3, Events v3, Bridge v2, structured timeline and runtime snapshot |
-| TSPi package | 0.11.1 | Bridge v2, runtime metadata, and controller/observer launch policy |
-| Mobile app | 0.12.1+36 | API v3, zh/en UI, refined conversation chrome, compact tool disclosures and activity rail |
+| TS Phone server | 0.6.0 | API v4, Events v3, Bridge v3, structured timeline and runtime snapshot |
+| TSPi package | 0.12.0 | Bridge v3, runtime metadata, and controller/observer launch policy |
+| Mobile app | 0.13.0+37 | API v4, adaptive navigation, accessible visual effects, and fenced Stop requests |
 
-Do not mix the old Bridge v1 or API v2 components with this set.
+This is the current source compatibility set. It is not deployable until a new
+signed APK and complete TSPi Package are built and recorded. The 0.12.1+36 APK
+listed in `artifacts.md` uses API v3 and Bridge v2 and is not compatible with
+this set. Do not mix components across the two sets.
 
 ## 1. Build The TS Phone Component
 
@@ -51,9 +54,25 @@ python3 deploy/build-component-release.py \
 ~~~
 
 The component builder owns the server typecheck, tests, and production build,
-then verifies the production arm64 APK's v2 signature and certificate and writes a
-deterministic archive plus `ts-phone-component-release.json`. Production builds
-require a clean committed checkout. `--allow-dirty` is only for local probes.
+all from a private capture of the committed source. The Android build embeds
+that source identity in each signed artifact and writes a matching attestation.
+It validates the complete APK/AAB set in private staging, publishes it under a
+content-addressed `dist/android-releases/` directory, and only then atomically
+switches `dist/android-current`. A failed build never changes the current set.
+The component builder verifies the production arm64 APK's Signature Scheme v2
+record, pinned certificate, package name, version, build code, ABI, embedded
+source identity, and attestation before writing a deterministic archive plus
+`ts-phone-component-release.json`. Production builds require a clean committed
+checkout. `--allow-dirty` is only for local probes.
+
+The AAB boundary is intentionally narrower. The build verifies strict JAR
+signature integrity, exactly one pinned signer, its embedded source identity,
+and its attestation, but it does not independently decode the AAB binary
+manifest to confirm application ID and version. Run a pinned `bundletool`
+validation before store upload. The script also selects fixed local Flutter,
+Android SDK, and JDK paths but does not attest those tool binaries, so source
+provenance is reproducible while bit-for-bit cross-machine output is not yet a
+release claim.
 
 ## 2. Build The Complete TSPi Package
 
@@ -62,6 +81,7 @@ release:
 
 ~~~bash
 cd /home/iaw/Codex/Project/2026-06-13/TSPi
+export TSPI_ANDROID_BUILD_TOOLS=/home/iaw/soft/android/sdk/build-tools/36.0.0
 python3 scripts/test_source.py \
   --conda-root /home/iaw/soft/conda/2026.03.05 \
   --with-render \
@@ -73,9 +93,10 @@ python3 scripts/build_package.py \
   --json
 ~~~
 
-The suite builder creates the Agent component internally, verifies Agent, Web,
-and Phone compatibility, and produces one `tspi-package-release/1` manifest and
-one content-addressed archive. Both source commits and both component IDs are
+The suite builder creates the Agent component internally, independently
+verifies the Phone APK and attestation, checks Agent, Web, and Phone
+compatibility, and produces one `tspi-package-release/2` manifest and one
+content-addressed archive. Both source identities and both component IDs are
 bound into that result.
 
 ## 3. Install The Package Without Service Activation

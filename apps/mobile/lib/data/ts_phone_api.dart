@@ -38,6 +38,7 @@ enum TsPhoneProblemCode {
   approvalExpired,
   approvalStale,
   approvalMissing,
+  agentRunChanged,
 }
 
 class TsPhoneProblem {
@@ -95,6 +96,12 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
       return const TsPhoneProblem(
         TsPhoneProblemKind.request,
         TsPhoneProblemCode.approvalMissing,
+      );
+    }
+    if (error.code == 'agent_run_stale' || error.code == 'agent_not_running') {
+      return const TsPhoneProblem(
+        TsPhoneProblemKind.request,
+        TsPhoneProblemCode.agentRunChanged,
       );
     }
     if (error.code == 'request_timeout') {
@@ -175,6 +182,7 @@ class TsPhoneMessageSnapshot {
     required this.sessionRevision,
     required this.messages,
     required this.lastEventId,
+    this.activeAgentRunId,
     this.messageIds,
     this.hasMore = false,
     this.nextBefore,
@@ -184,6 +192,7 @@ class TsPhoneMessageSnapshot {
   final String sessionRevision;
   final List<Object?> messages;
   final String lastEventId;
+  final String? activeAgentRunId;
   final List<String>? messageIds;
   final bool hasMore;
   final String? nextBefore;
@@ -198,6 +207,7 @@ class TsPhoneTimelineSnapshot {
     required this.hasMore,
     required this.lastEventId,
     required this.capabilities,
+    this.activeAgentRunId,
     this.nextBefore,
   });
 
@@ -209,6 +219,7 @@ class TsPhoneTimelineSnapshot {
   final String? nextBefore;
   final String lastEventId;
   final Set<String> capabilities;
+  final String? activeAgentRunId;
 }
 
 abstract interface class TsPhoneGateway {
@@ -237,9 +248,10 @@ abstract interface class TsPhoneGateway {
   });
   Future<void> abort(
     String workspaceId,
-    String sessionId,
-    String sessionRevision,
-  );
+    String sessionId, {
+    required String sessionRevision,
+    required String agentRunId,
+  });
   Future<void> respondToApproval(
     String workspaceId,
     String sessionId,
@@ -324,12 +336,15 @@ class TsPhoneApi implements TsPhoneGateway {
     final lastEventId = data['lastEventId'];
     final responseSessionId = data['sessionId'];
     final sessionRevision = data['sessionRevision'];
+    final activeAgentRunId = data['activeAgentRunId'];
     if (messages is! List ||
         lastEventId is! String ||
         lastEventId.isEmpty ||
         responseSessionId is! String ||
         responseSessionId != sessionId ||
-        sessionRevision is! String) {
+        sessionRevision is! String ||
+        !data.containsKey('activeAgentRunId') ||
+        !_isOptionalBoundedId(activeAgentRunId)) {
       throw const FormatException('Messages response is invalid');
     }
     List<String>? messageIds;
@@ -360,6 +375,7 @@ class TsPhoneApi implements TsPhoneGateway {
       sessionRevision: sessionRevision,
       messages: messages.cast<Object?>(),
       lastEventId: lastEventId,
+      activeAgentRunId: activeAgentRunId as String?,
       messageIds: messageIds,
       hasMore: hasMore,
       nextBefore: rawNextBefore as String?,
@@ -394,6 +410,8 @@ class TsPhoneApi implements TsPhoneGateway {
         data['sessionRevision'] is! String ||
         data['lastEventId'] is! String ||
         (data['lastEventId']! as String).isEmpty ||
+        !data.containsKey('activeAgentRunId') ||
+        !_isOptionalBoundedId(data['activeAgentRunId']) ||
         data['items'] is! List ||
         data['hasMore'] is! bool ||
         data['capabilities'] is! List ||
@@ -428,6 +446,7 @@ class TsPhoneApi implements TsPhoneGateway {
       capabilities: Set<String>.unmodifiable(
         (data['capabilities']! as List).cast<String>(),
       ),
+      activeAgentRunId: data['activeAgentRunId'] as String?,
     );
   }
 
@@ -454,13 +473,17 @@ class TsPhoneApi implements TsPhoneGateway {
   @override
   Future<void> abort(
     String workspaceId,
-    String sessionId,
-    String sessionRevision,
-  ) async {
+    String sessionId, {
+    required String sessionRevision,
+    required String agentRunId,
+  }) async {
     await _request(
       'POST',
       _sessionPath(workspaceId, sessionId, 'abort'),
-      body: <String, Object?>{'sessionRevision': sessionRevision},
+      body: <String, Object?>{
+        'sessionRevision': sessionRevision,
+        'agentRunId': agentRunId,
+      },
     );
   }
 
@@ -574,7 +597,7 @@ class TsPhoneApi implements TsPhoneGateway {
       throw _apiError(response.statusCode, response.body);
     }
     final payload = _asMap(jsonDecode(response.body), 'API response');
-    if (payload['apiVersion'] != 'ts-phone-api/3') {
+    if (payload['apiVersion'] != 'ts-phone-api/4') {
       throw const FormatException('Server API version is not supported');
     }
     return payload['data'];
@@ -611,6 +634,10 @@ class TsPhoneApi implements TsPhoneGateway {
     if (value is! Map) throw FormatException('$label is invalid');
     return value.cast<String, Object?>();
   }
+
+  static bool _isOptionalBoundedId(Object? value) =>
+      value == null ||
+      (value is String && RegExp(r'^[A-Za-z0-9._:-]{1,160}$').hasMatch(value));
 
   @override
   void close() => _client.close();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -87,11 +88,14 @@ class _ApprovalPanel extends StatefulWidget {
 
 class _ApprovalPanelState extends State<_ApprovalPanel>
     with WidgetsBindingObserver {
+  static const Set<int> _countdownAnnouncementThresholds = <int>{60, 30, 10};
+
   _ApprovalPanelPhase _phase = _ApprovalPanelPhase.pending;
   TsPhoneProblem? _failure;
   Timer? _countdownTimer;
   Timer? _expiryTimer;
   Timer? _terminalTimer;
+  final Set<int> _announcedCountdownThresholds = <int>{};
   int _remainingSeconds = 0;
 
   bool get _canRespond =>
@@ -128,15 +132,32 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
     if (mounted) setState(() {});
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || !_canRespond) return;
+      final nextSeconds = math.max(0, _remainingSeconds - 1);
       setState(() {
-        _remainingSeconds = math.max(0, _remainingSeconds - 1);
+        _remainingSeconds = nextSeconds;
       });
+      _announceCountdownThreshold(nextSeconds);
     });
     _expiryTimer = Timer(remaining, () {
       if (mounted && _canRespond) {
         _markTerminal(_ApprovalPanelPhase.expired);
       }
     });
+  }
+
+  void _announceCountdownThreshold(int seconds) {
+    if (!_countdownAnnouncementThresholds.contains(seconds) ||
+        !MediaQuery.supportsAnnounceOf(context) ||
+        !_announcedCountdownThresholds.add(seconds)) {
+      return;
+    }
+    unawaited(
+      SemanticsService.sendAnnouncement(
+        View.of(context),
+        context.l10n.approvalExpiresIn(seconds),
+        Directionality.of(context),
+      ),
+    );
   }
 
   void _checkSessionIdentity() {
@@ -175,7 +196,7 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
       _markTerminal(_ApprovalPanelPhase.expired);
       return;
     }
-    approved ? ActionFeedback.tap() : ActionFeedback.warning();
+    approved ? ActionFeedback.warning() : ActionFeedback.tap();
     setState(() {
       _phase = approved
           ? _ApprovalPanelPhase.approving
@@ -230,6 +251,7 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final colors = Theme.of(context).colorScheme;
     final radius = widget.phoneLayout
         ? const BorderRadius.vertical(top: Radius.circular(26))
         : BorderRadius.circular(TsPhoneRadii.panel);
@@ -258,9 +280,16 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    if (widget.phoneLayout) _buildSheetHandle(context),
                     _buildHeader(context),
-                    Flexible(child: _buildContent(context)),
+                    Flexible(
+                      child: Material(
+                        key: const ValueKey<String>(
+                          'approval-readable-surface',
+                        ),
+                        color: colors.surfaceContainerLowest,
+                        child: _buildContent(context),
+                      ),
+                    ),
                     _buildActions(context),
                   ],
                 ),
@@ -272,23 +301,7 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
     );
   }
 
-  Widget _buildSheetHandle(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 9),
-      child: Container(
-        width: 36,
-        height: 5,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(3),
-        ),
-      ),
-    );
-  }
-
   Widget _buildHeader(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         TsPhoneSpacing.large,
@@ -296,58 +309,97 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
         TsPhoneSpacing.large,
         TsPhoneSpacing.medium,
       ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: colors.tertiary.withValues(alpha: 0.16),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.shield_outlined, color: colors.tertiary),
-          ),
-          const SizedBox(width: TsPhoneSpacing.medium),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stackHeader =
+              MediaQuery.textScalerOf(context).scale(17) > 22 ||
+              constraints.maxWidth < 328;
+          final identity = _buildHeaderIdentity(context);
+          final countdown = _buildCountdownBadge(context);
+          if (stackHeader) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  l10n.approvalTitle,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: TsPhoneSpacing.xSmall),
-                Text(
-                  l10n.approvalRequestDescription,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
+                identity,
+                const SizedBox(height: TsPhoneSpacing.small),
+                Align(alignment: Alignment.centerRight, child: countdown),
               ],
+            );
+          }
+          return Row(
+            children: <Widget>[
+              Expanded(child: identity),
+              const SizedBox(width: TsPhoneSpacing.small),
+              countdown,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildHeaderIdentity(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: colors.tertiaryContainer,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.shield_outlined, color: colors.onTertiaryContainer),
+        ),
+        const SizedBox(width: TsPhoneSpacing.medium),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                l10n.approvalTitle,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: TsPhoneSpacing.xSmall),
+              Text(
+                l10n.approvalRequestDescription,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCountdownBadge(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
+    return Semantics(
+      key: const ValueKey<String>('approval-countdown'),
+      container: true,
+      liveRegion: false,
+      label: l10n.approvalExpiresIn(_remainingSeconds),
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.tertiaryContainer,
+            borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: Text(
+              '${_remainingSeconds}s',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colors.onTertiaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          const SizedBox(width: TsPhoneSpacing.small),
-          Semantics(
-            liveRegion: true,
-            label: l10n.approvalExpiresIn(_remainingSeconds),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.tertiaryContainer,
-                borderRadius: BorderRadius.circular(TsPhoneRadii.small),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                child: Text(
-                  '${_remainingSeconds}s',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colors.onTertiaryContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -393,23 +445,20 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
           ),
           const SizedBox(height: TsPhoneSpacing.small),
           Container(
-            constraints: const BoxConstraints(maxHeight: 240),
             padding: const EdgeInsets.all(TsPhoneSpacing.medium),
             decoration: BoxDecoration(
-              color: colors.surfaceContainerLow.withValues(alpha: 0.78),
+              color: colors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
               border: Border.all(
                 color: colors.outlineVariant.withValues(alpha: 0.72),
                 width: 0.6,
               ),
             ),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                widget.request.preview,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontFamily: 'monospace',
-                  height: 1.45,
-                ),
+            child: SelectableText(
+              widget.request.preview,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                height: 1.45,
               ),
             ),
           ),
@@ -445,15 +494,24 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
                     else
                       Icon(
                         _phase == _ApprovalPanelPhase.failed
-                            ? Icons.error_outline
-                            : Icons.info_outline,
+                            ? Icons.error_outline_rounded
+                            : Icons.info_outline_rounded,
                         size: 19,
                         color: _phase == _ApprovalPanelPhase.failed
-                            ? colors.error
+                            ? colors.onErrorContainer
                             : colors.onSurfaceVariant,
                       ),
                     const SizedBox(width: TsPhoneSpacing.small),
-                    Expanded(child: Text(message)),
+                    Expanded(
+                      child: Text(
+                        message,
+                        style: TextStyle(
+                          color: _phase == _ApprovalPanelPhase.failed
+                              ? colors.onErrorContainer
+                              : colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -480,17 +538,21 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
     final busy =
         _phase == _ApprovalPanelPhase.approving ||
         _phase == _ApprovalPanelPhase.rejecting;
-    final reject = OutlinedButton(
+    final reject = OutlinedButton.icon(
+      key: const ValueKey<String>('approval-reject'),
       onPressed: _canRespond ? () => _respond(false) : null,
-      child: Text(l10n.reject),
+      icon: const Icon(Icons.block_outlined),
+      label: Text(l10n.reject),
     );
-    final approve = FilledButton(
+    final approve = FilledButton.icon(
+      key: const ValueKey<String>('approval-approve'),
       onPressed: _canRespond ? () => _respond(true) : null,
       style: FilledButton.styleFrom(
         backgroundColor: colors.tertiary,
         foregroundColor: colors.onTertiary,
       ),
-      child: Text(l10n.approveOnce),
+      icon: const Icon(Icons.shield_outlined),
+      label: Text(l10n.approveOnce),
     );
     final stackActions =
         MediaQuery.textScalerOf(context).scale(14) > 18 ||
@@ -561,22 +623,24 @@ class _ApprovalFact extends StatelessWidget {
             ),
           ),
           const SizedBox(width: TsPhoneSpacing.small),
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(width: TsPhoneSpacing.small),
           Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  label,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

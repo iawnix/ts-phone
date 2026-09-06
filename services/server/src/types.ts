@@ -1,6 +1,6 @@
-export const API_VERSION = "ts-phone-api/3" as const;
+export const API_VERSION = "ts-phone-api/4" as const;
 export const EVENT_VERSION = "ts-phone-events/3" as const;
-export const SERVICE_VERSION = "0.5.1" as const;
+export const SERVICE_VERSION = "0.6.0" as const;
 
 export type RuntimeState =
   | "offline"
@@ -35,6 +35,7 @@ export interface WorkspaceSummary {
 export interface SessionSummary {
   sessionId: string;
   sessionRevision: string;
+  activeAgentRunId: string | null;
   sessionName?: string;
   model?: string;
   runtime?: SessionRuntimeSnapshot;
@@ -84,6 +85,7 @@ export interface MessagePage {
 export interface MessageSnapshot extends MessagePage {
   sessionId: string;
   sessionRevision: string;
+  activeAgentRunId: string | null;
   lastEventId: string;
 }
 
@@ -164,6 +166,7 @@ export interface TimelineSnapshot extends TimelinePage {
   schemaVersion: "ts-phone-timeline/1";
   sessionId: string;
   sessionRevision: string;
+  activeAgentRunId: string | null;
   lastEventId: string;
   capabilities: SessionCapability[];
 }
@@ -192,6 +195,7 @@ export interface ApprovalInput {
   sessionRevision: string;
 }
 
-export interface SessionCommandInput {
+export interface AbortInput {
   sessionRevision: string;
+  agentRunId: string;
 }

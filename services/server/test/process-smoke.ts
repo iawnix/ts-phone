@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,9 @@ const workspaceRoot = join(root, "workspaces");
 const stateDir = join(root, "state");
 const bridgeSocketPath = join(root, "run", "bridge.sock");
 const bridgeSecretPath = join(stateDir, "bridge.secret");
-const port = parsePort(process.env.TS_PHONE_SMOKE_PORT || "22113");
+const port = process.env.TS_PHONE_SMOKE_PORT
+  ? parsePort(process.env.TS_PHONE_SMOKE_PORT)
+  : await findAvailablePort();
 const baseUrl = `http://127.0.0.1:${port}`;
 await mkdir(join(workspaceRoot, "smoke"), { recursive: true });
 const config: ServerConfig = {
@@ -58,9 +61,9 @@ try {
 
   const token = (await readFile(join(stateDir, "auth.token"), "utf8")).trim();
   const authorization = { Authorization: `Bearer ${token}` };
-  assert.equal((await fetch(`${baseUrl}/api/v3/workspaces`)).status, 401);
+  assert.equal((await fetch(`${baseUrl}/api/v4/workspaces`)).status, 401);
 
-  const workspaces = await fetch(`${baseUrl}/api/v3/workspaces`, { headers: authorization });
+  const workspaces = await fetch(`${baseUrl}/api/v4/workspaces`, { headers: authorization });
   assert.equal(workspaces.status, 200);
   assert.match(await workspaces.text(), /"smoke"/);
 
@@ -68,14 +71,14 @@ try {
   await waitForWorkspaceState(authorization, "idle");
   const sessionRevision = await readSessionRevision(authorization);
 
-  const eventResponse = await fetch(`${baseUrl}/api/v3/workspaces/smoke/sessions/session-test/events`, {
+  const eventResponse = await fetch(`${baseUrl}/api/v4/workspaces/smoke/sessions/session-test/events`, {
     headers: authorization,
   });
   assert.equal(eventResponse.status, 200);
   const reader = eventResponse.body?.getReader();
   assert.ok(reader);
   try {
-    assert.equal((await fetch(`${baseUrl}/api/v3/workspaces/smoke/sessions/session-test/messages`, {
+    assert.equal((await fetch(`${baseUrl}/api/v4/workspaces/smoke/sessions/session-test/messages`, {
       method: "POST",
       headers: { ...authorization, "Content-Type": "application/json" },
       body: JSON.stringify({ clientMessageId: "process-smoke-1", sessionRevision, message: "process-smoke" }),
@@ -85,7 +88,7 @@ try {
     await reader.cancel();
   }
 
-  const messages = await fetch(`${baseUrl}/api/v3/workspaces/smoke/sessions/session-test/messages`, {
+  const messages = await fetch(`${baseUrl}/api/v4/workspaces/smoke/sessions/session-test/messages`, {
     headers: authorization,
   });
   assert.equal(messages.status, 200);
@@ -108,7 +111,7 @@ async function waitForWorkspaceState(
   expected: string,
 ): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    const response = await fetch(`${baseUrl}/api/v3/workspaces`, { headers: authorization });
+    const response = await fetch(`${baseUrl}/api/v4/workspaces`, { headers: authorization });
     const payload = await response.json() as { data?: Array<{ runtimeState?: string }> };
     if (payload.data?.[0]?.runtimeState === expected) return;
     await new Promise((resolveWait) => setTimeout(resolveWait, 20));
@@ -117,7 +120,7 @@ async function waitForWorkspaceState(
 }
 
 async function readSessionRevision(authorization: { Authorization: string }): Promise<string> {
-  const response = await fetch(`${baseUrl}/api/v3/workspaces/smoke/sessions`, { headers: authorization });
+  const response = await fetch(`${baseUrl}/api/v4/workspaces/smoke/sessions`, { headers: authorization });
   const payload = await response.json() as { data?: Array<{ sessionRevision?: string }> };
   const revision = payload.data?.[0]?.sessionRevision;
   if (!revision) throw new Error("Smoke session revision was unavailable");
@@ -165,4 +168,21 @@ function parsePort(value: string): number {
     throw new Error("TS_PHONE_SMOKE_PORT must be an integer between 1 and 65535");
   }
   return parsed;
+}
+
+async function findAvailablePort(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((resolveListen, rejectListen) => {
+    probe.once("error", rejectListen);
+    probe.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = probe.address();
+  assert.ok(address && typeof address === "object");
+  await new Promise<void>((resolveClose, rejectClose) => {
+    probe.close((error) => {
+      if (error) rejectClose(error);
+      else resolveClose();
+    });
+  });
+  return address.port;
 }

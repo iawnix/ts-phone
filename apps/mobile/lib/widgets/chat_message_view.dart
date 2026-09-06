@@ -184,9 +184,7 @@ class _MessageFrame extends StatelessWidget {
               ),
         decoration: isUser
             ? BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHigh.withValues(
-                  alpha: 0.86,
-                ),
+                color: theme.colorScheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(TsPhoneRadii.bubble),
               )
             : null,

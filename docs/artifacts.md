@@ -1,5 +1,10 @@
 # Build Artifacts
 
+The records below describe the last published Android release, 0.12.1+36. It
+uses API v3 and Bridge v2. The current source tree has advanced to 0.13.0+37,
+API v4, and Bridge v3; no new signed artifact or digest is recorded here yet.
+Do not relabel the 0.12.1 APK as a current-source build.
+
 ## TSPi Component Release
 
 The distributable Phone input to a complete TSPi Package is built with:
@@ -11,9 +16,12 @@ python3 deploy/build-component-release.py --output-dir dist/component --json
 It produces one deterministic `ts-phone-component-*.tgz` plus
 `ts-phone-component-release.json`. The manifest binds the server and mobile
 versions, API/Events/Bridge protocols, built server entry, arm64 APK digest and
-signer certificate, source commit, and component archive digest. Other split
-APKs and the AAB remain standalone mobile artifacts; the suite includes only
-the production arm64 APK named by the component manifest. The source-tree
+signer certificate, complete source snapshot, mobile build attestation, and
+component archive digest. The signed APK contains the same source snapshot, so
+an old artifact cannot be relabeled for a newer checkout. Other split APKs and
+the AAB remain standalone mobile artifacts; each receives its own attestation,
+while the suite includes only the production arm64 APK named by the component
+manifest. The source-tree
 systemd unit is not included because live service configuration belongs to the
 installation, not to an immutable component release.
 
@@ -48,9 +56,12 @@ installation, not to an immutable component release.
   synchronization, direct navigation between the start and latest message,
   Reduce Motion, narrow-screen and large-text support, and the TSPi character
   brand mark
-- Branding source: apps/mobile/assets/branding/ts-phone-logo-source.png
+- Authoritative branding source:
+  apps/mobile/assets/branding/ts-phone-logo-source.png
 - Derived app assets: ts-phone-icon.png, ts-phone-mark.png, and
   ts-phone-mark-monochrome.png
+- Legacy SVG files are design references only and are not release inputs; see
+  apps/mobile/assets/branding/README.md
 - Android icons: legacy five-density, adaptive foreground, and Android 13
   monochrome themed icon
 - Icon generator: apps/mobile/tool/generate_app_icons.sh
@@ -75,15 +86,17 @@ Validation commands:
 
 ~~~bash
 apps/mobile/tool/build_release_android.sh
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
-/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
-/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/ts-phone-v0.12.1-build36-release.aab
-sha256sum dist/ts-phone-v0.12.1-build36-*
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump badging dist/android-current/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/aapt dump permissions dist/android-current/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
+/home/iaw/soft/android/sdk/build-tools/36.0.0/apksigner verify --verbose --print-certs dist/android-current/ts-phone-v0.12.1-build36-arm64-v8a-release.apk
+/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner -verify dist/android-current/ts-phone-v0.12.1-build36-release.aab
+sha256sum dist/android-current/ts-phone-v0.12.1-build36-*
 ~~~
 
 The generated Flutter outputs and archived artifacts were compared byte for
-byte. Install the `arm64-v8a` APK on typical current Android phones. A previous
+byte. New builds publish one content-addressed directory and atomically update
+`dist/android-current`; an existing same-version release is never overwritten.
+Install the `arm64-v8a` APK on typical current Android phones. A previous
 debug/profile installation must be uninstalled first because its signing
 certificate differs; uninstalling clears its local token and settings.
 

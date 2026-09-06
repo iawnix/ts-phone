@@ -5,6 +5,7 @@ import { HttpError, RuntimeError } from "../errors.js";
 import { appendProjectedMessage, projectSnapshotMessagePage } from "../message-projection.js";
 import { secretsEqual } from "../security.js";
 import type {
+  AbortInput,
   ApprovalInput,
   MessagePage,
   MessagePageRequest,
@@ -12,7 +13,6 @@ import type {
   PromptInput,
   RuntimeState,
   SessionCapability,
-  SessionCommandInput,
   SessionRuntimeSnapshot,
   SessionSnapshot,
   SessionSummary,
@@ -48,6 +48,7 @@ interface SessionRecord {
   snapshot?: SessionSnapshot;
   runtime?: SessionRuntimeSnapshot;
   snapshotEventId?: string;
+  activeAgentRunId?: string;
   messageCommands: Map<string, Promise<void>>;
 }
 
@@ -138,6 +139,7 @@ export class WorkspaceHub {
     session.state = "connecting";
     delete session.snapshot;
     delete session.snapshotEventId;
+    delete session.activeAgentRunId;
     session.messageCommands.clear();
 
     const connection = new BridgeConnection(socket, registration, this.#config.commandTimeoutMs);
@@ -164,6 +166,7 @@ export class WorkspaceHub {
       return {
         sessionId,
         sessionRevision: session.journal.epoch,
+        activeAgentRunId: session.activeAgentRunId ?? null,
         ...messagePageFromSnapshot(session.snapshot, request.limit),
         lastEventId: session.snapshotEventId,
       };
@@ -186,6 +189,7 @@ export class WorkspaceHub {
     return {
       sessionId,
       sessionRevision: session.journal.epoch,
+      activeAgentRunId: null,
       ...page,
       lastEventId: session.journal.latestId,
     };
@@ -217,6 +221,7 @@ export class WorkspaceHub {
       schemaVersion: "ts-phone-timeline/1",
       sessionId,
       sessionRevision: session.journal.epoch,
+      activeAgentRunId: session.activeAgentRunId ?? null,
       ...page,
       lastEventId: session.snapshotEventId ?? session.journal.latestId,
       capabilities: capabilitiesForSession(session, selectedActive),
@@ -250,9 +255,15 @@ export class WorkspaceHub {
     return command;
   }
 
-  async abort(workspaceId: string, sessionId: string, input: SessionCommandInput): Promise<void> {
+  async abort(workspaceId: string, sessionId: string, input: AbortInput): Promise<void> {
     const session = await this.#connectedSession(workspaceId, sessionId);
     this.#assertRevision(session, input.sessionRevision);
+    if (!session.activeAgentRunId) {
+      throw new HttpError(409, "agent_not_running", "No agent run is active in this TSPi session");
+    }
+    if (input.agentRunId !== session.activeAgentRunId) {
+      throw new HttpError(409, "agent_run_stale", "The requested agent run is no longer active");
+    }
     const connection = session.connection!;
     await connection.sendCommand({
       protocolVersion: BRIDGE_PROTOCOL_VERSION,
@@ -261,6 +272,7 @@ export class WorkspaceHub {
       sessionId,
       instanceEpoch: connection.instanceEpoch,
       sessionGeneration: connection.sessionGeneration,
+      agentRunId: input.agentRunId,
     });
   }
 
@@ -331,6 +343,7 @@ export class WorkspaceHub {
       if (bridgeRecord.snapshot.sessionId !== session.sessionId) {
         throw new Error("Bridge snapshot sessionId did not match registration");
       }
+      const { agentRunId, ...bridgeSnapshot } = bridgeRecord.snapshot;
       const projected = projectSnapshotMessagePage(
         bridgeRecord.snapshot.messages,
         bridgeRecord.snapshot.messageIds,
@@ -338,7 +351,7 @@ export class WorkspaceHub {
       const hasMore = Boolean(projected.messageIds?.length)
         && (bridgeRecord.snapshot.hasMore === true || projected.omitted > 0);
       const snapshot: SessionSnapshot = {
-        ...bridgeRecord.snapshot,
+        ...bridgeSnapshot,
         messages: projected.messages,
       };
       if (projected.messageIds !== undefined) {
@@ -352,6 +365,8 @@ export class WorkspaceHub {
         delete snapshot.nextBefore;
       }
       session.snapshot = snapshot;
+      if (agentRunId) session.activeAgentRunId = agentRunId;
+      else delete session.activeAgentRunId;
       if (snapshot.runtime) session.runtime = snapshot.runtime;
       else delete session.runtime;
       session.state = snapshot.isStreaming ? "running" : "idle";
@@ -359,6 +374,7 @@ export class WorkspaceHub {
         "session.snapshot",
         {
           ...snapshot,
+          activeAgentRunId: session.activeAgentRunId ?? null,
           messages: [...snapshot.messages],
           accessMode: session.accessMode,
           historyAvailable: Boolean(session.persisted),
@@ -386,10 +402,20 @@ export class WorkspaceHub {
       return;
     }
     if (bridgeRecord.eventType === "agent_start") {
+      const agentRunId = agentRunIdFromEvent(bridgeRecord.payload, "agent_start");
+      if (session.activeAgentRunId && session.activeAgentRunId !== agentRunId) {
+        throw new Error("Bridge started a new agent run before settling the active run");
+      }
+      session.activeAgentRunId = agentRunId;
       session.state = "running";
       if (session.snapshot) session.snapshot.isStreaming = true;
     }
     if (bridgeRecord.eventType === "agent_settled") {
+      const agentRunId = agentRunIdFromEvent(bridgeRecord.payload, "agent_settled");
+      if (session.activeAgentRunId !== agentRunId) {
+        throw new Error("Bridge settled an agent run that was not active");
+      }
+      delete session.activeAgentRunId;
       session.state = "idle";
       if (session.snapshot) session.snapshot.isStreaming = false;
     }
@@ -403,7 +429,13 @@ export class WorkspaceHub {
       }
     }
     const event = session.journal.publish(bridgeRecord.eventType, bridgeRecord.payload, identity);
-    if (bridgeRecord.eventType === "message_end" && session.snapshot) session.snapshotEventId = event.id;
+    if (session.snapshot && (
+      bridgeRecord.eventType === "message_end"
+      || bridgeRecord.eventType === "agent_start"
+      || bridgeRecord.eventType === "agent_settled"
+    )) {
+      session.snapshotEventId = event.id;
+    }
     if (bridgeRecord.eventType === "agent_start" || bridgeRecord.eventType === "agent_settled") {
       this.#publishState(session);
     }
@@ -431,6 +463,7 @@ export class WorkspaceHub {
     delete session.connection;
     delete session.snapshot;
     delete session.snapshotEventId;
+    delete session.activeAgentRunId;
     session.messageCommands.clear();
     session.state = session.state === "running" ? "recovery_required" : "offline";
     for (const [key, pending] of this.#approvals) {
@@ -558,6 +591,7 @@ export class WorkspaceHub {
     const summary: SessionSummary = {
       sessionId: session.sessionId,
       sessionRevision: session.journal.epoch,
+      activeAgentRunId: session.activeAgentRunId ?? null,
       runtimeState: session.state,
       isStreaming: session.state === "running",
       accessMode: session.accessMode,
@@ -584,6 +618,7 @@ export class WorkspaceHub {
       model: session.snapshot?.model,
       runtime: session.runtime,
       isStreaming: session.state === "running",
+      activeAgentRunId: session.activeAgentRunId ?? null,
       accessMode: session.accessMode,
       historyAvailable: Boolean(session.persisted),
       historyOnly: session.state === "offline" && !isLive(session) && Boolean(session.persisted),
@@ -631,6 +666,17 @@ function aggregateState(states: RuntimeState[]): RuntimeState {
 function messageFromEndEvent(payload: unknown): unknown | undefined {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
   return (payload as Record<string, unknown>).message;
+}
+
+function agentRunIdFromEvent(payload: unknown, eventType: "agent_start" | "agent_settled"): string {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(`${eventType} payload must be an object`);
+  }
+  const agentRunId = (payload as Record<string, unknown>).agentRunId;
+  if (typeof agentRunId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(agentRunId)) {
+    throw new Error(`${eventType} payload must include a valid agentRunId`);
+  }
+  return agentRunId;
 }
 
 function messagePageFromSnapshot(snapshot: SessionSnapshot, limit: number): MessagePage {

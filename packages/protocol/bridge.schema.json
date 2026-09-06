@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tsphone.iawnix.xyz/schema/bridge-v2.json",
+  "$id": "https://tsphone.iawnix.xyz/schema/bridge-v3.json",
   "title": "TS Phone local bridge record",
   "type": "object",
   "required": [
@@ -11,7 +11,7 @@
     "instanceEpoch"
   ],
   "properties": {
-    "protocolVersion": { "const": "ts-phone-bridge/2" },
+    "protocolVersion": { "const": "ts-phone-bridge/3" },
     "type": {
       "enum": [
         "bridge.register",
@@ -49,6 +49,10 @@
       "type": "string",
       "pattern": "^[A-Za-z0-9._:-]{1,160}$"
     },
+    "agentRunId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
     "approvalId": {
       "type": "string",
       "pattern": "^[A-Za-z0-9._:-]{1,160}$"
@@ -67,10 +71,85 @@
     "message": { "type": "string", "minLength": 1, "maxLength": 65536 },
     "approved": { "type": "boolean" },
     "ok": { "type": "boolean" },
+    "errorCode": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "eventType": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,100}$"
+    },
+    "payload": {},
     "snapshot": { "$ref": "#/$defs/sessionSnapshot" }
   },
   "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "command.abort" } },
+        "required": ["type"]
+      },
+      "then": { "required": ["agentRunId"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "event.publish" },
+          "eventType": { "const": "agent_start" }
+        },
+        "required": ["type", "eventType"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "allOf": [
+              { "$ref": "#/$defs/agentRunEvent" },
+              { "properties": { "type": { "const": "agent_start" } } }
+            ]
+          }
+        },
+        "required": ["payload"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "event.publish" },
+          "eventType": { "const": "agent_settled" }
+        },
+        "required": ["type", "eventType"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "allOf": [
+              { "$ref": "#/$defs/agentRunEvent" },
+              { "properties": { "type": { "const": "agent_settled" } } }
+            ]
+          }
+        },
+        "required": ["payload"]
+      }
+    }
+  ],
   "$defs": {
+    "agentRunEvent": {
+      "type": "object",
+      "required": ["type", "origin", "turnId", "agentRunId"],
+      "properties": {
+        "type": { "enum": ["agent_start", "agent_settled"] },
+        "origin": { "enum": ["local", "extension", "phone", "unknown"] },
+        "turnId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+        },
+        "agentRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+        }
+      },
+      "additionalProperties": false
+    },
     "sessionRuntime": {
       "type": "object",
       "required": ["schemaVersion", "model", "updatedAt"],
@@ -114,6 +193,10 @@
         "runtime": { "$ref": "#/$defs/sessionRuntime" },
         "thinkingLevel": { "type": "string", "minLength": 1, "maxLength": 100 },
         "isStreaming": { "type": "boolean" },
+        "agentRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+        },
         "messages": { "type": "array", "maxItems": 500 },
         "messageIds": {
           "type": "array",
@@ -123,7 +206,17 @@
         "hasMore": { "type": "boolean" },
         "nextBefore": { "type": "string", "pattern": "^[0-9a-f]{8}$" }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "isStreaming": { "const": true } },
+            "required": ["isStreaming"]
+          },
+          "then": { "required": ["agentRunId"] },
+          "else": { "not": { "required": ["agentRunId"] } }
+        }
+      ]
     }
   }
 }

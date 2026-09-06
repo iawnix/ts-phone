@@ -166,6 +166,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get refreshing => '正在刷新';
 
   @override
+  String get opening => '正在打开';
+
+  @override
   String get researchDirectoriesRefreshed => '研究目录已刷新';
 
   @override
@@ -362,6 +365,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get abortRequested => '已发送中止请求';
 
   @override
+  String get abortTargetChanged => '当前生成已切换，未中止任何任务。';
+
+  @override
   String get approvalTitle => '需要你的确认';
 
   @override
@@ -436,6 +442,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get abortGeneration => '中止生成';
+
+  @override
+  String get abortGenerationConfirmation => '要中止当前生成吗？已产生的部分回复可能不完整。';
+
+  @override
+  String get keepGenerating => '继续生成';
 
   @override
   String get composerSynchronizing => '正在同步...';
@@ -592,6 +604,18 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get timelineFilterAll => '全部';
+
+  @override
+  String get timelineFilterMessages => '消息';
+
+  @override
+  String get timelineFilterActivities => '活动';
+
+  @override
+  String get timelineFilterEmpty => '当前视图没有内容';
+
+  @override
   String get timelineBranches => '会话分支';
 
   @override
@@ -686,12 +710,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get blockedNonHttpsImage => '[已阻止非 HTTPS 图片]';
 
   @override
-  String openImageWithAlt(String alt) {
-    return '在浏览器中打开图片：$alt';
-  }
+  String get previewImage => '预览图片';
 
   @override
-  String get openImage => '在浏览器中打开图片';
+  String get loadingImage => '正在加载图片';
+
+  @override
+  String get imageLoadFailed => '无法加载图片';
+
+  @override
+  String get openInBrowser => '在浏览器中打开';
+
+  @override
+  String get settingsLoadFailed => '无法读取本机设置，请重试。';
 
   @override
   String get problemIncompatible => '服务器数据格式与当前 App 不兼容';
@@ -704,6 +735,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemSessionChanged => '会话已变化，请重新同步';
+
+  @override
+  String get problemAgentRunChanged => '当前生成在中止前已发生切换';
 
   @override
   String get problemServiceUnavailable => 'TS Phone 服务暂时不可用';

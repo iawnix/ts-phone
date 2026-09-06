@@ -40,6 +40,7 @@ final class SessionViewState {
       historyOnly: controller.historyOnly,
       viewingInactiveBranch: controller.viewingInactiveBranch,
       canSend: controller.canSend,
+      hasActiveAgentRun: controller.activeAgentRunId != null,
       commandInFlight: controller.commandInFlight,
       canRefresh: controller.canRefresh,
     );
@@ -67,6 +68,7 @@ SessionViewState resolveSessionViewState({
   required bool historyOnly,
   required bool viewingInactiveBranch,
   required bool canSend,
+  required bool hasActiveAgentRun,
   required bool commandInFlight,
   required bool canRefresh,
 }) {
@@ -97,7 +99,11 @@ SessionViewState resolveSessionViewState({
     // prompt. Keep the affordance in lock-step with that guard so a
     // read-only, stale, or disconnected session never exposes a no-op stop
     // button.
-    canAbort: canSend && phase == SessionUiPhase.running && !commandInFlight,
+    canAbort:
+        canSend &&
+        hasActiveAgentRun &&
+        phase == SessionUiPhase.running &&
+        !commandInFlight,
     canRefresh: canRefresh,
     isHistorical: isHistorical,
   );

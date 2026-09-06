@@ -176,6 +176,7 @@ class SessionSummary {
     this.sessionName,
     this.model,
     this.runtime,
+    this.activeAgentRunId,
     this.historyAvailable = false,
     this.historyOnly = false,
     this.canPrompt = true,
@@ -191,6 +192,7 @@ class SessionSummary {
     final canPrompt = json['canPrompt'];
     final rawCapabilities = json['capabilities'];
     final rawRuntime = json['runtime'];
+    final activeAgentRunId = json['activeAgentRunId'];
     if (sessionId is! String ||
         sessionRevision is! String ||
         isStreaming is! bool ||
@@ -198,12 +200,22 @@ class SessionSummary {
         (historyOnly != null && historyOnly is! bool) ||
         (canPrompt != null && canPrompt is! bool) ||
         (rawRuntime != null && rawRuntime is! Map) ||
+        !json.containsKey('activeAgentRunId') ||
+        (activeAgentRunId != null &&
+            (activeAgentRunId is! String ||
+                !RegExp(
+                  r'^[A-Za-z0-9._:-]{1,160}$',
+                ).hasMatch(activeAgentRunId))) ||
         (rawCapabilities != null &&
             (rawCapabilities is! List ||
                 rawCapabilities.any((value) => value is! String)))) {
       throw const FormatException('Session response is invalid');
     }
     final runtimeState = RuntimeState.parse(json['runtimeState']);
+    if ((runtimeState == RuntimeState.running) !=
+        (activeAgentRunId is String && activeAgentRunId.isNotEmpty)) {
+      throw const FormatException('Session agent run identity is invalid');
+    }
     final hasHistory = historyAvailable == true;
     final promptAvailable = canPrompt is bool
         ? canPrompt
@@ -221,6 +233,7 @@ class SessionSummary {
           : SessionRuntimeSnapshot.fromJson(
               Map<String, Object?>.from(rawRuntime as Map),
             ),
+      activeAgentRunId: activeAgentRunId as String?,
       runtimeState: runtimeState,
       isStreaming: isStreaming,
       accessMode: SessionAccessMode.parse(json['accessMode']),
@@ -240,6 +253,7 @@ class SessionSummary {
   final String? sessionName;
   final String? model;
   final SessionRuntimeSnapshot? runtime;
+  final String? activeAgentRunId;
   final RuntimeState runtimeState;
   final bool isStreaming;
   final SessionAccessMode accessMode;

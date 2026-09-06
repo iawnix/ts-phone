@@ -7,6 +7,7 @@ import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../models/workspace.dart';
+import '../../navigation/adaptive_page_route.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
@@ -39,6 +40,7 @@ class _SessionListPageState extends State<SessionListPage>
   List<SessionSummary>? _sessions;
   TsPhoneProblem? _problem;
   bool _refreshing = false;
+  String? _openingSessionId;
 
   @override
   void initState() {
@@ -86,9 +88,12 @@ class _SessionListPageState extends State<SessionListPage>
   }
 
   Future<void> _open(SessionSummary session) async {
+    if (_openingSessionId != null) return;
+    setState(() => _openingSessionId = session.sessionId);
     ActionFeedback.selection();
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+    try {
+      await pushTsPhonePage<void>(
+        context: context,
         builder: (context) => ChatPage(
           settings: widget.settings,
           workspace: widget.workspace,
@@ -96,9 +101,11 @@ class _SessionListPageState extends State<SessionListPage>
           recoveredSession:
               session.runtimeState == RuntimeState.recoveryRequired,
         ),
-      ),
-    );
-    await _refresh();
+      );
+      if (mounted) await _refresh();
+    } finally {
+      if (mounted) setState(() => _openingSessionId = null);
+    }
   }
 
   Future<void> _copyStartCommand() async {
@@ -122,14 +129,7 @@ class _SessionListPageState extends State<SessionListPage>
     final l10n = context.l10n;
     return Scaffold(
       appBar: TsGlassAppBar(
-        leading: IconButton(
-          onPressed: () {
-            ActionFeedback.selection();
-            Navigator.of(context).maybePop();
-          },
-          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-        ),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
         title: Text(widget.workspace.name),
         actions: <Widget>[
           IconButton(
@@ -140,11 +140,23 @@ class _SessionListPageState extends State<SessionListPage>
                     dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.refresh),
+                : const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
-      body: TsPageBackdrop(child: _buildBody()),
+      body: TsPageBackdrop(
+        child: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: TsPhoneSpacing.xLarge),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: _buildBody(),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -168,7 +180,7 @@ class _SessionListPageState extends State<SessionListPage>
               message: l10n.noSessionHistoryMessage,
               action: FilledButton.icon(
                 onPressed: _copyStartCommand,
-                icon: const Icon(Icons.copy_outlined),
+                icon: const Icon(Icons.copy_rounded),
                 label: Text(l10n.copyStartCommand),
               ),
             ),
@@ -204,7 +216,10 @@ class _SessionListPageState extends State<SessionListPage>
                 final session = _sessions![index - 1];
                 return _SessionTile(
                   session: session,
-                  onTap: () => _open(session),
+                  opening: _openingSessionId == session.sessionId,
+                  onTap: _openingSessionId == null
+                      ? () => _open(session)
+                      : null,
                 );
               },
             ),
@@ -239,10 +254,15 @@ int _sessionDisplayPriority(SessionSummary session) {
 }
 
 class _SessionTile extends StatelessWidget {
-  const _SessionTile({required this.session, required this.onTap});
+  const _SessionTile({
+    required this.session,
+    required this.opening,
+    required this.onTap,
+  });
 
   final SessionSummary session;
-  final VoidCallback onTap;
+  final bool opening;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +273,7 @@ class _SessionTile extends StatelessWidget {
       RuntimeState.running || RuntimeState.connecting => status.warning,
       RuntimeState.idle => status.connected,
       RuntimeState.recoveryRequired => status.error,
-      RuntimeState.offline => colors.outline,
+      RuntimeState.offline => colors.onSurfaceVariant,
     };
     final accessIcon = session.historyOnly
         ? Icons.history_rounded
@@ -301,6 +321,18 @@ class _SessionTile extends StatelessWidget {
           ),
         ],
       ),
+      trailing: opening
+          ? Semantics(
+              label: l10n.opening,
+              liveRegion: true,
+              child: const ExcludeSemantics(
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          : null,
       onTap: onTap,
     );
   }
@@ -322,7 +354,7 @@ class _SessionError extends StatelessWidget {
       action: IconButton.filledTonal(
         onPressed: () => onRetry(announce: true),
         tooltip: l10n.retry,
-        icon: const Icon(Icons.refresh),
+        icon: const Icon(Icons.refresh_rounded),
       ),
     );
   }

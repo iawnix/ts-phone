@@ -17,6 +17,12 @@ A bridge reconnect changes sessionRevision. Mobile clients must discard the old
 stream cursor, fetch the new session snapshot, and wait for the new SSE stream
 before enabling prompt, abort, or approval actions.
 
+An abort conflict is not an ambiguous command outcome. `agent_not_running`
+means the observed run already settled; `agent_run_stale` means another run is
+now active. In both cases refresh the session snapshot and do not retry the old
+abort. Only a timeout or disconnect without an acknowledgement remains
+ambiguous.
+
 An offline broker record remains visible only while its workspace-local Pi
 session JSONL still exists. Deleting that history removes the disconnected
 record on the next workspace/session refresh. Deleting the workspace removes all

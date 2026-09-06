@@ -63,6 +63,7 @@ extension TsPhoneProblemLocalizations on TsPhoneProblem {
     TsPhoneProblemCode.authentication => l10n.problemAuthentication,
     TsPhoneProblemCode.sessionOffline => l10n.problemSessionOffline,
     TsPhoneProblemCode.sessionChanged => l10n.problemSessionChanged,
+    TsPhoneProblemCode.agentRunChanged => l10n.problemAgentRunChanged,
     TsPhoneProblemCode.serviceUnavailable => l10n.problemServiceUnavailable,
     TsPhoneProblemCode.connectionFailed => l10n.problemConnectionFailed,
     TsPhoneProblemCode.requestTimeout => l10n.problemRequestTimeout,

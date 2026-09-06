@@ -31,8 +31,17 @@ abstract final class TsPhoneMotion {
 class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
   const TsPhoneStatusTheme({
     required this.connected,
+    required this.onConnected,
+    required this.connectedContainer,
+    required this.onConnectedContainer,
     required this.warning,
+    required this.onWarning,
+    required this.warningContainer,
+    required this.onWarningContainer,
     required this.error,
+    required this.onError,
+    required this.errorContainer,
+    required this.onErrorContainer,
     required this.codeBackground,
     required this.codeForeground,
     required this.terminalBackground,
@@ -42,8 +51,17 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
   });
 
   final Color connected;
+  final Color onConnected;
+  final Color connectedContainer;
+  final Color onConnectedContainer;
   final Color warning;
+  final Color onWarning;
+  final Color warningContainer;
+  final Color onWarningContainer;
   final Color error;
+  final Color onError;
+  final Color errorContainer;
+  final Color onErrorContainer;
   final Color codeBackground;
   final Color codeForeground;
   final Color terminalBackground;
@@ -51,12 +69,54 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
   final Color terminalForeground;
   final Color terminalMuted;
 
-  factory TsPhoneStatusTheme.forBrightness(Brightness brightness) {
+  factory TsPhoneStatusTheme.forBrightness(
+    Brightness brightness, {
+    bool highContrast = false,
+  }) {
     final isLight = brightness == Brightness.light;
     return TsPhoneStatusTheme(
-      connected: isLight ? const Color(0xFF00A884) : const Color(0xFF00C2A8),
-      warning: const Color(0xFFFFB020),
-      error: const Color(0xFFFF453A),
+      connected: isLight
+          ? highContrast
+                ? const Color(0xFF005A46)
+                : const Color(0xFF007A5E)
+          : highContrast
+          ? const Color(0xFF7FFFD4)
+          : const Color(0xFF63E6BE),
+      onConnected: isLight ? Colors.white : Colors.black,
+      connectedContainer: isLight
+          ? const Color(0xFFD6F5EC)
+          : const Color(0xFF123D36),
+      onConnectedContainer: isLight
+          ? const Color(0xFF00382C)
+          : const Color(0xFFD9FFF5),
+      warning: isLight
+          ? highContrast
+                ? const Color(0xFF6B3900)
+                : const Color(0xFF8A4B00)
+          : highContrast
+          ? const Color(0xFFFFE08A)
+          : const Color(0xFFFFD166),
+      onWarning: isLight ? Colors.white : Colors.black,
+      warningContainer: isLight
+          ? const Color(0xFFFFF0D8)
+          : const Color(0xFF49330C),
+      onWarningContainer: isLight
+          ? const Color(0xFF4A2900)
+          : const Color(0xFFFFF1D2),
+      error: isLight
+          ? highContrast
+                ? const Color(0xFFA81712)
+                : const Color(0xFFC52A23)
+          : highContrast
+          ? const Color(0xFFFF928D)
+          : const Color(0xFFFF6961),
+      onError: isLight ? Colors.white : Colors.black,
+      errorContainer: isLight
+          ? const Color(0xFFFFE8E5)
+          : const Color(0xFF571B19),
+      onErrorContainer: isLight
+          ? const Color(0xFF5F0C08)
+          : const Color(0xFFFFE8E6),
       codeBackground: isLight
           ? const Color(0xFFE5F1F1)
           : const Color(0xFF13302D),
@@ -72,6 +132,12 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
 
   static TsPhoneStatusTheme resolve(BuildContext context) {
     final theme = Theme.of(context);
+    if (MediaQuery.highContrastOf(context)) {
+      return TsPhoneStatusTheme.forBrightness(
+        theme.brightness,
+        highContrast: true,
+      );
+    }
     return theme.extension<TsPhoneStatusTheme>() ??
         TsPhoneStatusTheme.forBrightness(theme.brightness);
   }
@@ -79,8 +145,17 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
   @override
   TsPhoneStatusTheme copyWith({
     Color? connected,
+    Color? onConnected,
+    Color? connectedContainer,
+    Color? onConnectedContainer,
     Color? warning,
+    Color? onWarning,
+    Color? warningContainer,
+    Color? onWarningContainer,
     Color? error,
+    Color? onError,
+    Color? errorContainer,
+    Color? onErrorContainer,
     Color? codeBackground,
     Color? codeForeground,
     Color? terminalBackground,
@@ -90,8 +165,17 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
   }) {
     return TsPhoneStatusTheme(
       connected: connected ?? this.connected,
+      onConnected: onConnected ?? this.onConnected,
+      connectedContainer: connectedContainer ?? this.connectedContainer,
+      onConnectedContainer: onConnectedContainer ?? this.onConnectedContainer,
       warning: warning ?? this.warning,
+      onWarning: onWarning ?? this.onWarning,
+      warningContainer: warningContainer ?? this.warningContainer,
+      onWarningContainer: onWarningContainer ?? this.onWarningContainer,
       error: error ?? this.error,
+      onError: onError ?? this.onError,
+      errorContainer: errorContainer ?? this.errorContainer,
+      onErrorContainer: onErrorContainer ?? this.onErrorContainer,
       codeBackground: codeBackground ?? this.codeBackground,
       codeForeground: codeForeground ?? this.codeForeground,
       terminalBackground: terminalBackground ?? this.terminalBackground,
@@ -109,8 +193,37 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
     if (other is! TsPhoneStatusTheme) return this;
     return TsPhoneStatusTheme(
       connected: Color.lerp(connected, other.connected, t)!,
+      onConnected: Color.lerp(onConnected, other.onConnected, t)!,
+      connectedContainer: Color.lerp(
+        connectedContainer,
+        other.connectedContainer,
+        t,
+      )!,
+      onConnectedContainer: Color.lerp(
+        onConnectedContainer,
+        other.onConnectedContainer,
+        t,
+      )!,
       warning: Color.lerp(warning, other.warning, t)!,
+      onWarning: Color.lerp(onWarning, other.onWarning, t)!,
+      warningContainer: Color.lerp(
+        warningContainer,
+        other.warningContainer,
+        t,
+      )!,
+      onWarningContainer: Color.lerp(
+        onWarningContainer,
+        other.onWarningContainer,
+        t,
+      )!,
       error: Color.lerp(error, other.error, t)!,
+      onError: Color.lerp(onError, other.onError, t)!,
+      errorContainer: Color.lerp(errorContainer, other.errorContainer, t)!,
+      onErrorContainer: Color.lerp(
+        onErrorContainer,
+        other.onErrorContainer,
+        t,
+      )!,
       codeBackground: Color.lerp(codeBackground, other.codeBackground, t)!,
       codeForeground: Color.lerp(codeForeground, other.codeForeground, t)!,
       terminalBackground: Color.lerp(
@@ -153,8 +266,24 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
   final double blurSigma;
   final double floatingBlurSigma;
 
-  factory TsPhoneGlassTheme.forBrightness(Brightness brightness) {
+  factory TsPhoneGlassTheme.forBrightness(
+    Brightness brightness, {
+    bool highContrast = false,
+  }) {
     final isLight = brightness == Brightness.light;
+    if (highContrast) {
+      return TsPhoneGlassTheme(
+        surface: isLight ? Colors.white : Colors.black,
+        elevatedSurface: isLight ? Colors.white : const Color(0xFF111111),
+        controlSurface: isLight ? Colors.white : const Color(0xFF1C1C1E),
+        border: isLight ? const Color(0xFF3A3A3C) : const Color(0xFFC7C7CC),
+        strongBorder: isLight ? Colors.black : Colors.white,
+        highlight: Colors.transparent,
+        shadow: Colors.transparent,
+        blurSigma: 0,
+        floatingBlurSigma: 0,
+      );
+    }
     return TsPhoneGlassTheme(
       surface: isLight ? const Color(0xBDF7F9FC) : const Color(0xBA10161D),
       elevatedSurface: isLight
@@ -229,6 +358,12 @@ abstract final class TsPhoneTheme {
 
   static ThemeData dark() => _build(Brightness.dark);
 
+  static ThemeData highContrastLight() =>
+      _build(Brightness.light, highContrast: true);
+
+  static ThemeData highContrastDark() =>
+      _build(Brightness.dark, highContrast: true);
+
   static SystemUiOverlayStyle systemUiOverlayStyle(ColorScheme scheme) {
     final isLight = scheme.brightness == Brightness.light;
     final iconBrightness = isLight ? Brightness.dark : Brightness.light;
@@ -245,18 +380,30 @@ abstract final class TsPhoneTheme {
     );
   }
 
-  static ThemeData _build(Brightness brightness) {
+  static ThemeData _build(Brightness brightness, {bool highContrast = false}) {
     final isLight = brightness == Brightness.light;
-    final glassTheme = TsPhoneGlassTheme.forBrightness(brightness);
-    final statusTheme = TsPhoneStatusTheme.forBrightness(brightness);
+    final glassTheme = TsPhoneGlassTheme.forBrightness(
+      brightness,
+      highContrast: highContrast,
+    );
+    final statusTheme = TsPhoneStatusTheme.forBrightness(
+      brightness,
+      highContrast: highContrast,
+    );
+    final primary = switch ((brightness, highContrast)) {
+      (Brightness.light, false) => const Color(0xFF0068D0),
+      (Brightness.light, true) => const Color(0xFF004F9E),
+      (Brightness.dark, false) => const Color(0xFF409CFF),
+      (Brightness.dark, true) => const Color(0xFF78B7FF),
+    };
     final scheme =
         ColorScheme.fromSeed(
-          seedColor: const Color(0xFF007AFF),
+          seedColor: primary,
           brightness: brightness,
           dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
         ).copyWith(
-          primary: const Color(0xFF007AFF),
-          onPrimary: Colors.white,
+          primary: primary,
+          onPrimary: isLight ? Colors.white : Colors.black,
           primaryContainer: isLight
               ? const Color(0xFFDCEEFF)
               : const Color(0xFF0A3155),
@@ -264,27 +411,24 @@ abstract final class TsPhoneTheme {
               ? const Color(0xFF003A66)
               : const Color(0xFFDCEEFF),
           secondary: statusTheme.connected,
-          secondaryContainer: isLight
-              ? const Color(0xFFD9F4EE)
-              : const Color(0xFF123D36),
-          onSecondaryContainer: isLight
-              ? const Color(0xFF004C3C)
-              : const Color(0xFFD9FFF5),
+          onSecondary: statusTheme.onConnected,
+          secondaryContainer: statusTheme.connectedContainer,
+          onSecondaryContainer: statusTheme.onConnectedContainer,
           tertiary: statusTheme.warning,
-          tertiaryContainer: isLight
-              ? const Color(0xFFFFEDD1)
-              : const Color(0xFF49330C),
-          onTertiaryContainer: isLight
-              ? const Color(0xFF5C3500)
-              : const Color(0xFFFFEACB),
+          onTertiary: statusTheme.onWarning,
+          tertiaryContainer: statusTheme.warningContainer,
+          onTertiaryContainer: statusTheme.onWarningContainer,
           error: statusTheme.error,
-          errorContainer: isLight
-              ? const Color(0xFFFFE6E4)
-              : const Color(0xFF571B19),
-          onErrorContainer: isLight
-              ? const Color(0xFF690005)
-              : const Color(0xFFFFE8E6),
-          surface: isLight ? const Color(0xFFF2F2F7) : const Color(0xFF0B0F14),
+          onError: statusTheme.onError,
+          errorContainer: statusTheme.errorContainer,
+          onErrorContainer: statusTheme.onErrorContainer,
+          surface: highContrast
+              ? isLight
+                    ? Colors.white
+                    : Colors.black
+              : isLight
+              ? const Color(0xFFF2F2F7)
+              : const Color(0xFF0B0F14),
           onSurface: isLight
               ? const Color(0xFF1C1C1E)
               : const Color(0xFFF2F2F7),
@@ -306,8 +450,16 @@ abstract final class TsPhoneTheme {
           surfaceContainerHighest: isLight
               ? const Color(0xFFD8D8DE)
               : const Color(0xFF252E37),
-          outline: const Color(0xFF8E8E93),
-          outlineVariant: isLight
+          outline: highContrast
+              ? isLight
+                    ? const Color(0xFF3A3A3C)
+                    : const Color(0xFFC7C7CC)
+              : const Color(0xFF8E8E93),
+          outlineVariant: highContrast
+              ? isLight
+                    ? const Color(0xFF747477)
+                    : const Color(0xFF636366)
+              : isLight
               ? const Color(0xFFC7C7CC)
               : const Color(0xFF343D46),
         );
@@ -353,7 +505,16 @@ abstract final class TsPhoneTheme {
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
       borderSide: BorderSide(
-        color: scheme.outlineVariant.withValues(alpha: 0.72),
+        color: highContrast
+            ? scheme.outline
+            : scheme.outlineVariant.withValues(alpha: 0.72),
+      ),
+    );
+    final overlayShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
+      side: BorderSide(
+        color: highContrast ? scheme.outline : scheme.outlineVariant,
+        width: highContrast ? 1 : 0.5,
       ),
     );
     final overlayStyle = systemUiOverlayStyle(scheme);
@@ -365,8 +526,8 @@ abstract final class TsPhoneTheme {
       extensions: <ThemeExtension<dynamic>>[glassTheme, statusTheme],
       textTheme: textTheme,
       scaffoldBackgroundColor: scheme.surface,
-      splashFactory: InkRipple.splashFactory,
-      splashColor: scheme.primary.withValues(alpha: 0.16),
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
       highlightColor: scheme.primary.withValues(alpha: 0.08),
       focusColor: scheme.primary.withValues(alpha: 0.12),
       hoverColor: scheme.primary.withValues(alpha: 0.06),
@@ -417,7 +578,7 @@ abstract final class TsPhoneTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: glassTheme.elevatedSurface,
+        fillColor: scheme.surfaceContainerLowest,
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: inputBorder.copyWith(
@@ -490,9 +651,92 @@ abstract final class TsPhoneTheme {
           borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
         ),
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: highContrast ? 0 : 8,
+        shadowColor: glassTheme.shadow,
+        shape: overlayShape,
+        titleTextStyle: textTheme.titleMedium?.copyWith(
+          color: scheme.onSurface,
+        ),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+        ),
+        barrierColor: Colors.black.withValues(alpha: 0.42),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surfaceContainerLowest,
+        modalBackgroundColor: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: highContrast ? 0 : 8,
+        shadowColor: glassTheme.shadow,
+        modalBarrierColor: Colors.black.withValues(alpha: 0.42),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(TsPhoneRadii.bubble),
+          ),
+          side: BorderSide(
+            color: highContrast ? scheme.outline : scheme.outlineVariant,
+            width: highContrast ? 1 : 0.5,
+          ),
+        ),
+        showDragHandle: false,
+        dragHandleColor: scheme.onSurfaceVariant,
+        clipBehavior: Clip.antiAlias,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: highContrast ? 0 : 8,
+        shadowColor: glassTheme.shadow,
+        shape: overlayShape,
+        textStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurface),
+        position: PopupMenuPosition.under,
+        iconColor: scheme.onSurfaceVariant,
+      ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           animationDuration: TsPhoneMotion.quick,
+          minimumSize: const WidgetStatePropertyAll<Size>(Size(44, 44)),
+          backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return scheme.surfaceContainerLow;
+            }
+            if (states.contains(WidgetState.selected)) {
+              return highContrast ? scheme.primary : scheme.primaryContainer;
+            }
+            return scheme.surfaceContainerHigh;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return scheme.onSurface.withValues(alpha: 0.38);
+            }
+            if (states.contains(WidgetState.selected)) {
+              return highContrast
+                  ? scheme.onPrimary
+                  : scheme.onPrimaryContainer;
+            }
+            return scheme.onSurface;
+          }),
+          iconColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return scheme.onSurface.withValues(alpha: 0.38);
+            }
+            if (states.contains(WidgetState.selected)) {
+              return highContrast
+                  ? scheme.onPrimary
+                  : scheme.onPrimaryContainer;
+            }
+            return scheme.onSurfaceVariant;
+          }),
+          side: WidgetStatePropertyAll<BorderSide>(
+            BorderSide(
+              color: highContrast ? scheme.outline : scheme.outlineVariant,
+              width: highContrast ? 1.5 : 0.7,
+            ),
+          ),
           shape: WidgetStatePropertyAll<OutlinedBorder>(
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(TsPhoneRadii.medium),

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.5.1
+  version: 0.6.0
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -22,15 +22,15 @@ paths:
                 properties:
                   ok: { const: true }
                   service: { const: ts-phone }
-                  version: { const: ts-phone-api/3 }
+                  version: { const: ts-phone-api/4 }
                 additionalProperties: false
-  /api/v3/version:
+  /api/v4/version:
     get:
       operationId: getVersion
       responses:
         "200": { $ref: "#/components/responses/Success" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-  /api/v3/workspaces:
+  /api/v4/workspaces:
     get:
       operationId: listWorkspaces
       responses:
@@ -47,7 +47,7 @@ paths:
                         type: array
                         items: { $ref: "#/components/schemas/Workspace" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-  /api/v3/workspaces/{workspaceId}:
+  /api/v4/workspaces/{workspaceId}:
     get:
       operationId: getWorkspace
       parameters:
@@ -56,7 +56,7 @@ paths:
         "200": { $ref: "#/components/responses/Success" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v3/workspaces/{workspaceId}/sessions:
+  /api/v4/workspaces/{workspaceId}/sessions:
     get:
       operationId: listSessions
       parameters:
@@ -76,7 +76,7 @@ paths:
                         items: { $ref: "#/components/schemas/Session" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/messages:
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/messages:
     get:
       operationId: getMessages
       parameters:
@@ -140,7 +140,7 @@ paths:
         "409": { $ref: "#/components/responses/SessionConflict" }
         "504":
           description: Command outcome is ambiguous and must not be retried automatically
-  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/abort:
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/abort:
     post:
       operationId: abortGeneration
       parameters:
@@ -152,9 +152,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [sessionRevision]
+              required: [sessionRevision, agentRunId]
               properties:
                 sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+                agentRunId: { $ref: "#/components/schemas/BoundedId" }
               additionalProperties: false
       responses:
         "200": { $ref: "#/components/responses/Success" }
@@ -162,7 +163,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/SessionConflict" }
-  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/timeline:
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/timeline:
     get:
       operationId: getTimeline
       parameters:
@@ -206,7 +207,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/SessionConflict" }
-  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/events:
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/events:
     get:
       operationId: streamEvents
       parameters:
@@ -224,7 +225,7 @@ paths:
               schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v3/workspaces/{workspaceId}/sessions/{sessionId}/approvals/{approvalId}:
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/approvals/{approvalId}:
     post:
       operationId: respondToApproval
       parameters:
@@ -274,14 +275,14 @@ components:
       type: object
       required: [apiVersion, data]
       properties:
-        apiVersion: { const: ts-phone-api/3 }
+        apiVersion: { const: ts-phone-api/4 }
         data: {}
       additionalProperties: false
     ErrorEnvelope:
       type: object
       required: [apiVersion, error]
       properties:
-        apiVersion: { const: ts-phone-api/3 }
+        apiVersion: { const: ts-phone-api/4 }
         error:
           type: object
           required: [code, message]
@@ -296,6 +297,10 @@ components:
     SessionRevision:
       type: string
       pattern: "^[0-9a-f-]{36}$"
+    ActiveAgentRunId:
+      oneOf:
+        - { $ref: "#/components/schemas/BoundedId" }
+        - { type: "null" }
     RuntimeState:
       enum: [offline, connecting, idle, running, recovery_required]
     SessionCapability:
@@ -323,10 +328,11 @@ components:
       additionalProperties: false
     Session:
       type: object
-      required: [sessionId, sessionRevision, runtimeState, isStreaming, accessMode, capabilities]
+      required: [sessionId, sessionRevision, activeAgentRunId, runtimeState, isStreaming, accessMode, capabilities]
       properties:
         sessionId: { $ref: "#/components/schemas/BoundedId" }
         sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+        activeAgentRunId: { $ref: "#/components/schemas/ActiveAgentRunId" }
         sessionName: { type: string }
         model: { type: string }
         runtime: { $ref: "#/components/schemas/SessionRuntime" }
@@ -374,10 +380,11 @@ components:
       additionalProperties: false
     MessageSnapshot:
       type: object
-      required: [sessionId, sessionRevision, messages, hasMore, lastEventId]
+      required: [sessionId, sessionRevision, activeAgentRunId, messages, hasMore, lastEventId]
       properties:
         sessionId: { $ref: "#/components/schemas/BoundedId" }
         sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+        activeAgentRunId: { $ref: "#/components/schemas/ActiveAgentRunId" }
         messages:
           type: array
           maxItems: 500
@@ -476,6 +483,7 @@ components:
         - schemaVersion
         - sessionId
         - sessionRevision
+        - activeAgentRunId
         - items
         - history
         - hasMore
@@ -485,6 +493,7 @@ components:
         schemaVersion: { const: ts-phone-timeline/1 }
         sessionId: { $ref: "#/components/schemas/BoundedId" }
         sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+        activeAgentRunId: { $ref: "#/components/schemas/ActiveAgentRunId" }
         items:
           type: array
           maxItems: 500
@@ -520,7 +529,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
     SessionConflict:
-      description: Session is offline, connecting, stale, or requires resynchronization
+      description: Session is offline, connecting, stale, has no matching active agent run, or requires resynchronization
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }

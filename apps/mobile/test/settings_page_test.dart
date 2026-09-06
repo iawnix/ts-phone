@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -64,12 +63,10 @@ void main() {
     await tester.pumpWidget(_settingsApp());
     await tester.pumpAndSettle();
 
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is CupertinoSlidingSegmentedControl,
-      ),
-      findsNWidgets(2),
+    final segmentedControls = find.byWidgetPredicate(
+      (widget) => widget is TsSegmentedControl,
     );
+    expect(segmentedControls, findsNWidgets(2));
     expect(
       tester.getSize(find.byType(TsSettingsSection).first).height,
       lessThan(180),
@@ -78,12 +75,7 @@ void main() {
       tester.getSize(find.byType(TsContentSurface).first).height,
       lessThan(128),
     );
-    for (final control
-        in find
-            .byWidgetPredicate(
-              (widget) => widget is CupertinoSlidingSegmentedControl,
-            )
-            .evaluate()) {
+    for (final control in segmentedControls.evaluate()) {
       expect(tester.getSize(find.byWidget(control.widget)).height, 44);
     }
     expect(tester.takeException(), isNull);
@@ -131,11 +123,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byWidgetPredicate(
-        (widget) => widget is CupertinoSlidingSegmentedControl,
-      ),
+      find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
       findsNothing,
     );
+    final darkChoice = tester.widget<Semantics>(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == 'Dark',
+      ),
+    );
+    expect(darkChoice.properties.checked, isFalse);
+    expect(darkChoice.properties.inMutuallyExclusiveGroup, isTrue);
+    expect(darkChoice.properties.button, isNull);
+    expect(darkChoice.properties.onTap, isNotNull);
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();
 
@@ -150,7 +149,7 @@ void main() {
     final oldClient = MockClient((_) => oldResponse.future);
     final newClient = MockClient(
       (_) async => http.Response(
-        '{"apiVersion":"ts-phone-api/3","data":{"apiVersion":"ts-phone-api/3"}}',
+        '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4"}}',
         200,
       ),
     );
@@ -183,7 +182,7 @@ void main() {
     );
     oldResponse.complete(
       http.Response(
-        '{"apiVersion":"ts-phone-api/3","data":{"apiVersion":"ts-phone-api/3"}}',
+        '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4"}}',
         200,
       ),
     );
@@ -262,7 +261,7 @@ class _ThrowingCloseClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final body = utf8.encode(
-      '{"apiVersion":"ts-phone-api/3","data":{"apiVersion":"ts-phone-api/3"}}',
+      '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4"}}',
     );
     return http.StreamedResponse(
       Stream<List<int>>.value(body),

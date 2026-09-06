@@ -69,7 +69,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _syncing = false;
   bool _sending = false;
   bool _aborting = false;
+  bool _abortConfirmationOpen = false;
   bool _hasDraft = false;
+  TimelineViewFilter _timelineFilter = TimelineViewFilter.all;
   bool _initialTimelinePositioned = false;
   bool _bottomDockMeasureScheduled = false;
   double _bottomDockHeight = 72;
@@ -85,6 +87,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       initialSessionRevision: widget.session.sessionRevision,
       initialSessionTitle: widget.session.sessionName,
       initialSessionRuntime: widget.session.runtime,
+      initialActiveAgentRunId: widget.session.activeAgentRunId,
       initialRuntimeState: widget.session.runtimeState,
       accessMode: widget.session.accessMode,
       initialHistoryAvailable: widget.session.historyAvailable,
@@ -407,6 +410,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     setState(() => _sending = true);
     try {
       final sent = await _controller.send(_composer.text);
+      if (!mounted) return;
       if (sent) {
         _composer.clear();
         _resumeTailFollow();
@@ -431,16 +435,76 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _abort() async {
+  Future<void> _abort({
+    required String expectedSessionRevision,
+    required String expectedAgentRunId,
+  }) async {
     if (_aborting) return;
     ActionFeedback.warning();
     setState(() => _aborting = true);
     try {
-      await _controller.abort();
-      if (!mounted || _controller.problem != null) return;
+      final requested = await _controller.abort(
+        expectedSessionRevision: expectedSessionRevision,
+        expectedAgentRunId: expectedAgentRunId,
+      );
+      if (!mounted) return;
+      if (!requested) {
+        if (_controller.problem == null) {
+          _showActionMessage(context.l10n.abortTargetChanged);
+        }
+        return;
+      }
+      if (_controller.problem != null) return;
       _showActionMessage(context.l10n.abortRequested);
     } finally {
       if (mounted) setState(() => _aborting = false);
+    }
+  }
+
+  Future<void> _confirmAbort() async {
+    if (_aborting || _abortConfirmationOpen) return;
+    final agentRunId = _controller.activeAgentRunId;
+    if (agentRunId == null) return;
+    _abortConfirmationOpen = true;
+    final sessionRevision = _controller.sessionRevision;
+    final colors = Theme.of(context).colorScheme;
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: Icon(Icons.stop_circle_outlined, color: colors.error),
+          title: Text(context.l10n.abortGeneration),
+          content: Text(context.l10n.abortGenerationConfirmation),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(context.l10n.keepGenerating),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.error,
+                foregroundColor: colors.onError,
+              ),
+              child: Text(context.l10n.abortGeneration),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true &&
+          mounted &&
+          _controller.sessionRevision == sessionRevision &&
+          _controller.activeAgentRunId == agentRunId &&
+          SessionViewState.fromController(_controller).canAbort) {
+        await _abort(
+          expectedSessionRevision: sessionRevision,
+          expectedAgentRunId: agentRunId,
+        );
+      } else if (confirmed == true && mounted) {
+        _showActionMessage(context.l10n.abortTargetChanged);
+      }
+    } finally {
+      _abortConfirmationOpen = false;
     }
   }
 
@@ -568,11 +632,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             toolbarHeight: _chatToolbarHeight,
             centerTitle: true,
             titleSpacing: 0,
-            leading: IconButton(
+            leading: BackButton(
               key: const ValueKey<String>('chat-back'),
               onPressed: _goBack,
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
             ),
             title: _ChatNavigationTitle(
               title: _navigationTitle,
@@ -610,17 +672,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             ],
           ),
           body: TsPageBackdrop(
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                child!,
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: _buildBottomDock(context, viewState),
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) => Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  child!,
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _buildBottomDock(
+                      context,
+                      viewState,
+                      availableHeight: constraints.maxHeight,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -648,6 +716,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             onLoadEarlier: _loadEarlierMessages,
             onLoadAll: _loadAllHistory,
             onSelectBranch: _selectTimelineBranch,
+            filter: _timelineFilter,
+            onFilterChanged: (value) {
+              if (_timelineFilter == value) return;
+              setState(() => _timelineFilter = value);
+            },
             header: showNotice ? _priorityBanner() : null,
             bottomContentInset: _bottomDockHeight,
           ),
@@ -656,7 +729,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildBottomDock(BuildContext context, SessionViewState viewState) {
+  Widget _buildBottomDock(
+    BuildContext context,
+    SessionViewState viewState, {
+    required double availableHeight,
+  }) {
     _scheduleBottomDockMeasurement();
     final showLiveRun =
         viewState.hasLiveRun ||
@@ -687,21 +764,45 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 if (showLiveRun)
                   LiveRunStrip(
                     activity: _controller.activity,
-                    canAbort:
-                        viewState.canAbort &&
-                        _controller.activity?.kind !=
-                            ChatActivityKind.toolFailed,
+                    canAbort: viewState.canAbort,
                     aborting: _aborting,
-                    onAbort: _abort,
+                    onAbort: _confirmAbort,
                   ),
                 if (showLiveRun) const SizedBox(height: TsPhoneSpacing.small),
-                if (!viewState.isHistorical) _buildComposer(context),
+                if (!viewState.isHistorical)
+                  _buildComposer(
+                    context,
+                    maxLines: _composerMaxLines(
+                      context,
+                      availableHeight: availableHeight,
+                      showLiveRun: showLiveRun,
+                    ),
+                  ),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  int _composerMaxLines(
+    BuildContext context, {
+    required double availableHeight,
+    required bool showLiveRun,
+  }) {
+    if (!availableHeight.isFinite) return 7;
+    final scaledLineHeight = MediaQuery.textScalerOf(context).scale(16) * 1.32;
+    final extraLineHeight = (scaledLineHeight - 21).clamp(0, double.infinity);
+    final liveRunReserve = showLiveRun ? 64 + extraLineHeight * 1.5 : 0;
+    final navigationReserve = _showJumpToStart || _showJumpToLatest ? 52.0 : 0;
+    final dockChrome =
+        34.0 +
+        (showLiveRun ? TsPhoneSpacing.small : 0) +
+        (navigationReserve > 0 ? TsPhoneSpacing.small : 0);
+    final lineBudget =
+        availableHeight - liveRunReserve - navigationReserve - dockChrome;
+    return (lineBudget / scaledLineHeight).floor().clamp(1, 7);
   }
 
   void _scheduleBottomDockMeasurement() {
@@ -823,7 +924,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildComposer(BuildContext context) {
+  Widget _buildComposer(BuildContext context, {required int maxLines}) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
@@ -851,12 +952,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         animation: _composerFocus,
         builder: (context, _) {
           final focused = _composerFocus.hasFocus && viewState.canCompose;
-          final glass = TsPhoneGlassTheme.resolve(context);
-          return TsGlassSurface(
+          return TsContentSurface(
             key: const ValueKey<String>('chat-composer'),
-            elevated: true,
-            blurSigma: glass.floatingBlurSigma,
             borderRadius: BorderRadius.circular(26),
+            backgroundColor: colors.surfaceContainerLowest,
             borderColor: focused
                 ? colors.primary.withValues(alpha: 0.58)
                 : null,
@@ -870,7 +969,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     focusNode: _composerFocus,
                     enabled: viewState.canCompose,
                     minLines: 1,
-                    maxLines: 7,
+                    maxLines: maxLines,
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     textCapitalization: TextCapitalization.sentences,
@@ -975,6 +1074,33 @@ class _ChatNavigationTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (compactStatus) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          _SessionStatusLine(
+            runtimeState: runtimeState,
+            isHistorical: isHistorical,
+            compact: true,
+            connectionState: connectionState,
+          ),
+        ],
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
@@ -1020,7 +1146,11 @@ class _SessionStatusLine extends StatelessWidget {
     final status = TsPhoneStatusTheme.resolve(context);
     final l10n = context.l10n;
     final (color, label, pulsing) = isHistorical
-        ? (theme.colorScheme.outline, l10n.historyReadOnlyStatus, false)
+        ? (
+            theme.colorScheme.onSurfaceVariant,
+            l10n.historyReadOnlyStatus,
+            false,
+          )
         : switch (connectionState) {
             EventConnectionState.connected => switch (runtimeState) {
               RuntimeState.idle => (
@@ -1039,18 +1169,18 @@ class _SessionStatusLine extends StatelessWidget {
                 false,
               ),
               RuntimeState.offline => (
-                theme.colorScheme.outline,
+                theme.colorScheme.onSurfaceVariant,
                 runtimeState.localizedLabel(l10n),
                 false,
               ),
             },
             EventConnectionState.suspended => (
-              theme.colorScheme.outline,
+              theme.colorScheme.onSurfaceVariant,
               l10n.liveSyncSuspended,
               false,
             ),
             EventConnectionState.closed => (
-              theme.colorScheme.outline,
+              theme.colorScheme.onSurfaceVariant,
               l10n.liveSyncClosed,
               false,
             ),
@@ -1070,13 +1200,29 @@ class _SessionStatusLine extends StatelessWidget {
               true,
             ),
           };
-    final compactHistoricalStatus = isHistorical && compact;
-    if (compactHistoricalStatus) {
+    if (compact) {
+      final compactIcon = switch (connectionState) {
+        EventConnectionState.connected => Icons.check_circle_outline_rounded,
+        EventConnectionState.suspended => Icons.pause_circle_outline_rounded,
+        EventConnectionState.closed => Icons.cloud_off_outlined,
+        EventConnectionState.failed => Icons.error_outline_rounded,
+        EventConnectionState.reconnecting => Icons.sync_problem_rounded,
+        EventConnectionState.connecting => Icons.sync_rounded,
+      };
       return Semantics(
-        key: const ValueKey<String>('chat-history-status'),
+        key: ValueKey<String>(
+          isHistorical ? 'chat-history-status' : 'chat-compact-status',
+        ),
         label: label,
         child: ExcludeSemantics(
-          child: Icon(Icons.lock_outline_rounded, size: 18, color: color),
+          child: Tooltip(
+            message: label,
+            child: Icon(
+              isHistorical ? Icons.lock_outline_rounded : compactIcon,
+              size: 18,
+              color: color,
+            ),
+          ),
         ),
       );
     }
@@ -1450,6 +1596,8 @@ class _MessageTimeline extends StatelessWidget {
     required this.onLoadEarlier,
     required this.onLoadAll,
     required this.onSelectBranch,
+    required this.filter,
+    required this.onFilterChanged,
     required this.bottomContentInset,
     this.header,
   });
@@ -1465,6 +1613,8 @@ class _MessageTimeline extends StatelessWidget {
   final Future<void> Function() onLoadEarlier;
   final Future<void> Function() onLoadAll;
   final Future<void> Function(String branchId) onSelectBranch;
+  final TimelineViewFilter filter;
+  final ValueChanged<TimelineViewFilter> onFilterChanged;
   final double bottomContentInset;
   final Widget? header;
 
@@ -1517,24 +1667,44 @@ class _MessageTimeline extends StatelessWidget {
     return ValueListenableBuilder<List<SessionTimelineItem>>(
       valueListenable: controller.timelineUpdates,
       builder: (context, items, _) {
-        final groups = groupTimelineItems(
+        final allGroups = groupTimelineItems(
           items,
           totalTurnCount: controller.timelineTurnCount,
         );
+        final groups = filterTimelineGroups(allGroups, filter);
+        final includeStreaming = filter != TimelineViewFilter.activities;
+        final showFilter = items.isNotEmpty;
         return _list(
           context: context,
           itemCount: groups.length + 2,
           itemBuilder: (context, index) {
             if (index == 0) {
-              return TimelineHistoryControl(
-                controller: controller,
-                onLoadEarlier: onLoadEarlier,
-                onLoadAll: onLoadAll,
-                onSelectBranch: onSelectBranch,
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TimelineHistoryControl(
+                    controller: controller,
+                    onLoadEarlier: onLoadEarlier,
+                    onLoadAll: onLoadAll,
+                    onSelectBranch: onSelectBranch,
+                  ),
+                  if (showFilter)
+                    TimelineFilterControl(
+                      selected: filter,
+                      onChanged: onFilterChanged,
+                    ),
+                ],
               );
             }
             final groupIndex = index - 1;
-            if (groupIndex == groups.length) return _streamingMessage();
+            if (groupIndex == groups.length) {
+              return _StructuredTimelineTail(
+                hasVisibleGroups: groups.isNotEmpty,
+                includeStreaming: includeStreaming,
+                streamingTextListenable: streamingTextListenable,
+                streamUpdatesEnabledListenable: streamUpdatesEnabledListenable,
+              );
+            }
             final group = groups[groupIndex];
             return TimelineTurnGroupView(
               key: ValueKey<String>('timeline-group-${group.identity}'),
@@ -1576,6 +1746,51 @@ class _MessageTimeline extends StatelessWidget {
     textListenable: streamingTextListenable,
     updatesEnabledListenable: streamUpdatesEnabledListenable,
   );
+}
+
+class _StructuredTimelineTail extends StatelessWidget {
+  const _StructuredTimelineTail({
+    required this.hasVisibleGroups,
+    required this.includeStreaming,
+    required this.streamingTextListenable,
+    required this.streamUpdatesEnabledListenable,
+  });
+
+  final bool hasVisibleGroups;
+  final bool includeStreaming;
+  final ValueListenable<String?> streamingTextListenable;
+  final ValueListenable<bool> streamUpdatesEnabledListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: streamingTextListenable,
+      builder: (context, streamingText, _) {
+        if (includeStreaming && streamingText != null) {
+          return StreamingChatMessageView(
+            key: const ValueKey<String>('streaming-message'),
+            textListenable: streamingTextListenable,
+            updatesEnabledListenable: streamUpdatesEnabledListenable,
+          );
+        }
+        if (hasVisibleGroups) return const SizedBox.shrink();
+        return Padding(
+          key: const ValueKey<String>('timeline-filter-empty'),
+          padding: const EdgeInsets.symmetric(
+            horizontal: TsPhoneSpacing.xLarge,
+            vertical: TsPhoneSpacing.xxLarge,
+          ),
+          child: Text(
+            context.l10n.timelineFilterEmpty,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _EarlierMessagesControl extends StatelessWidget {
@@ -1730,7 +1945,7 @@ class _WorkspaceWaitingView extends StatelessWidget {
                 IconButton(
                   onPressed: onCopy,
                   tooltip: context.l10n.copyStartCommand,
-                  icon: const Icon(Icons.copy_outlined),
+                  icon: const Icon(Icons.copy_rounded),
                 ),
               ],
             ),
@@ -1745,7 +1960,11 @@ class _WorkspaceWaitingView extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
-                Icon(Icons.hourglass_top, size: 18, color: colors.outline),
+                Icon(
+                  Icons.hourglass_top_rounded,
+                  size: 18,
+                  color: colors.outline,
+                ),
               const SizedBox(width: 8),
               Text(status),
             ],
@@ -1753,7 +1972,7 @@ class _WorkspaceWaitingView extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: retrying ? null : onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             label: Text(context.l10n.checkAgain),
           ),
         ],
@@ -1803,7 +2022,7 @@ class _ConnectionProblemView extends StatelessWidget {
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.refresh),
+            : const Icon(Icons.refresh_rounded),
         label: Text(
           retrying ? context.l10n.reconnecting : context.l10n.reconnect,
         ),

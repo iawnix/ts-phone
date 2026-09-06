@@ -25,8 +25,10 @@ Back up both files together; losing them prevents future in-place updates of the
 production app.
 
 The release builder produces one APK per supported ABI plus a Play-compatible
-AAB under `dist/`. It verifies archive identity, APK v2 signatures, the AAB
-signature, and the signer fingerprint. Use the `arm64-v8a` APK for current
+AAB as one content-addressed set under `dist/android-releases/`, then atomically
+switches `dist/android-current`. It verifies archive identity, APK v2
+signatures and metadata, the AAB signature, and the single signer fingerprint.
+Use the `arm64-v8a` APK for current
 64-bit Android phones. Do not produce or distribute a separate debug APK.
 
 An existing debug/profile installation uses a different signer and cannot be

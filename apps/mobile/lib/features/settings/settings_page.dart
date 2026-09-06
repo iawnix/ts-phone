@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../app_identity.dart';
 import '../../data/ts_phone_api.dart';
 import '../../models/app_theme_preference.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -158,160 +158,146 @@ class _SettingsPageState extends State<SettingsPage> {
         : diagnostics?.problem == null && diagnostics != null
         ? statusTheme.connected
         : Theme.of(context).colorScheme.onSurfaceVariant;
-    final protocolValue = diagnostics?.apiVersion ?? 'ts-phone-api/3';
-    return PopScope<void>(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) widget.onClose();
-      },
-      child: Scaffold(
-        appBar: TsGlassAppBar(
-          leading: IconButton(
-            onPressed: () {
-              ActionFeedback.selection();
-              widget.onClose();
-            },
-            tooltip: l10n.back,
-            icon: const Icon(Icons.arrow_back),
-          ),
-          title: Text(l10n.settings),
-        ),
-        body: TsPageBackdrop(
-          child: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: TsPhoneSpacing.xxLarge),
-              children: <Widget>[
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 620),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        TsSettingsSection(
-                          title: l10n.preferences,
-                          child: Column(
-                            children: <Widget>[
-                              _PreferenceControlRow(
-                                label: l10n.appearance,
-                                saving: _savingTheme,
-                                control:
-                                    _AdaptiveChoiceControl<AppThemePreference>(
-                                      groupValue: widget.themePreference,
-                                      choices: <AppThemePreference, String>{
-                                        AppThemePreference.system:
-                                            l10n.themeSystem,
-                                        AppThemePreference.light:
-                                            l10n.themeLight,
-                                        AppThemePreference.dark: l10n.themeDark,
-                                      },
-                                      onValueChanged: (value) =>
-                                          unawaited(_changeTheme(value)),
-                                    ),
+    final protocolValue = diagnostics?.apiVersion ?? l10n.diagnosticNotChecked;
+    return Scaffold(
+      appBar: TsGlassAppBar(
+        leading: BackButton(onPressed: widget.onClose),
+        title: Text(l10n.settings),
+      ),
+      body: TsPageBackdrop(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: TsPhoneSpacing.xxLarge),
+            children: <Widget>[
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 620),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      TsSettingsSection(
+                        title: l10n.preferences,
+                        child: Column(
+                          children: <Widget>[
+                            _PreferenceControlRow(
+                              label: l10n.appearance,
+                              saving: _savingTheme,
+                              control:
+                                  _AdaptiveChoiceControl<AppThemePreference>(
+                                    groupValue: widget.themePreference,
+                                    choices: <AppThemePreference, String>{
+                                      AppThemePreference.system:
+                                          l10n.themeSystem,
+                                      AppThemePreference.light: l10n.themeLight,
+                                      AppThemePreference.dark: l10n.themeDark,
+                                    },
+                                    onValueChanged: (value) =>
+                                        unawaited(_changeTheme(value)),
+                                  ),
+                            ),
+                            const _SettingsDivider(),
+                            _PreferenceControlRow(
+                              label: l10n.language,
+                              saving: _savingLocale,
+                              control:
+                                  _AdaptiveChoiceControl<AppLocalePreference>(
+                                    groupValue: widget.localePreference,
+                                    choices: <AppLocalePreference, String>{
+                                      AppLocalePreference.system:
+                                          l10n.languageSystem,
+                                      AppLocalePreference.zh:
+                                          l10n.languageChinese,
+                                      AppLocalePreference.en:
+                                          l10n.languageEnglish,
+                                    },
+                                    onValueChanged: (value) =>
+                                        unawaited(_changeLocale(value)),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TsSettingsSection(
+                        title: l10n.connection,
+                        child: Column(
+                          children: <Widget>[
+                            _ConnectionServiceRow(
+                              key: const ValueKey<String>(
+                                'connection-service-edit',
                               ),
+                              title: l10n.tsPhoneService,
+                              endpoint: endpointSummary,
+                              onTap: () {
+                                ActionFeedback.selection();
+                                widget.onEditConnection();
+                              },
+                            ),
+                            const _SettingsDivider(),
+                            _DiagnosticsActionRow(
+                              enabled: connection != null,
+                              diagnosing: _diagnosing,
+                              diagnostics: diagnostics,
+                              onTap: _runDiagnostics,
+                            ),
+                            if (diagnostics?.problem
+                                case final problem?) ...<Widget>[
                               const _SettingsDivider(),
-                              _PreferenceControlRow(
-                                label: l10n.language,
-                                saving: _savingLocale,
-                                control:
-                                    _AdaptiveChoiceControl<AppLocalePreference>(
-                                      groupValue: widget.localePreference,
-                                      choices: <AppLocalePreference, String>{
-                                        AppLocalePreference.system:
-                                            l10n.languageSystem,
-                                        AppLocalePreference.zh:
-                                            l10n.languageChinese,
-                                        AppLocalePreference.en:
-                                            l10n.languageEnglish,
-                                      },
-                                      onValueChanged: (value) =>
-                                          unawaited(_changeLocale(value)),
-                                    ),
+                              _ConnectionProblem(
+                                message: problem.localizedMessage(l10n),
                               ),
                             ],
-                          ),
-                        ),
-                        TsSettingsSection(
-                          title: l10n.connection,
-                          child: Column(
-                            children: <Widget>[
-                              _ConnectionServiceRow(
+                            const _SettingsDivider(),
+                            _ConnectionDetailsToggle(
+                              expanded: _showConnectionDetails,
+                              onTap: () {
+                                ActionFeedback.selection();
+                                setState(
+                                  () => _showConnectionDetails =
+                                      !_showConnectionDetails,
+                                );
+                              },
+                            ),
+                            if (_showConnectionDetails) ...<Widget>[
+                              const _SettingsDivider(),
+                              KeyedSubtree(
                                 key: const ValueKey<String>(
-                                  'connection-service-edit',
+                                  'connection-details',
                                 ),
-                                title: l10n.tsPhoneService,
-                                endpoint: endpointSummary,
-                                onTap: () {
-                                  ActionFeedback.selection();
-                                  widget.onEditConnection();
-                                },
-                              ),
-                              const _SettingsDivider(),
-                              _DiagnosticsActionRow(
-                                enabled: connection != null,
-                                diagnosing: _diagnosing,
-                                diagnostics: diagnostics,
-                                onTap: _runDiagnostics,
-                              ),
-                              if (diagnostics?.problem
-                                  case final problem?) ...<Widget>[
-                                const _SettingsDivider(),
-                                _ConnectionProblem(
-                                  message: problem.localizedMessage(l10n),
+                                child: Column(
+                                  children: <Widget>[
+                                    _DiagnosticRow(
+                                      label: l10n.endpoint,
+                                      value:
+                                          connection?.serverUrl ??
+                                          l10n.notConfigured,
+                                      stacked: true,
+                                      selectable: connection != null,
+                                    ),
+                                    const _SettingsDivider(),
+                                    _DiagnosticRow(
+                                      label: l10n.auth,
+                                      value: authValue,
+                                      valueColor: authColor,
+                                    ),
+                                    const _SettingsDivider(),
+                                    _DiagnosticRow(
+                                      label: l10n.protocol,
+                                      value: protocolValue,
+                                    ),
+                                  ],
                                 ),
-                              ],
-                              const _SettingsDivider(),
-                              _ConnectionDetailsToggle(
-                                expanded: _showConnectionDetails,
-                                onTap: () {
-                                  ActionFeedback.selection();
-                                  setState(
-                                    () => _showConnectionDetails =
-                                        !_showConnectionDetails,
-                                  );
-                                },
                               ),
-                              if (_showConnectionDetails) ...<Widget>[
-                                const _SettingsDivider(),
-                                KeyedSubtree(
-                                  key: const ValueKey<String>(
-                                    'connection-details',
-                                  ),
-                                  child: Column(
-                                    children: <Widget>[
-                                      _DiagnosticRow(
-                                        label: l10n.endpoint,
-                                        value:
-                                            connection?.serverUrl ??
-                                            l10n.notConfigured,
-                                        stacked: true,
-                                        selectable: connection != null,
-                                      ),
-                                      const _SettingsDivider(),
-                                      _DiagnosticRow(
-                                        label: l10n.auth,
-                                        value: authValue,
-                                        valueColor: authColor,
-                                      ),
-                                      const _SettingsDivider(),
-                                      _DiagnosticRow(
-                                        label: l10n.protocol,
-                                        value: protocolValue,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
                             ],
-                          ),
+                          ],
                         ),
-                        const _AppIdentityFooter(),
-                      ],
-                    ),
+                      ),
+                      const _AppIdentityFooter(),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -331,13 +317,12 @@ class _SettingsDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Divider(
       height: 0.5,
       thickness: 0.5,
       indent: TsPhoneSpacing.large,
-      color: Theme.of(
-        context,
-      ).colorScheme.outlineVariant.withValues(alpha: 0.72),
+      color: theme.dividerTheme.color,
     );
   }
 }
@@ -585,13 +570,13 @@ class _AppIdentityFooter extends StatelessWidget {
         children: <Widget>[
           const TsPhoneBrandBadge(size: 18),
           Text(
-            'TS Phone',
+            tsPhoneAppName,
             style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           Text(
-            context.l10n.clientVersionBuild('0.12.1', '36'),
+            context.l10n.clientVersionBuild(tsPhoneAppVersion, tsPhoneAppBuild),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -693,7 +678,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
     final (label, color) = diagnosing
         ? (l10n.diagnosticsRunning, theme.colorScheme.primary)
         : !enabled
-        ? (l10n.notConfigured, theme.colorScheme.outline)
+        ? (l10n.notConfigured, theme.colorScheme.onSurfaceVariant)
         : problem != null
         ? (l10n.diagnosticFailed, status.error)
         : diagnostics != null
@@ -795,30 +780,24 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
         final useRows = scaledLabelSize > 17 || constraints.maxWidth < 180;
         if (useRows) return _buildRows(context);
 
-        final theme = Theme.of(context);
-        final colors = theme.colorScheme;
         return SizedBox(
           width: double.infinity,
           height: 44,
-          child: CupertinoSlidingSegmentedControl<T>(
-            groupValue: groupValue,
-            proportionalWidth: false,
-            backgroundColor: colors.surfaceContainerHigh.withValues(
-              alpha: 0.42,
-            ),
-            thumbColor: colors.surfaceContainerHighest.withValues(alpha: 0.9),
-            padding: const EdgeInsets.all(2),
-            children: <T, Widget>{
+          child: TsSegmentedControl<T>(
+            selected: groupValue,
+            segments: <ButtonSegment<T>>[
               for (final entry in choices.entries)
-                entry.key: Center(
-                  child: Text(
+                ButtonSegment<T>(
+                  value: entry.key,
+                  label: Text(
                     entry.value,
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                   ),
                 ),
-            },
-            onValueChanged: onValueChanged,
+            ],
+            onChanged: onValueChanged,
           ),
         );
       },
@@ -839,12 +818,13 @@ class _AdaptiveChoiceControl<T extends Object> extends StatelessWidget {
               color: colors.outlineVariant,
             ),
           Semantics(
-            selected: entries[index].key == groupValue,
-            button: true,
+            label: entries[index].value,
+            checked: entries[index].key == groupValue,
+            inMutuallyExclusiveGroup: true,
+            excludeSemantics: true,
+            onTap: () => onValueChanged(entries[index].key),
             child: InkWell(
-              onTap: entries[index].key == groupValue
-                  ? null
-                  : () => onValueChanged(entries[index].key),
+              onTap: () => onValueChanged(entries[index].key),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 48),
                 child: Padding(

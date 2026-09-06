@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../theme/ts_phone_theme.dart';
+import '../theme/ts_visual_accessibility.dart';
 
 enum TsInfoTone { neutral, info, warning, error }
 
@@ -48,13 +49,16 @@ class TsContentSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final highContrast = MediaQuery.highContrastOf(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor ?? colors.surfaceContainerLowest,
         borderRadius: borderRadius,
         border: Border.all(
-          color: borderColor ?? colors.outlineVariant,
-          width: 0.5,
+          color:
+              borderColor ??
+              (highContrast ? colors.outline : colors.outlineVariant),
+          width: highContrast ? 1 : 0.5,
         ),
       ),
       child: ClipRRect(
@@ -76,7 +80,7 @@ class TsGlassSurface extends StatelessWidget {
       Radius.circular(TsPhoneRadii.panel),
     ),
     this.elevated = false,
-    this.blurSigma = 0,
+    this.blurSigma,
     this.tint,
     this.borderColor,
   });
@@ -85,7 +89,7 @@ class TsGlassSurface extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final BorderRadius borderRadius;
   final bool elevated;
-  final double blurSigma;
+  final double? blurSigma;
   final Color? tint;
   final Color? borderColor;
 
@@ -94,23 +98,40 @@ class TsGlassSurface extends StatelessWidget {
     final theme = Theme.of(context);
     final glass = TsPhoneGlassTheme.resolve(context);
     final highContrast = MediaQuery.highContrastOf(context);
+    final reduceTransparency =
+        highContrast || TsVisualAccessibility.reduceTransparencyOf(context);
     final requestedFill =
         tint ?? (elevated ? glass.elevatedSurface : glass.surface);
-    final fill = highContrast
-        ? Color.alphaBlend(requestedFill, theme.colorScheme.surfaceContainerLow)
+    final fill = reduceTransparency
+        ? theme.colorScheme.surfaceContainerLowest
         : requestedFill;
-    final effectiveBorder = highContrast
-        ? theme.colorScheme.outline
-        : borderColor ?? (elevated ? glass.strongBorder : glass.border);
-    final effectiveBlur = highContrast ? 0.0 : blurSigma;
+    final effectiveBorder =
+        borderColor ??
+        (highContrast
+            ? theme.colorScheme.outline
+            : reduceTransparency
+            ? theme.colorScheme.outlineVariant
+            : elevated
+            ? glass.strongBorder
+            : glass.border);
+    final effectiveBlur = reduceTransparency
+        ? 0.0
+        : blurSigma ?? glass.blurSigma;
     final content = DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[Color.alphaBlend(glass.highlight, fill), fill, fill],
-          stops: const <double>[0, 0.28, 1],
-        ),
+        color: reduceTransparency ? fill : null,
+        gradient: reduceTransparency
+            ? null
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  Color.alphaBlend(glass.highlight, fill),
+                  fill,
+                  fill,
+                ],
+                stops: const <double>[0, 0.28, 1],
+              ),
         borderRadius: borderRadius,
         border: Border.all(
           color: effectiveBorder,
@@ -131,7 +152,7 @@ class TsGlassSurface extends StatelessWidget {
               child: content,
             ),
     );
-    if (!elevated) return clipped;
+    if (!elevated || reduceTransparency) return clipped;
     return RepaintBoundary(
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -164,21 +185,34 @@ class TsGlassBar extends StatelessWidget {
     final theme = Theme.of(context);
     final glass = TsPhoneGlassTheme.resolve(context);
     final highContrast = MediaQuery.highContrastOf(context);
-    final fill = highContrast
+    final reduceTransparency =
+        highContrast || TsVisualAccessibility.reduceTransparencyOf(context);
+    final fill = reduceTransparency
         ? theme.colorScheme.surfaceContainerLowest
         : glass.surface;
     final borderSide = BorderSide(
-      color: highContrast ? theme.colorScheme.outline : glass.border,
+      color: highContrast
+          ? theme.colorScheme.outline
+          : reduceTransparency
+          ? theme.colorScheme.outlineVariant
+          : glass.border,
       width: highContrast ? 1 : 0.6,
     );
     final content = DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[Color.alphaBlend(glass.highlight, fill), fill, fill],
-          stops: const <double>[0, 0.22, 1],
-        ),
+        color: reduceTransparency ? fill : null,
+        gradient: reduceTransparency
+            ? null
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  Color.alphaBlend(glass.highlight, fill),
+                  fill,
+                  fill,
+                ],
+                stops: const <double>[0, 0.22, 1],
+              ),
         border: switch (edge) {
           TsGlassBarEdge.top => Border(top: borderSide),
           TsGlassBarEdge.bottom => Border(bottom: borderSide),
@@ -188,7 +222,7 @@ class TsGlassBar extends StatelessWidget {
     );
     return RepaintBoundary(
       child: ClipRect(
-        child: highContrast
+        child: reduceTransparency
             ? content
             : BackdropFilter(
                 filter: ImageFilter.blur(
@@ -230,7 +264,9 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     final theme = Theme.of(context);
     final glass = TsPhoneGlassTheme.resolve(context);
     final highContrast = MediaQuery.highContrastOf(context);
-    final scrolledUnderFill = highContrast
+    final reduceTransparency =
+        highContrast || TsVisualAccessibility.reduceTransparencyOf(context);
+    final scrolledUnderFill = reduceTransparency
         ? theme.colorScheme.surfaceContainerLowest
         : glass.elevatedSurface;
     return AppBar(
@@ -272,43 +308,103 @@ class TsSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.small,
+    final titleWidget = Text(
+      title,
+      style: theme.textTheme.titleSmall?.copyWith(
+        color: theme.colorScheme.onSurface,
+        fontWeight: FontWeight.w600,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (caption case final value?)
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.only(left: TsPhoneSpacing.medium),
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+    );
+    final captionValue = caption;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stack =
+            captionValue != null &&
+            (constraints.maxWidth < 360 ||
+                MediaQuery.textScalerOf(context).scale(13) > 17);
+        final content = stack
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(child: titleWidget),
+                      ?trailing,
+                    ],
                   ),
-                ),
-              ),
-            ),
-          ?trailing,
-        ],
-      ),
+                  const SizedBox(height: TsPhoneSpacing.xSmall),
+                  Text(
+                    captionValue,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Expanded(child: titleWidget),
+                  if (captionValue != null)
+                    Flexible(
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          left: TsPhoneSpacing.medium,
+                        ),
+                        child: Text(
+                          captionValue,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ?trailing,
+                ],
+              );
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TsPhoneSpacing.large,
+            TsPhoneSpacing.large,
+            TsPhoneSpacing.large,
+            TsPhoneSpacing.small,
+          ),
+          child: content,
+        );
+      },
+    );
+  }
+}
+
+/// The single segmented-control implementation used across TS Phone.
+///
+/// It intentionally omits Material's selected check mark and lets the shared
+/// theme express selection through fill, foreground, and border contrast.
+class TsSegmentedControl<T> extends StatelessWidget {
+  const TsSegmentedControl({
+    super.key,
+    required this.segments,
+    required this.selected,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final List<ButtonSegment<T>> segments;
+  final T selected;
+  final ValueChanged<T> onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<T>(
+      segments: segments,
+      selected: <T>{selected},
+      onSelectionChanged: enabled ? (values) => onChanged(values.single) : null,
+      showSelectedIcon: false,
+      expandedInsets: EdgeInsets.zero,
     );
   }
 }
@@ -320,7 +416,7 @@ class TsInfoBand extends StatelessWidget {
     required this.message,
     this.tone = TsInfoTone.neutral,
     this.action,
-    this.maxLines = 3,
+    this.maxLines,
   });
 
   final IconData icon;
@@ -367,30 +463,50 @@ class TsInfoBand extends StatelessWidget {
           borderRadius: BorderRadius.circular(TsPhoneRadii.small),
           border: Border(left: BorderSide(color: rail, width: 3)),
         ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            TsPhoneSpacing.medium,
-            TsPhoneSpacing.small,
-            action == null ? TsPhoneSpacing.medium : TsPhoneSpacing.xSmall,
-            TsPhoneSpacing.small,
-          ),
-          child: Row(
-            children: <Widget>[
-              Icon(icon, size: 19, color: rail),
-              const SizedBox(width: TsPhoneSpacing.small),
-              Expanded(
-                child: Text(
-                  message,
-                  maxLines: maxLines,
-                  overflow: maxLines == null ? null : TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: foreground),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final textScale = MediaQuery.textScalerOf(context).scale(13);
+            final stackAction =
+                action != null &&
+                (constraints.maxWidth < 340 || textScale > 17);
+            final messageRow = Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Icon(icon, size: 19, color: rail),
                 ),
+                const SizedBox(width: TsPhoneSpacing.small),
+                Expanded(
+                  child: Text(
+                    message,
+                    maxLines: maxLines,
+                    overflow: maxLines == null ? null : TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: foreground),
+                  ),
+                ),
+                if (action != null && !stackAction) action!,
+              ],
+            );
+            return Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TsPhoneSpacing.medium,
+                vertical: TsPhoneSpacing.small,
               ),
-              ?action,
-            ],
-          ),
+              child: stackAction
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        messageRow,
+                        const SizedBox(height: TsPhoneSpacing.xSmall),
+                        Align(alignment: Alignment.centerRight, child: action),
+                      ],
+                    )
+                  : messageRow,
+            );
+          },
         ),
       ),
     );
@@ -417,7 +533,7 @@ class TsStatusListTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Widget? trailing;
   final Color? iconColor;
   final bool showStatusIndicator;
@@ -774,6 +890,7 @@ class TsStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final highContrast = MediaQuery.highContrastOf(context);
     final style = Theme.of(context).textTheme.labelSmall?.copyWith(
       color: color,
       fontFamily: 'monospace',
@@ -788,9 +905,12 @@ class TsStatusBadge extends StatelessWidget {
         vertical: compact ? 3 : 4,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.11),
+        color: color.withValues(alpha: highContrast ? 0.18 : 0.11),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.24), width: 0.6),
+        border: Border.all(
+          color: color.withValues(alpha: highContrast ? 0.72 : 0.24),
+          width: highContrast ? 1 : 0.6,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

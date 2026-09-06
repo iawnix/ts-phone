@@ -8,10 +8,10 @@ import { assertBearerAuthorization, ensureBearerToken, ensureBridgeSecret } from
 import {
   API_VERSION,
   SERVICE_VERSION,
+  type AbortInput,
   type ApprovalInput,
   type MessagePageRequest,
   type PromptInput,
-  type SessionCommandInput,
   type TimelinePageRequest,
 } from "./types.js";
 
@@ -93,17 +93,17 @@ async function handleRequest(
     return;
   }
   assertBearerAuthorization(request.headers.authorization, token);
-  if (method === "GET" && url.pathname === "/api/v3/version") {
+  if (method === "GET" && url.pathname === "/api/v4/version") {
     sendData(response, 200, { apiVersion: API_VERSION, serviceVersion: SERVICE_VERSION });
     return;
   }
-  if (method === "GET" && url.pathname === "/api/v3/workspaces") {
+  if (method === "GET" && url.pathname === "/api/v4/workspaces") {
     sendData(response, 200, await hub.listWorkspaces());
     return;
   }
 
   const segments = decodeSegments(url.pathname);
-  if (segments.length < 4 || segments[0] !== "api" || segments[1] !== "v3" || segments[2] !== "workspaces") {
+  if (segments.length < 4 || segments[0] !== "api" || segments[1] !== "v4" || segments[2] !== "workspaces") {
     throw new HttpError(404, "not_found", "API endpoint was not found");
   }
   const workspaceId = segments[3] || "";
@@ -142,7 +142,7 @@ async function handleRequest(
     return;
   }
   if (sessionResource === "abort" && segments.length === 7 && method === "POST") {
-    const input = validateSessionCommand(await readJsonBody(request, config.maxBodyBytes));
+    const input = validateAbort(await readJsonBody(request, config.maxBodyBytes));
     await hub.abort(workspaceId, sessionId, input);
     sendData(response, 200, { aborted: true });
     return;
@@ -287,12 +287,18 @@ function validateApproval(value: unknown): ApprovalInput {
   return { approved: value.approved, sessionRevision: value.sessionRevision };
 }
 
-function validateSessionCommand(value: unknown): SessionCommandInput {
-  if (!isObject(value) || Object.keys(value).length !== 1 || typeof value.sessionRevision !== "string") {
-    throw new HttpError(400, "invalid_request", "sessionRevision must be the only field");
+function validateAbort(value: unknown): AbortInput {
+  if (!isObject(value)
+    || Object.keys(value).length !== 2
+    || typeof value.sessionRevision !== "string"
+    || typeof value.agentRunId !== "string") {
+    throw new HttpError(400, "invalid_abort", "sessionRevision and agentRunId are required");
   }
   validateRevision(value.sessionRevision);
-  return { sessionRevision: value.sessionRevision };
+  if (!/^[A-Za-z0-9._:-]{1,160}$/.test(value.agentRunId)) {
+    throw new HttpError(400, "invalid_agent_run_id", "agentRunId is invalid");
+  }
+  return { sessionRevision: value.sessionRevision, agentRunId: value.agentRunId };
 }
 
 function validateRevision(value: string): void {
@@ -373,7 +379,9 @@ function sendError(response: ServerResponse, error: unknown): void {
     return;
   }
   if (error instanceof RuntimeError) {
-    const status = error.code === "command_ambiguous" ? 504 : 502;
+    const status = error.code === "command_ambiguous"
+      ? 504
+      : (error.code === "agent_not_running" || error.code === "agent_run_stale" ? 409 : 502);
     sendJson(response, status, { apiVersion: API_VERSION, error: { code: error.code, message: error.message } });
     return;
   }

@@ -82,6 +82,87 @@ void main() {
     },
   );
 
+  test(
+    'stops an automatic timeline refresh from mutating state after dispose',
+    () async {
+      final earlierRequested = Completer<void>();
+      final earlierResponse = Completer<TsPhoneTimelineSnapshot>();
+      final api = FakeGateway();
+      api.timelineResponder = ({before, branch}) async => timelineSnapshot(
+        items: <SessionTimelineItem>[
+          TimelineMessageItem(
+            id: '00000003',
+            turnId: '00000001',
+            message: ChatMessage.fromJson(assistantMessage('latest')),
+          ),
+        ],
+        totalItems: 1,
+      );
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        accessMode: SessionAccessMode.controller,
+        initialRuntimeState: RuntimeState.idle,
+        initialCapabilities: const <String>{timelineCapability},
+      );
+      await controller.initialize();
+      api.addEvent('message_start', <String, Object?>{
+        'message': <String, Object?>{'role': 'assistant'},
+      });
+      api.addEvent('message_update', <String, Object?>{
+        'assistantMessageEvent': <String, Object?>{
+          'type': 'text_delta',
+          'delta': 'still streaming',
+        },
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.streamingText, 'still streaming');
+
+      api.timelineResponder = ({before, branch}) {
+        if (before == null) {
+          return Future<TsPhoneTimelineSnapshot>.value(
+            timelineSnapshot(
+              items: <SessionTimelineItem>[
+                TimelineMessageItem(
+                  id: '00000003',
+                  turnId: '00000001',
+                  message: ChatMessage.fromJson(assistantMessage('latest')),
+                ),
+              ],
+              totalItems: 2,
+              hasMore: true,
+              nextBefore: '00000003',
+            ),
+          );
+        }
+        expect(before, '00000003');
+        if (!earlierRequested.isCompleted) earlierRequested.complete();
+        return earlierResponse.future;
+      };
+
+      final refresh = controller.refreshMessages();
+      await earlierRequested.future;
+      controller.dispose();
+      earlierResponse.complete(
+        timelineSnapshot(
+          items: <SessionTimelineItem>[
+            TimelineMessageItem(
+              id: '00000002',
+              turnId: '00000001',
+              message: ChatMessage.fromJson(assistantMessage('earlier')),
+            ),
+          ],
+          totalItems: 2,
+        ),
+      );
+
+      await expectLater(refresh, completes);
+      expect(controller.streamingText, 'still streaming');
+    },
+  );
+
   test('an inactive timeline branch is read-only', () async {
     final api = FakeGateway();
     api.timelineResponder = ({before, branch}) async => timelineSnapshot(
@@ -489,7 +570,10 @@ void main() {
         'source': 'interactive',
         'origin': 'local',
       });
-      api.addEvent('agent_start', <String, Object?>{'type': 'agent_start'});
+      api.addEvent('agent_start', <String, Object?>{
+        'type': 'agent_start',
+        'agentRunId': 'run-cli-1',
+      });
       api.addEvent('message_start', <String, Object?>{
         'type': 'message_start',
         'message': <String, Object?>{'role': 'assistant'},
@@ -510,6 +594,247 @@ void main() {
       expect(api.lastMessage, 'phone prompt');
     },
   );
+
+  test('tracks the bridge-issued agent run identity', () async {
+    final api = FakeGateway();
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    expect(controller.activeAgentRunId, isNull);
+
+    api.addEvent('agent_start', <String, Object?>{
+      'type': 'agent_start',
+      'agentRunId': 'run-1',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.runtimeState, RuntimeState.running);
+    expect(controller.activeAgentRunId, 'run-1');
+
+    api.addEvent('session_state', <String, Object?>{
+      'state': 'running',
+      'isStreaming': true,
+      'activeAgentRunId': 'run-1',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.activeAgentRunId, 'run-1');
+
+    api.addEvent('agent_settled', <String, Object?>{
+      'type': 'agent_settled',
+      'agentRunId': 'run-1',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.runtimeState, RuntimeState.idle);
+    expect(controller.activeAgentRunId, isNull);
+
+    api.addEvent('session_state', <String, Object?>{
+      'state': 'idle',
+      'isStreaming': false,
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.activeAgentRunId, isNull);
+
+    api.addEvent('session_state', <String, Object?>{
+      'state': 'running',
+      'isStreaming': true,
+      'activeAgentRunId': 'run-2',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.activeAgentRunId, 'run-2');
+
+    api.addEvent('agent_start', <String, Object?>{
+      'type': 'agent_start',
+      'agentRunId': 'run-2',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.activeAgentRunId, 'run-2');
+  });
+
+  test(
+    'REST snapshot promotes a stale idle summary to the active run',
+    () async {
+      final api = FakeGateway()
+        ..snapshot = TsPhoneMessageSnapshot(
+          sessionId: 'session-test',
+          sessionRevision: '11111111-1111-4111-8111-111111111111',
+          activeAgentRunId: 'run-snapshot',
+          messages: const <Object?>[],
+          lastEventId: 'epoch:1',
+        );
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        accessMode: SessionAccessMode.controller,
+        initialRuntimeState: RuntimeState.idle,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+
+      expect(controller.runtimeState, RuntimeState.running);
+      expect(controller.activeAgentRunId, 'run-snapshot');
+    },
+  );
+
+  test('REST snapshot retires a stale running summary', () async {
+    final api = FakeGateway();
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      initialActiveAgentRunId: 'run-old',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.running,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.initialize();
+
+    expect(controller.runtimeState, RuntimeState.idle);
+    expect(controller.activeAgentRunId, isNull);
+  });
+
+  test('refuses an abort after the session revision changes', () async {
+    final api = FakeGateway();
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    api.addEvent('session_state', <String, Object?>{
+      'state': 'running',
+      'isStreaming': true,
+      'activeAgentRunId': 'run-original',
+    });
+    await Future<void>.delayed(Duration.zero);
+    final expectedAgentRunId = controller.activeAgentRunId!;
+    final expectedRevision = controller.sessionRevision;
+
+    api.snapshot = TsPhoneMessageSnapshot(
+      sessionId: 'session-test',
+      sessionRevision: '22222222-2222-4222-8222-222222222222',
+      messages: const <Object?>[],
+      lastEventId: 'replacement:1',
+    );
+    await controller.refreshMessages();
+
+    expect(controller.runtimeState, RuntimeState.idle);
+    expect(controller.activeAgentRunId, isNull);
+    expect(controller.sessionRevision, isNot(expectedRevision));
+    expect(
+      await controller.abort(
+        expectedSessionRevision: expectedRevision,
+        expectedAgentRunId: expectedAgentRunId,
+      ),
+      isFalse,
+    );
+    expect(api.abortCalls, 0);
+  });
+
+  test('sends abort only for the matching bridge-issued agent run', () async {
+    final api = FakeGateway();
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    api.addEvent('agent_start', <String, Object?>{
+      'type': 'agent_start',
+      'agentRunId': 'run-current',
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      await controller.abort(
+        expectedSessionRevision: controller.sessionRevision,
+        expectedAgentRunId: 'run-stale',
+      ),
+      isFalse,
+    );
+    expect(api.abortCalls, 0);
+
+    expect(
+      await controller.abort(
+        expectedSessionRevision: controller.sessionRevision,
+        expectedAgentRunId: 'run-current',
+      ),
+      isTrue,
+    );
+    expect(api.abortCalls, 1);
+    expect(api.lastAbortAgentRunId, 'run-current');
+  });
+
+  for (final errorCode in <String>['agent_run_stale', 'agent_not_running']) {
+    test('reconciles the active run after $errorCode rejects abort', () async {
+      final abortResponse = Completer<void>();
+      final api = FakeGateway()..nextAbort = abortResponse.future;
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        accessMode: SessionAccessMode.controller,
+        initialRuntimeState: RuntimeState.idle,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      api.addEvent('agent_start', <String, Object?>{
+        'type': 'agent_start',
+        'agentRunId': 'run-original',
+      });
+      await Future<void>.delayed(Duration.zero);
+      final abort = controller.abort(
+        expectedSessionRevision: controller.sessionRevision,
+        expectedAgentRunId: 'run-original',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      api.snapshot = TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        activeAgentRunId: 'run-replacement',
+        messages: const <Object?>[],
+        lastEventId: 'epoch:replacement',
+      );
+      abortResponse.completeError(
+        TsPhoneApiException(
+          'Abort target changed',
+          statusCode: 409,
+          code: errorCode,
+        ),
+      );
+
+      expect(await abort, isFalse);
+      expect(api.abortCalls, 1);
+      expect(api.messageSnapshotCalls, 2);
+      expect(controller.runtimeState, RuntimeState.running);
+      expect(controller.activeAgentRunId, 'run-replacement');
+      expect(controller.problem, isNull);
+    });
+  }
 
   test('surfaces each phone approval once', () async {
     final api = FakeGateway();
@@ -630,6 +955,27 @@ void main() {
     },
   );
 
+  test('does not publish a deferred send result after dispose', () async {
+    final sendResponse = Completer<void>();
+    final api = FakeGateway()..nextSend = sendResponse.future;
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      accessMode: SessionAccessMode.controller,
+      initialRuntimeState: RuntimeState.idle,
+    );
+    await controller.initialize();
+
+    final send = controller.send('leave before this completes');
+    await Future<void>.delayed(Duration.zero);
+    controller.dispose();
+    sendResponse.complete();
+
+    expect(await send, isTrue);
+  });
+
   test('scopes approval deduplication to the session revision', () async {
     const nextRevision = '22222222-2222-4222-8222-222222222222';
     final api = FakeGateway();
@@ -712,7 +1058,10 @@ void main() {
       expect(controller.eventConnectionState, EventConnectionState.connected);
       expect(api.eventConnectionCount, 1);
 
-      api.addEvent('agent_start', <String, Object?>{'type': 'agent_start'});
+      api.addEvent('agent_start', <String, Object?>{
+        'type': 'agent_start',
+        'agentRunId': 'run-resume-1',
+      });
       await Future<void>.delayed(Duration.zero);
       api.failEventStream();
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -1245,9 +1594,13 @@ class FakeGateway implements TsPhoneGateway {
   int _sequence = 0;
   int eventConnectionCount = 0;
   int messageSnapshotCalls = 0;
+  int abortCalls = 0;
+  String? lastAbortAgentRunId;
   final List<String?> lastEventIds = <String?>[];
   String? lastMessage;
   Object? sendError;
+  Future<void>? nextSend;
+  Future<void>? nextAbort;
   String? lastApprovalId;
   bool? lastApproval;
   TsPhoneMessageSnapshot snapshot = TsPhoneMessageSnapshot(
@@ -1292,9 +1645,16 @@ class FakeGateway implements TsPhoneGateway {
   @override
   Future<void> abort(
     String workspaceId,
-    String sessionId,
-    String sessionRevision,
-  ) async {}
+    String sessionId, {
+    required String sessionRevision,
+    required String agentRunId,
+  }) async {
+    abortCalls += 1;
+    lastAbortAgentRunId = agentRunId;
+    final pending = nextAbort;
+    nextAbort = null;
+    if (pending != null) await pending;
+  }
 
   @override
   void close() {
@@ -1377,6 +1737,9 @@ class FakeGateway implements TsPhoneGateway {
     String message, {
     required String clientMessageId,
   }) async {
+    final pending = nextSend;
+    nextSend = null;
+    if (pending != null) await pending;
     if (sendError case final error?) throw error;
     lastMessage = message;
   }

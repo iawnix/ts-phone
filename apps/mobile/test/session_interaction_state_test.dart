@@ -20,6 +20,7 @@ void main() {
       historyOnly: false,
       viewingInactiveBranch: false,
       canSend: true,
+      hasActiveAgentRun: true,
       commandInFlight: false,
       canRefresh: true,
     );
@@ -37,6 +38,7 @@ void main() {
       historyOnly: false,
       viewingInactiveBranch: false,
       canSend: false,
+      hasActiveAgentRun: false,
       commandInFlight: false,
       canRefresh: true,
     );
@@ -54,6 +56,7 @@ void main() {
       historyOnly: false,
       viewingInactiveBranch: false,
       canSend: true,
+      hasActiveAgentRun: true,
       commandInFlight: false,
       canRefresh: true,
     );
@@ -69,6 +72,7 @@ void main() {
       historyOnly: false,
       viewingInactiveBranch: false,
       canSend: false,
+      hasActiveAgentRun: true,
       commandInFlight: false,
       canRefresh: true,
     );
@@ -83,6 +87,7 @@ void main() {
       historyOnly: true,
       viewingInactiveBranch: false,
       canSend: false,
+      hasActiveAgentRun: false,
       commandInFlight: false,
       canRefresh: true,
     );
@@ -99,6 +104,7 @@ void main() {
       historyOnly: false,
       viewingInactiveBranch: false,
       canSend: true,
+      hasActiveAgentRun: false,
       commandInFlight: false,
       canRefresh: true,
     );
@@ -118,6 +124,7 @@ void main() {
       historyOnly: false,
       viewingInactiveBranch: false,
       canSend: true,
+      hasActiveAgentRun: false,
       commandInFlight: false,
       canRefresh: true,
     );

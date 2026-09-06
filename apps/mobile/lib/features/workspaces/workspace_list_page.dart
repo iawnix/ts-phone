@@ -6,6 +6,7 @@ import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../models/workspace.dart';
+import '../../navigation/adaptive_page_route.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
@@ -41,6 +42,8 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
   int _refreshGeneration = 0;
   Duration? _latency;
   DateTime? _lastSync;
+  String? _openingWorkspaceId;
+  int _openGeneration = 0;
 
   @override
   void initState() {
@@ -60,6 +63,8 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.settings.serverUrl != widget.settings.serverUrl ||
         oldWidget.settings.token != widget.settings.token) {
+      _openGeneration += 1;
+      _openingWorkspaceId = null;
       _api.close();
       _api = _createGateway();
       unawaited(_refresh(force: true));
@@ -128,10 +133,18 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
   }
 
   Future<void> _open(WorkspaceSummary workspace) async {
+    if (_openingWorkspaceId != null) return;
+    final generation = ++_openGeneration;
+    final gateway = _api;
+    setState(() => _openingWorkspaceId = workspace.id);
     ActionFeedback.selection();
     try {
-      final sessions = await _api.listSessions(workspace.id);
-      if (!mounted) return;
+      final sessions = await gateway.listSessions(workspace.id);
+      if (!mounted ||
+          generation != _openGeneration ||
+          !identical(gateway, _api)) {
+        return;
+      }
       final page = sessions.length == 1
           ? ChatPage(
               settings: widget.settings,
@@ -145,11 +158,13 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
               workspace: workspace,
               initialSessions: sessions,
             );
-      await Navigator.of(
-        context,
-      ).push<void>(MaterialPageRoute<void>(builder: (context) => page));
+      await pushTsPhonePage<void>(context: context, builder: (context) => page);
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _openGeneration ||
+          !identical(gateway, _api)) {
+        return;
+      }
       ActionFeedback.error();
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -161,8 +176,12 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
             duration: const Duration(seconds: 2),
           ),
         );
+    } finally {
+      if (mounted && generation == _openGeneration) {
+        setState(() => _openingWorkspaceId = null);
+      }
     }
-    await _refresh();
+    if (mounted && generation == _openGeneration) await _refresh();
   }
 
   @override
@@ -179,7 +198,7 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
             const SizedBox(width: TsPhoneSpacing.medium),
             Flexible(
               child: Text(
-                l10n.appTitle,
+                l10n.workspaces,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -199,19 +218,34 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
                     dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.refresh),
+                : const Icon(Icons.refresh_rounded),
           ),
           IconButton(
-            onPressed: () {
-              ActionFeedback.selection();
-              widget.onOpenSettings();
-            },
+            key: const ValueKey<String>('workspace-settings'),
+            onPressed: _openingWorkspaceId == null
+                ? () {
+                    ActionFeedback.selection();
+                    widget.onOpenSettings();
+                  }
+                : null,
             tooltip: l10n.settings,
             icon: const Icon(Icons.settings_outlined),
           ),
         ],
       ),
-      body: TsPageBackdrop(child: _buildBody()),
+      body: TsPageBackdrop(
+        child: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: TsPhoneSpacing.xLarge),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: _buildBody(),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -259,14 +293,21 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
                 TsPhoneSpacing.large,
                 TsPhoneSpacing.xLarge,
               ),
-              itemCount: _workspaces!.length,
+              itemCount: _workspaces!.length + 1,
               itemBuilder: (context, index) {
-                final workspace = _workspaces![index];
+                if (index == 0) {
+                  return _ServiceSyncHeader(
+                    latency: _latency,
+                    lastSync: _lastSync,
+                  );
+                }
+                final workspace = _workspaces![index - 1];
                 return _WorkspaceTile(
                   workspace: workspace,
-                  latency: _latency,
-                  lastSync: _lastSync,
-                  onTap: () => _open(workspace),
+                  opening: _openingWorkspaceId == workspace.id,
+                  onTap: _openingWorkspaceId == null
+                      ? () => _open(workspace)
+                      : null,
                 );
               },
               separatorBuilder: (context, index) =>
@@ -299,18 +340,40 @@ class _WorkspaceLoadProblemBand extends StatelessWidget {
   }
 }
 
+class _ServiceSyncHeader extends StatelessWidget {
+  const _ServiceSyncHeader({required this.latency, required this.lastSync});
+
+  final Duration? latency;
+  final DateTime? lastSync;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final sync = lastSync?.toLocal();
+    final syncLabel = sync == null
+        ? '\u2014'
+        : '${sync.hour.toString().padLeft(2, '0')}:${sync.minute.toString().padLeft(2, '0')}';
+    final latencyLabel = latency == null
+        ? '\u2014'
+        : '${latency!.inMilliseconds} ms';
+    return TsSectionHeader(
+      title: l10n.tsPhoneService,
+      caption:
+          '${l10n.latency} $latencyLabel \u00b7 ${l10n.lastSync} $syncLabel',
+    );
+  }
+}
+
 class _WorkspaceTile extends StatelessWidget {
   const _WorkspaceTile({
     required this.workspace,
-    required this.latency,
-    required this.lastSync,
+    required this.opening,
     required this.onTap,
   });
 
   final WorkspaceSummary workspace;
-  final Duration? latency;
-  final DateTime? lastSync;
-  final VoidCallback onTap;
+  final bool opening;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +384,7 @@ class _WorkspaceTile extends StatelessWidget {
       RuntimeState.running || RuntimeState.connecting => status.warning,
       RuntimeState.idle => status.connected,
       RuntimeState.recoveryRequired => status.error,
-      RuntimeState.offline => colors.outline,
+      RuntimeState.offline => colors.onSurfaceVariant,
     };
     final stateLabel = switch (workspace.runtimeState) {
       RuntimeState.running => l10n.statusRunning,
@@ -330,13 +393,6 @@ class _WorkspaceTile extends StatelessWidget {
       RuntimeState.recoveryRequired => l10n.statusRecovery,
       RuntimeState.offline => l10n.runtimeOffline,
     };
-    final sync = lastSync?.toLocal();
-    final syncLabel = sync == null
-        ? '—'
-        : '${sync.hour.toString().padLeft(2, '0')}:${sync.minute.toString().padLeft(2, '0')}';
-    final latencyLabel = latency == null
-        ? '—'
-        : '${latency!.inMilliseconds} ms';
     final title = workspace.name == workspace.id
         ? TsMonoText(
             workspace.name,
@@ -414,31 +470,34 @@ class _WorkspaceTile extends StatelessWidget {
                               icon: Icons.sensors_rounded,
                               text: l10n.statusLive(workspace.liveSessionCount),
                             ),
-                          TsMetadataItem(
-                            icon: Icons.speed_rounded,
-                            text: '${l10n.tsPhoneService} · $latencyLabel',
-                            tooltip: l10n.latency,
-                            maxLines: 3,
-                          ),
-                          TsMetadataItem(
-                            icon: Icons.sync_rounded,
-                            text: '${l10n.lastSync} · $syncLabel',
-                            tooltip: l10n.lastSync,
-                            maxLines: 3,
-                          ),
                         ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: TsPhoneSpacing.xSmall),
-                ExcludeSemantics(
-                  child: Icon(
-                    Icons.chevron_right,
-                    size: 21,
-                    color: colors.outline,
+                if (opening)
+                  Semantics(
+                    label: l10n.opening,
+                    liveRegion: true,
+                    child: ExcludeSemantics(
+                      child: SizedBox.square(
+                        key: ValueKey<String>(
+                          'workspace-opening-${workspace.id}',
+                        ),
+                        dimension: 20,
+                        child: const CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                else
+                  ExcludeSemantics(
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 21,
+                      color: colors.outline,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -466,7 +525,7 @@ class _ErrorView extends StatelessWidget {
       TsPhoneProblemKind.authentication => Icons.lock_outline,
       TsPhoneProblemKind.incompatible => Icons.sync_problem_outlined,
       TsPhoneProblemKind.unavailable => Icons.cloud_off_outlined,
-      TsPhoneProblemKind.request => Icons.error_outline,
+      TsPhoneProblemKind.request => Icons.error_outline_rounded,
     };
     return TsEmptyState(
       icon: icon,
@@ -479,7 +538,7 @@ class _ErrorView extends StatelessWidget {
         children: <Widget>[
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             label: Text(l10n.retry),
           ),
           TextButton.icon(

@@ -66,7 +66,7 @@ class SessionNoticeView extends StatelessWidget {
           IconButton(
             onPressed: onCopyStartCommand,
             tooltip: l10n.copyStartCommand,
-            icon: const Icon(Icons.copy_outlined),
+            icon: const Icon(Icons.copy_rounded),
           ),
           IconButton(
             onPressed: onRetry,

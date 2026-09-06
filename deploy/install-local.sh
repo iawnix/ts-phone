@@ -84,7 +84,7 @@ readonly SERVER_ENTRY="${SOURCE_ROOT}/services/server/dist/index.js"
 readonly CTL_ENTRY="${SOURCE_ROOT}/bin/ts-phone-ctl"
 readonly UNIT_SOURCE="${SOURCE_ROOT}/deploy/systemd/ts-phone.service"
 readonly ENV_SOURCE="${SOURCE_ROOT}/deploy/server.env.example"
-readonly APK_SOURCE="${SOURCE_ROOT}/dist/ts-phone-v${mobile_name}-build${mobile_build}-arm64-v8a-release.apk"
+readonly APK_SOURCE="${SOURCE_ROOT}/dist/android-current/ts-phone-v${mobile_name}-build${mobile_build}-arm64-v8a-release.apk"
 
 for required_file in "$SERVER_ENTRY" "$CTL_ENTRY" "$UNIT_SOURCE" "$ENV_SOURCE"; do
     [[ -f "$required_file" && ! -L "$required_file" ]] || die "required release file is missing or unsafe: ${required_file}"
@@ -237,14 +237,14 @@ rollback_current() {
     fi
 }
 
-check_v3_health() {
+check_v4_health() {
     node --input-type=module --eval '
 const response = await fetch("http://127.0.0.1:22113/healthz", {
   redirect: "error",
   signal: AbortSignal.timeout(5_000),
 });
 const body = await response.json();
-if (!response.ok || body?.ok !== true || body?.service !== "ts-phone" || body?.version !== "ts-phone-api/3") {
+if (!response.ok || body?.ok !== true || body?.service !== "ts-phone" || body?.version !== "ts-phone-api/4") {
   process.exit(1);
 }
 '
@@ -257,8 +257,8 @@ if ! systemctl --user enable ts-phone.service ||
 fi
 sleep 2
 if ! systemctl --user is-active --quiet ts-phone.service ||
-   ! check_v3_health; then
+   ! check_v4_health; then
     rollback_current
-    die "service v0.3 health check failed; previous current link was restored when available"
+    die "service API v4 health check failed; previous current link was restored when available"
 fi
-log "ts-phone.service is active and ts-phone-api/3 health passed"
+log "ts-phone.service is active and ts-phone-api/4 health passed"

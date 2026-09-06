@@ -20,16 +20,24 @@ Flutter -> HTTPS/SSE -> TS Phone broker -> Unix socket -> visible TSPi/Pi
 ## Release Ownership
 
 TS Phone owns its source, server/mobile versions, protocol schemas, tests, and
-`ts-phone-component-release/1` builder. The component archive contains the
-built broker, control entrypoint, protocol documents, operational references,
-and one production-signed arm64 APK. It does not select a live TSPi release.
+`ts-phone-component-release/2` builder. Android releases are built from a
+private source capture; the signed APK embeds that source snapshot, and a
+sidecar attestation binds the snapshot, version, build, ABI, filename, size,
+and digest. The component builder parses the protocol documents and verifies
+their version identities, lifecycle payload closure, event bindings, running
+snapshot identity, and fenced Abort contract. The component archive contains
+the built broker, control entrypoint, those validated protocol documents,
+operational references, attestation, and one production-signed arm64 APK. It
+does not select a live TSPi release.
 
-TSPi owns the complete `tspi-package-release/1` assembly and install
+TSPi owns the complete `tspi-package-release/2` assembly and install
 transaction. `ts_web` remains embedded in its Agent component because it reads
 the research kernel's workspace projection. The suite manifest freezes the
 Agent component, Phone component, Web contract, server entry, signed APK, and
-protocol versions into one compatible set. One suite `current` pointer backs
-all four installed launchers.
+protocol versions into one compatible set. TSPi independently verifies the
+APK signature, pinned certificate, package metadata, embedded source snapshot,
+and attestation rather than trusting producer fields. One suite `current`
+pointer backs all four installed launchers.
 
 Configuration, Bearer tokens, bridge secrets, Pi sessions, research
 workspaces, service units, and process state are installation-owned and remain
@@ -68,11 +76,18 @@ allows parallel inspection while keeping a single writer.
 
 ## Identity And Fencing
 
-The complete routing identity is:
+The session routing identity is:
 
 ~~~text
 workspaceId + sessionId + sessionRevision
 ~~~
+
+Abort adds a Bridge-issued `agentRunId`. The broker exposes it as
+`activeAgentRunId` in session and snapshot state, requires the phone to return
+the exact value, and forwards the same value unchanged to the Bridge. The
+Bridge compares it again immediately before calling Pi's abort operation. This
+second fence prevents a delayed request for a completed run from stopping its
+successor in the same session revision.
 
 The local bridge additionally binds instanceEpoch and sessionGeneration. Bridge
 events carry a monotonically increasing sequence. The broker rejects:
@@ -80,7 +95,8 @@ events carry a monotonically increasing sequence. The broker rejects:
 - a second live connection for the same sessionId;
 - a second live controller for the same workspace;
 - records whose workspace, session, instance, generation, or sequence changed;
-- prompt, abort, or approval commands with a stale sessionRevision.
+- prompt, abort, or approval commands with a stale sessionRevision;
+- abort commands while idle or for a different active agent run.
 
 A bridge reconnect resets that session journal and creates a new revision.
 Mobile clients stop applying the old stream, fetch an authoritative snapshot,

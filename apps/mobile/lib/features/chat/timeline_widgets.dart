@@ -4,9 +4,146 @@ import '../../l10n/app_localizations_extensions.dart';
 import '../../models/session_timeline.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/chat_message_view.dart';
+import '../../widgets/presentation.dart';
 import 'chat_controller.dart';
 
+enum TimelineViewFilter { all, messages, activities }
+
 enum _TimelineHistoryActionKind { loadEarlier, loadAll, selectBranch }
+
+class TimelineFilterControl extends StatelessWidget {
+  const TimelineFilterControl({
+    required this.selected,
+    required this.onChanged,
+    super.key,
+  });
+
+  final TimelineViewFilter selected;
+  final ValueChanged<TimelineViewFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Padding(
+      key: const ValueKey<String>('timeline-view-filter'),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final labels = <TimelineViewFilter, String>{
+            TimelineViewFilter.all: l10n.timelineFilterAll,
+            TimelineViewFilter.messages: l10n.timelineFilterMessages,
+            TimelineViewFilter.activities: l10n.timelineFilterActivities,
+          };
+          final scaledLabelSize = MediaQuery.textScalerOf(context).scale(14);
+          final useMenu = scaledLabelSize > 18 || constraints.maxWidth < 280;
+          if (useMenu) {
+            return Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: _TimelineFilterMenu(
+                selected: selected,
+                labels: labels,
+                onChanged: onChanged,
+              ),
+            );
+          }
+          return TsSegmentedControl<TimelineViewFilter>(
+            selected: selected,
+            onChanged: onChanged,
+            segments: <ButtonSegment<TimelineViewFilter>>[
+              for (final entry in labels.entries)
+                ButtonSegment<TimelineViewFilter>(
+                  value: entry.key,
+                  label: Text(
+                    entry.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TimelineFilterMenu extends StatelessWidget {
+  const _TimelineFilterMenu({
+    required this.selected,
+    required this.labels,
+    required this.onChanged,
+  });
+
+  final TimelineViewFilter selected;
+  final Map<TimelineViewFilter, String> labels;
+  final ValueChanged<TimelineViewFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final label = labels[selected]!;
+    return PopupMenuButton<TimelineViewFilter>(
+      key: const ValueKey<String>('timeline-view-filter-menu'),
+      initialValue: selected,
+      tooltip: label,
+      onSelected: onChanged,
+      itemBuilder: (context) => <PopupMenuEntry<TimelineViewFilter>>[
+        for (final entry in labels.entries)
+          PopupMenuItem<TimelineViewFilter>(
+            value: entry.key,
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  entry.key == selected
+                      ? Icons.check_rounded
+                      : Icons.circle_outlined,
+                  size: 18,
+                ),
+                const SizedBox(width: TsPhoneSpacing.small),
+                Expanded(child: Text(entry.value)),
+              ],
+            ),
+          ),
+      ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 152, minHeight: 44),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHigh,
+            border: Border.all(color: colors.outlineVariant),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TsPhoneSpacing.medium,
+              vertical: TsPhoneSpacing.xSmall,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  Icons.filter_list_rounded,
+                  size: 19,
+                  color: colors.onSurfaceVariant,
+                ),
+                const SizedBox(width: TsPhoneSpacing.small),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: TsPhoneSpacing.xSmall),
+                const Icon(Icons.arrow_drop_down_rounded, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _TimelineHistoryAction {
   const _TimelineHistoryAction(this.kind, {this.branchId});
@@ -275,6 +412,34 @@ List<TimelineTurnGroup> groupTimelineItems(
   return List<TimelineTurnGroup>.unmodifiable(groups);
 }
 
+List<TimelineTurnGroup> filterTimelineGroups(
+  List<TimelineTurnGroup> groups,
+  TimelineViewFilter filter,
+) {
+  if (filter == TimelineViewFilter.all) return groups;
+  final filtered = <TimelineTurnGroup>[];
+  for (final group in groups) {
+    final items = group.items
+        .where((item) {
+          return switch (filter) {
+            TimelineViewFilter.all => true,
+            TimelineViewFilter.messages => item is TimelineMessageItem,
+            TimelineViewFilter.activities => item is TimelineActivityItem,
+          };
+        })
+        .toList(growable: false);
+    if (items.isEmpty) continue;
+    filtered.add(
+      TimelineTurnGroup(
+        turnId: group.turnId,
+        number: group.number,
+        items: List<SessionTimelineItem>.unmodifiable(items),
+      ),
+    );
+  }
+  return List<TimelineTurnGroup>.unmodifiable(filtered);
+}
+
 class _TimelineTurnGroupBuilder {
   _TimelineTurnGroupBuilder({required this.turnId, required this.number});
 
@@ -522,12 +687,12 @@ class _ActivitySummary extends StatelessWidget {
 
 IconData _activityIcon(TimelineActivityCategory category) => switch (category) {
   TimelineActivityCategory.subagent => Icons.account_tree_outlined,
-  TimelineActivityCategory.research => Icons.science_rounded,
-  TimelineActivityCategory.review => Icons.fact_check_rounded,
-  TimelineActivityCategory.workspace => Icons.folder_copy_rounded,
-  TimelineActivityCategory.configuration => Icons.settings_rounded,
-  TimelineActivityCategory.context => Icons.compress_rounded,
-  TimelineActivityCategory.system => Icons.info_rounded,
+  TimelineActivityCategory.research => Icons.science_outlined,
+  TimelineActivityCategory.review => Icons.fact_check_outlined,
+  TimelineActivityCategory.workspace => Icons.folder_copy_outlined,
+  TimelineActivityCategory.configuration => Icons.settings_outlined,
+  TimelineActivityCategory.context => Icons.compress_outlined,
+  TimelineActivityCategory.system => Icons.info_outline_rounded,
 };
 
 IconData _activityStateIcon(TimelineActivityStatus status) => switch (status) {

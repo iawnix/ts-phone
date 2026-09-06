@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -21,6 +20,7 @@ import 'package:ts_phone/models/app_theme_preference.dart';
 import 'package:ts_phone/models/app_locale_preference.dart';
 import 'package:ts_phone/models/connection_settings.dart';
 import 'package:ts_phone/models/session_timeline.dart';
+import 'package:ts_phone/platform/ts_accessibility_controller.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 import 'package:ts_phone/models/chat_message.dart';
 import 'package:ts_phone/widgets/chat_message_view.dart';
@@ -95,6 +95,60 @@ void main() {
     expect(find.byType(Image), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  for (final locale in const <Locale>[Locale('en'), Locale('zh')]) {
+    testWidgets(
+      'timeline filter uses a large-text menu in ${locale.languageCode}',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(320, 640);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        var selected = TimelineViewFilter.all;
+        final activityLabel = locale.languageCode == 'zh' ? '活动' : 'Activity';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            theme: TsPhoneTheme.light(),
+            home: StatefulBuilder(
+              builder: (context, setState) => Scaffold(
+                body: TimelineFilterControl(
+                  selected: selected,
+                  onChanged: (value) => setState(() => selected = value),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey<String>('timeline-view-filter-menu')),
+          findsOneWidget,
+        );
+        expect(
+          find.byType(TsSegmentedControl<TimelineViewFilter>),
+          findsNothing,
+        );
+
+        await tester.tap(
+          find.byKey(const ValueKey<String>('timeline-view-filter-menu')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(activityLabel).last);
+        await tester.pumpAndSettle();
+
+        expect(selected, TimelineViewFilter.activities);
+        expect(find.text(activityLabel), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('renders inline code chips and terminal code blocks', (
     WidgetTester tester,
@@ -318,7 +372,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('连接设置'), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+    expect(find.byType(BackButton), findsOneWidget);
     expect(find.byIcon(Icons.close), findsNothing);
     expect(tester.takeException(), isNull);
 
@@ -365,6 +419,80 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('discarded connection verification cannot save settings', (
+    WidgetTester tester,
+  ) async {
+    final verification = Completer<void>();
+    var savedConnections = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConnectionPage(
+          verifier: (_) => verification.future,
+          onConnected: (_) async => savedConnections += 1,
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '访问令牌'),
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '连接'));
+    await tester.pump();
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    verification.complete();
+    await tester.pump();
+
+    expect(savedConnections, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('connection save cannot be dismissed midway', (
+    WidgetTester tester,
+  ) async {
+    final save = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            key: const ValueKey<String>('open-connection-editor'),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (routeContext) => ConnectionPage(
+                  verifier: (_) async {},
+                  onConnected: (_) => save.future,
+                  onBack: () => Navigator.of(routeContext).maybePop(),
+                ),
+              ),
+            ),
+            child: const Text('Open connection editor'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('open-connection-editor')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '访问令牌'),
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '连接'));
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(ConnectionPage), findsOneWidget);
+
+    save.complete();
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnectionPage), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('interactive controls have visible pressed-state feedback', (
     WidgetTester tester,
   ) async {
@@ -378,7 +506,8 @@ void main() {
       style.overlayColor!.resolve(<WidgetState>{WidgetState.pressed}),
       isNotNull,
     );
-    expect(theme.splashColor.a, greaterThan(0));
+    expect(theme.splashFactory, same(NoSplash.splashFactory));
+    expect(theme.highlightColor.a, greaterThan(0));
   });
 
   testWidgets('pulsing status indicators respect Reduce Motion', (
@@ -472,6 +601,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('failed tool status keeps stop available for an active run', (
+    WidgetTester tester,
+  ) async {
+    var stopped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: TsPhoneTheme.light(),
+        home: Scaffold(
+          body: LiveRunStrip(
+            activity: const ChatActivity(
+              ChatActivityKind.toolFailed,
+              toolName: 'ts_calc',
+            ),
+            canAbort: true,
+            onAbort: () => stopped = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Tool failed: Ts calc'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('live-run-stop')));
+    expect(stopped, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('failed activity rail fits dark mode with 2x text', (
     WidgetTester tester,
   ) async {
@@ -513,7 +672,7 @@ void main() {
     expect(find.text('Review · Validate'), findsOneWidget);
     expect(find.text('Failed'), findsOneWidget);
     expect(find.text('2.4s'), findsOneWidget);
-    expect(find.byIcon(Icons.fact_check_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.fact_check_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -586,8 +745,15 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final store = MemorySettingsStore()..localePreference = locale;
+      final accessibility = _glassAccessibilityController();
+      addTearDown(accessibility.dispose);
 
-      await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+      await tester.pumpWidget(
+        TsPhoneApp(
+          settingsStore: store,
+          accessibilityController: accessibility,
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.byType(TsGlassAppBar), findsOneWidget);
@@ -641,8 +807,12 @@ void main() {
         serverUrl: 'https://tsphone.iawnix.xyz',
         token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
+    final accessibility = _glassAccessibilityController();
+    addTearDown(accessibility.dispose);
 
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(
+      TsPhoneApp(settingsStore: store, accessibilityController: accessibility),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
@@ -660,9 +830,7 @@ void main() {
     );
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(
-      find.byWidgetPredicate(
-        (widget) => widget is CupertinoSlidingSegmentedControl,
-      ),
+      find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
       findsNWidgets(2),
     );
     for (final label in <String>['跟随系统', '浅色', '深色', '中文', 'English']) {
@@ -776,7 +944,7 @@ void main() {
 
     response.complete(
       http.Response(
-        '{"apiVersion":"ts-phone-api/3","data":{"apiVersion":"ts-phone-api/3","serviceVersion":"0.4.1"}}',
+        '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4","serviceVersion":"0.4.1"}}',
         200,
       ),
     );
@@ -786,14 +954,14 @@ void main() {
       find.descendant(of: diagnostics, matching: find.text('Healthy')),
       findsOneWidget,
     );
-    expect(find.text('ts-phone-api/3'), findsNothing);
+    expect(find.text('ts-phone-api/4'), findsNothing);
     final detailsToggle = find.byKey(
       const ValueKey<String>('connection-details-toggle'),
     );
     await tester.ensureVisible(detailsToggle);
     await tester.tap(detailsToggle);
     await tester.pumpAndSettle();
-    expect(find.text('ts-phone-api/3'), findsOneWidget);
+    expect(find.text('ts-phone-api/4'), findsOneWidget);
     expect(find.text('Ping'), findsNothing);
     expect(find.text('Runtime'), findsNothing);
     expect(find.text('Node ID'), findsNothing);
@@ -811,7 +979,7 @@ void main() {
     );
     final client = MockClient(
       (_) async => http.Response(
-        '{"apiVersion":"ts-phone-api/3","error":{"code":"unauthorized","message":"no"}}',
+        '{"apiVersion":"ts-phone-api/4","error":{"code":"unauthorized","message":"no"}}',
         401,
       ),
     );
@@ -882,9 +1050,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byWidgetPredicate(
-          (widget) => widget is CupertinoSlidingSegmentedControl,
-        ),
+        find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
         findsNothing,
       );
       expect(find.byIcon(Icons.check_rounded), findsNWidgets(2));
@@ -933,12 +1099,12 @@ void main() {
     expect(dark.surface, isNot(dark.primaryContainer));
     expect(light.brightness, Brightness.light);
     expect(dark.brightness, Brightness.dark);
-    expect(light.primary, const Color(0xFF007AFF));
+    expect(light.primary, const Color(0xFF0068D0));
     expect(dark.surface, const Color(0xFF0B0F14));
-    expect(lightStatus.connected, const Color(0xFF00A884));
-    expect(darkStatus.connected, const Color(0xFF00C2A8));
-    expect(darkStatus.warning, const Color(0xFFFFB020));
-    expect(darkStatus.error, const Color(0xFFFF453A));
+    expect(lightStatus.connected, const Color(0xFF007A5E));
+    expect(darkStatus.connected, const Color(0xFF63E6BE));
+    expect(darkStatus.warning, const Color(0xFFFFD166));
+    expect(darkStatus.error, const Color(0xFFFF6961));
     expect(lightTheme.cardTheme.elevation, 0);
   });
 
@@ -980,6 +1146,13 @@ void main() {
       AppLocalePreference.system,
     );
   });
+}
+
+TsAccessibilityController _glassAccessibilityController() {
+  return TsAccessibilityController(
+    probe: () async => false,
+    changes: const Stream<bool>.empty(),
+  );
 }
 
 class MemorySettingsStore implements SettingsStore {

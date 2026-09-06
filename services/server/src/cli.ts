@@ -18,7 +18,7 @@ if (command === "token") {
 }
 
 const token = await readBearerToken(config.stateDir);
-const baseUrl = `http://${config.host}:${config.port}/api/v3`;
+const baseUrl = `http://${config.host}:${config.port}/api/v4`;
 
 if (command === "workspaces") {
   const response = await apiRequest(`${baseUrl}/workspaces`, token, "GET");

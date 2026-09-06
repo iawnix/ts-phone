@@ -24,7 +24,7 @@ void main() {
         expect(request.followRedirects, isFalse);
         return http.Response(
           jsonEncode(<String, Object?>{
-            'apiVersion': 'ts-phone-api/3',
+            'apiVersion': 'ts-phone-api/4',
             'data': <Object?>[
               <String, Object?>{
                 'id': 'ts_001',
@@ -93,10 +93,11 @@ void main() {
       client: MockClient((request) async {
         return http.Response(
           jsonEncode(<String, Object?>{
-            'apiVersion': 'ts-phone-api/3',
+            'apiVersion': 'ts-phone-api/4',
             'data': <String, Object?>{
               'sessionId': 'session-test',
               'sessionRevision': '11111111-1111-4111-8111-111111111111',
+              'activeAgentRunId': null,
               'messages': <Object?>[
                 <String, Object?>{'role': 'user', 'content': 'hello'},
               ],
@@ -126,10 +127,11 @@ void main() {
         });
         return http.Response(
           jsonEncode(<String, Object?>{
-            'apiVersion': 'ts-phone-api/3',
+            'apiVersion': 'ts-phone-api/4',
             'data': <String, Object?>{
               'sessionId': 'session-test',
               'sessionRevision': '11111111-1111-4111-8111-111111111111',
+              'activeAgentRunId': null,
               'messages': <Object?>[
                 <String, Object?>{'role': 'user', 'content': 'earlier'},
               ],
@@ -162,11 +164,12 @@ void main() {
       client: MockClient(
         (request) async => http.Response(
           jsonEncode(<String, Object?>{
-            'apiVersion': 'ts-phone-api/3',
+            'apiVersion': 'ts-phone-api/4',
             'data': <Object?>[
               <String, Object?>{
                 'sessionId': 'session-history',
                 'sessionRevision': '33333333-3333-4333-8333-333333333333',
+                'activeAgentRunId': null,
                 'runtimeState': 'offline',
                 'isStreaming': false,
                 'accessMode': 'observer',
@@ -216,11 +219,12 @@ void main() {
         });
         return http.Response(
           jsonEncode(<String, Object?>{
-            'apiVersion': 'ts-phone-api/3',
+            'apiVersion': 'ts-phone-api/4',
             'data': <String, Object?>{
               'schemaVersion': 'ts-phone-timeline/1',
               'sessionId': 'session-test',
               'sessionRevision': '11111111-1111-4111-8111-111111111111',
+              'activeAgentRunId': 'run-current',
               'items': <Object?>[
                 <String, Object?>{
                   'id': '00000009',
@@ -286,6 +290,7 @@ void main() {
     expect(snapshot.history.totalItems, 3);
     expect(snapshot.history.selectedBranchIsActive, isTrue);
     expect(snapshot.hasMore, isTrue);
+    expect(snapshot.activeAgentRunId, 'run-current');
   });
 
   test('does not follow redirects carrying credentials', () async {
@@ -305,6 +310,48 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('binds an abort request to the active agent run', () async {
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        expect(
+          request.url.path,
+          '/api/v4/workspaces/ts_001/sessions/session-test/abort',
+        );
+        expect(jsonDecode(request.body), <String, Object?>{
+          'sessionRevision': '11111111-1111-4111-8111-111111111111',
+          'agentRunId': 'run-current',
+        });
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'apiVersion': 'ts-phone-api/4',
+            'data': <String, Object?>{'aborted': true},
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    await api.abort(
+      'ts_001',
+      'session-test',
+      sessionRevision: '11111111-1111-4111-8111-111111111111',
+      agentRunId: 'run-current',
+    );
+  });
+
+  test('classifies a stale abort target as a changed generation', () {
+    final problem = describeTsPhoneProblem(
+      const TsPhoneApiException(
+        'stale',
+        statusCode: 409,
+        code: 'agent_run_stale',
+      ),
+    );
+    expect(problem.code, TsPhoneProblemCode.agentRunChanged);
   });
 
   test('aborts a stalled API request after the configured timeout', () async {
