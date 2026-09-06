@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, readdir, realpath, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath, rename, rm, type FileHandle } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { HttpError } from "./errors.js";
@@ -45,6 +46,11 @@ export interface PersistedSessionIndex {
 export interface PersistedSession {
   id: string;
   filePath: string;
+}
+
+export interface QuarantinedPath {
+  original: string;
+  quarantine: string;
 }
 
 export class WorkspaceRegistry {
@@ -93,6 +99,64 @@ export class WorkspaceRegistry {
       throw new HttpError(400, "unsafe_workspace", "Workspace escaped the configured root");
     }
     return { id: name, name, root: resolved };
+  }
+
+  async create(name: string): Promise<RegisteredWorkspace> {
+    if (!WORKSPACE_NAME_PATTERN.test(name)) {
+      throw new HttpError(400, "invalid_workspace", "Workspace name is invalid");
+    }
+    const root = await this.#resolvedRoot();
+    const candidate = join(root, name);
+    try {
+      await mkdir(candidate, { mode: 0o700 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new HttpError(409, "workspace_exists", "Workspace already exists");
+      }
+      throw error;
+    }
+    return this.get(name);
+  }
+
+  async quarantineWorkspace(workspace: RegisteredWorkspace): Promise<QuarantinedPath> {
+    const root = await this.#resolvedRoot();
+    await this.#assertCurrentWorkspace(workspace);
+    const quarantine = join(root, `.ts-phone-purge-${randomUUID()}`);
+    await rename(workspace.root, quarantine);
+    return { original: workspace.root, quarantine };
+  }
+
+  async quarantineSession(
+    workspace: RegisteredWorkspace,
+    session: PersistedSession,
+  ): Promise<QuarantinedPath> {
+    await this.#assertCurrentWorkspace(workspace);
+    const sessionsRoot = join(workspace.root, ".pi", "sessions");
+    const sessionsStat = await lstat(sessionsRoot);
+    if (!sessionsStat.isDirectory()
+      || sessionsStat.isSymbolicLink()
+      || await realpath(sessionsRoot) !== sessionsRoot) {
+      throw new HttpError(409, "session_history_unsafe", "Session history cannot be purged safely");
+    }
+    const relation = relative(sessionsRoot, session.filePath);
+    if (!relation || relation.startsWith("..") || isAbsolute(relation) || relation.includes(sep)) {
+      throw new HttpError(409, "session_history_unsafe", "Session history cannot be purged safely");
+    }
+    const stat = await lstat(session.filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new HttpError(409, "session_history_unsafe", "Session history cannot be purged safely");
+    }
+    const quarantine = join(sessionsRoot, `.ts-phone-purge-${randomUUID()}`);
+    await rename(session.filePath, quarantine);
+    return { original: session.filePath, quarantine };
+  }
+
+  async restoreQuarantine(value: QuarantinedPath): Promise<void> {
+    await rename(value.quarantine, value.original);
+  }
+
+  async deleteQuarantine(value: QuarantinedPath): Promise<void> {
+    await rm(value.quarantine, { recursive: true, force: false });
   }
 
   async listPersistedSessionIds(workspace: RegisteredWorkspace): Promise<PersistedSessionIndex> {
@@ -272,6 +336,13 @@ export class WorkspaceRegistry {
       throw new Error("TS_PHONE_WORKSPACES must be a real directory");
     }
     return realpath(this.#configuredRoot);
+  }
+
+  async #assertCurrentWorkspace(workspace: RegisteredWorkspace): Promise<void> {
+    const current = await this.get(workspace.id);
+    if (current.root !== workspace.root) {
+      throw new HttpError(409, "workspace_changed", "Workspace path changed; refresh and try again");
+    }
   }
 }
 

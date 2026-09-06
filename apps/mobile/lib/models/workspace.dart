@@ -20,6 +20,21 @@ enum RuntimeState {
       this == RuntimeState.idle || this == RuntimeState.running;
 }
 
+enum LifecycleState {
+  active,
+  archived,
+  trashed;
+
+  static LifecycleState parse(Object? value) => switch (value) {
+    'active' => LifecycleState.active,
+    'archived' => LifecycleState.archived,
+    'trashed' => LifecycleState.trashed,
+    _ => throw FormatException('Unknown lifecycle state: $value'),
+  };
+
+  String get wireName => name;
+}
+
 class WorkspaceSummary {
   const WorkspaceSummary({
     required this.id,
@@ -28,6 +43,11 @@ class WorkspaceSummary {
     required this.isStreaming,
     required this.liveSessionCount,
     required this.sessionCount,
+    this.lifecycleState = LifecycleState.active,
+    this.managementRevision = 'unmanaged',
+    this.managed = false,
+    this.updatedAt,
+    this.deletedAt,
   });
 
   factory WorkspaceSummary.fromJson(Map<String, Object?> json) {
@@ -36,11 +56,17 @@ class WorkspaceSummary {
     final isStreaming = json['isStreaming'];
     final liveSessionCount = json['liveSessionCount'];
     final sessionCount = json['sessionCount'];
+    final rawLifecycleState = json['lifecycleState'];
+    final managementRevision = json['managementRevision'];
+    final managed = json['managed'];
     if (id is! String ||
         name is! String ||
         isStreaming is! bool ||
         liveSessionCount is! int ||
-        sessionCount is! int) {
+        sessionCount is! int ||
+        (rawLifecycleState != null && rawLifecycleState is! String) ||
+        (managementRevision != null && managementRevision is! String) ||
+        (managed != null && managed is! bool)) {
       throw const FormatException('Workspace response is invalid');
     }
     return WorkspaceSummary(
@@ -50,6 +76,13 @@ class WorkspaceSummary {
       isStreaming: isStreaming,
       liveSessionCount: liveSessionCount,
       sessionCount: sessionCount,
+      lifecycleState: rawLifecycleState == null
+          ? LifecycleState.active
+          : LifecycleState.parse(rawLifecycleState),
+      managementRevision: managementRevision as String? ?? 'unmanaged',
+      managed: managed as bool? ?? false,
+      updatedAt: _optionalDateTime(json['updatedAt'], 'workspace updatedAt'),
+      deletedAt: _optionalDateTime(json['deletedAt'], 'workspace deletedAt'),
     );
   }
 
@@ -59,6 +92,11 @@ class WorkspaceSummary {
   final bool isStreaming;
   final int liveSessionCount;
   final int sessionCount;
+  final LifecycleState lifecycleState;
+  final String managementRevision;
+  final bool managed;
+  final DateTime? updatedAt;
+  final DateTime? deletedAt;
 }
 
 enum SessionAccessMode {
@@ -181,6 +219,12 @@ class SessionSummary {
     this.historyOnly = false,
     this.canPrompt = true,
     this.capabilities = const <String>{},
+    this.lifecycleState = LifecycleState.active,
+    this.managementRevision = 'unmanaged',
+    this.managed = false,
+    this.canActivate = false,
+    this.updatedAt,
+    this.deletedAt,
   }) : assert(!historyOnly || historyAvailable);
 
   factory SessionSummary.fromJson(Map<String, Object?> json) {
@@ -193,6 +237,10 @@ class SessionSummary {
     final rawCapabilities = json['capabilities'];
     final rawRuntime = json['runtime'];
     final activeAgentRunId = json['activeAgentRunId'];
+    final rawLifecycleState = json['lifecycleState'];
+    final managementRevision = json['managementRevision'];
+    final managed = json['managed'];
+    final canActivate = json['canActivate'];
     if (sessionId is! String ||
         sessionRevision is! String ||
         isStreaming is! bool ||
@@ -200,6 +248,10 @@ class SessionSummary {
         (historyOnly != null && historyOnly is! bool) ||
         (canPrompt != null && canPrompt is! bool) ||
         (rawRuntime != null && rawRuntime is! Map) ||
+        (rawLifecycleState != null && rawLifecycleState is! String) ||
+        (managementRevision != null && managementRevision is! String) ||
+        (managed != null && managed is! bool) ||
+        (canActivate != null && canActivate is! bool) ||
         !json.containsKey('activeAgentRunId') ||
         (activeAgentRunId != null &&
             (activeAgentRunId is! String ||
@@ -245,6 +297,14 @@ class SessionSummary {
               !promptAvailable),
       canPrompt: promptAvailable,
       capabilities: parsedCapabilities,
+      lifecycleState: rawLifecycleState == null
+          ? LifecycleState.active
+          : LifecycleState.parse(rawLifecycleState),
+      managementRevision: managementRevision as String? ?? 'unmanaged',
+      managed: managed as bool? ?? false,
+      canActivate: canActivate as bool? ?? false,
+      updatedAt: _optionalDateTime(json['updatedAt'], 'session updatedAt'),
+      deletedAt: _optionalDateTime(json['deletedAt'], 'session deletedAt'),
     );
   }
 
@@ -261,6 +321,12 @@ class SessionSummary {
   final bool historyOnly;
   final bool canPrompt;
   final Set<String> capabilities;
+  final LifecycleState lifecycleState;
+  final String managementRevision;
+  final bool managed;
+  final bool canActivate;
+  final DateTime? updatedAt;
+  final DateTime? deletedAt;
 
   bool hasCapability(String capability) => capabilities.contains(capability);
 
@@ -269,3 +335,85 @@ class SessionSummary {
   String get shortId =>
       sessionId.substring(0, sessionId.length < 8 ? sessionId.length : 8);
 }
+
+class WorkspaceCreationResult {
+  const WorkspaceCreationResult({
+    required this.workspace,
+    required this.session,
+  });
+
+  factory WorkspaceCreationResult.fromJson(Map<String, Object?> json) {
+    final workspace = json['workspace'];
+    final session = json['session'];
+    if (workspace is! Map || session is! Map) {
+      throw const FormatException('Workspace creation response is invalid');
+    }
+    return WorkspaceCreationResult(
+      workspace: WorkspaceSummary.fromJson(
+        Map<String, Object?>.from(workspace),
+      ),
+      session: SessionSummary.fromJson(Map<String, Object?>.from(session)),
+    );
+  }
+
+  final WorkspaceSummary workspace;
+  final SessionSummary session;
+}
+
+class WorkspaceDeletionPreflight {
+  const WorkspaceDeletionPreflight({
+    required this.workspaceId,
+    required this.managementRevision,
+    required this.activeWorkers,
+    required this.remoteCalculations,
+    required this.pendingApprovals,
+    required this.unresolvedRemoteEffects,
+    required this.canDelete,
+  });
+
+  factory WorkspaceDeletionPreflight.fromJson(Map<String, Object?> json) {
+    final workspaceId = json['workspaceId'];
+    final managementRevision = json['managementRevision'];
+    final activeWorkers = json['activeWorkers'];
+    final remoteCalculations = json['remoteCalculations'];
+    final pendingApprovals = json['pendingApprovals'];
+    final unresolvedRemoteEffects = json['unresolvedRemoteEffects'];
+    final canDelete = json['canDelete'];
+    if (workspaceId is! String ||
+        managementRevision is! String ||
+        !_isCount(activeWorkers) ||
+        !_isCount(remoteCalculations) ||
+        !_isCount(pendingApprovals) ||
+        !_isCount(unresolvedRemoteEffects) ||
+        canDelete is! bool) {
+      throw const FormatException('Workspace deletion preflight is invalid');
+    }
+    return WorkspaceDeletionPreflight(
+      workspaceId: workspaceId,
+      managementRevision: managementRevision,
+      activeWorkers: activeWorkers as int,
+      remoteCalculations: remoteCalculations as int,
+      pendingApprovals: pendingApprovals as int,
+      unresolvedRemoteEffects: unresolvedRemoteEffects as int,
+      canDelete: canDelete,
+    );
+  }
+
+  final String workspaceId;
+  final String managementRevision;
+  final int activeWorkers;
+  final int remoteCalculations;
+  final int pendingApprovals;
+  final int unresolvedRemoteEffects;
+  final bool canDelete;
+}
+
+DateTime? _optionalDateTime(Object? value, String label) {
+  if (value == null) return null;
+  if (value is! String) throw FormatException('$label is invalid');
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) throw FormatException('$label is invalid');
+  return parsed;
+}
+
+bool _isCount(Object? value) => value is int && value >= 0;

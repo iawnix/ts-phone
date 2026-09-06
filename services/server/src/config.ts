@@ -5,9 +5,11 @@ export interface ServerConfig {
   port: number;
   workspaceRoot: string;
   stateDir: string;
+  tspiPath: string | undefined;
   bridgeSocketPath: string;
   bridgeSecretPath: string;
   commandTimeoutMs: number;
+  shutdownTimeoutMs: number;
   bridgeHeartbeatTimeoutMs: number;
   bridgeMaxRecordBytes: number;
   maxBodyBytes: number;
@@ -63,6 +65,9 @@ export function resolveConfig(
       "TS_PHONE_WORKSPACES",
     ),
     stateDir,
+    tspiPath: env.TS_PHONE_TSPI
+      ? absolutePath(env.TS_PHONE_TSPI, "TS_PHONE_TSPI")
+      : undefined,
     bridgeSocketPath: absolutePath(
       env.TS_PHONE_BRIDGE_SOCKET || resolve(runtimeDir, "bridge.sock"),
       "TS_PHONE_BRIDGE_SOCKET",
@@ -72,6 +77,11 @@ export function resolveConfig(
       env.TS_PHONE_COMMAND_TIMEOUT_MS,
       30_000,
       "TS_PHONE_COMMAND_TIMEOUT_MS",
+    ),
+    shutdownTimeoutMs: positiveInteger(
+      env.TS_PHONE_SHUTDOWN_TIMEOUT_MS,
+      10_000,
+      "TS_PHONE_SHUTDOWN_TIMEOUT_MS",
     ),
     bridgeHeartbeatTimeoutMs: positiveInteger(
       env.TS_PHONE_BRIDGE_HEARTBEAT_TIMEOUT_MS,

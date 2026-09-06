@@ -42,11 +42,26 @@ Pi branches are recovered from the JSONL parent graph. The current leaf can be
 interactive only with a live Bridge. Selecting another leaf intentionally makes
 the composer read-only; switch back to the active branch before sending.
 
+Project and conversation names, access/model preferences, lifecycle states, and
+management revisions are recovered from owner-only `management.json`. Active,
+Archived, and Recently Deleted are explicit views. Recently Deleted is not
+automatically emptied; restore an item or permanently delete it from the app.
+
+Permanent deletion first moves the target to a same-filesystem quarantine. If
+metadata removal or quarantine deletion fails, the Host attempts to restore the
+remaining files at the original path and exact management snapshot. Recursive
+removal is irreversible; inspect remaining files after any purge failure, even
+if metadata has been restored to Recently Deleted. A
+`purge_recovery_failed` response means compensation itself was incomplete: stop
+the Host, preserve `.ts-phone-purge-*` paths and `management.json`, and reconcile
+both before restarting. Do not create a replacement project with the same ID.
+
 Reconciliation never deletes files and never removes a live bridge. If any
 session history is malformed or unreadable, cleanup stops and retains existing
 broker records so storage damage cannot be mistaken for an intentional delete.
 
-Restart a controller with:
+The app can activate an offline managed session when `TS_PHONE_TSPI` is
+configured. For manual recovery, restart a controller with:
 
 ~~~bash
 ./TSPi --workspace <workspace> --phone

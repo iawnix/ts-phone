@@ -787,7 +787,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('CONNECTED'), findsNothing);
-    expect(find.textContaining('READY', findRichText: true), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
     expect(find.text('1 LIVE'), findsOneWidget);
     final serviceMetadata = find.textContaining('TS Phone service');
     final syncMetadata = find.textContaining('Last sync');
@@ -835,7 +835,7 @@ void main() {
     expect(find.text('观察会话'), findsOneWidget);
     expect(find.text('主会话'), findsOneWidget);
     expect(find.text('只读会话 · test/observer'), findsOneWidget);
-    expect(find.textContaining('就绪', findRichText: true), findsNWidgets(2));
+    expect(find.byIcon(Icons.check_circle_rounded), findsNWidgets(2));
     expect(find.byType(TsStatusListTile), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
@@ -965,7 +965,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ts_001'), findsNothing);
-    expect(find.text('没有可用研究目录'), findsOneWidget);
+    expect(find.text('还没有项目'), findsOneWidget);
     expect(gateway.listWorkspacesCalls, greaterThanOrEqualTo(2));
   });
 
@@ -993,7 +993,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('测试会话'), findsNothing);
-    expect(find.text('没有会话历史'), findsOneWidget);
+    expect(find.text('还没有会话'), findsOneWidget);
     expect(gateway.listSessionsCalls, greaterThanOrEqualTo(2));
   });
 

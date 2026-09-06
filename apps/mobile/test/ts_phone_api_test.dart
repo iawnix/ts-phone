@@ -207,6 +207,152 @@ void main() {
     expect(session.runtime?.context?.limitTokens, 128000);
   });
 
+  test('requests projects and sessions by lifecycle state', () async {
+    var requestIndex = 0;
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.queryParameters, <String, String>{
+          'state': 'archived',
+        });
+        final data = requestIndex++ == 0
+            ? <Object?>[_workspaceJson(lifecycleState: 'archived')]
+            : <Object?>[_sessionJson(lifecycleState: 'archived')];
+        return _apiResponse(data);
+      }),
+    );
+    addTearDown(api.close);
+
+    final management = api as TsPhoneManagementGateway;
+    final projects = await management.listWorkspacesByLifecycle(
+      LifecycleState.archived,
+    );
+    final sessions = await management.listSessionsByLifecycle(
+      'ts_001',
+      LifecycleState.archived,
+    );
+
+    expect(projects.single.lifecycleState, LifecycleState.archived);
+    expect(sessions.single.lifecycleState, LifecycleState.archived);
+    expect(requestIndex, 2);
+  });
+
+  test('binds project creation, preflight, and purge requests', () async {
+    var requestIndex = 0;
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        switch (requestIndex++) {
+          case 0:
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/v4/workspaces');
+            expect(jsonDecode(request.body), <String, Object?>{
+              'name': 'Catalytic cycle',
+            });
+            return _apiResponse(<String, Object?>{
+              'workspace': _workspaceJson(),
+              'session': _sessionJson(),
+            }, statusCode: 201);
+          case 1:
+            expect(request.method, 'GET');
+            expect(
+              request.url.path,
+              '/api/v4/workspaces/ts_001/deletion-preflight',
+            );
+            return _apiResponse(<String, Object?>{
+              'workspaceId': 'ts_001',
+              'managementRevision': _managementRevision,
+              'activeWorkers': 0,
+              'remoteCalculations': 0,
+              'pendingApprovals': 0,
+              'unresolvedRemoteEffects': 0,
+              'canDelete': true,
+            });
+          case 2:
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/v4/workspaces/ts_001/purge');
+            expect(jsonDecode(request.body), <String, Object?>{
+              'managementRevision': _managementRevision,
+              'confirmation': 'ts_001',
+            });
+            return _apiResponse(<String, Object?>{'purged': true});
+          default:
+            fail(
+              'Unexpected management request: ${request.method} ${request.url}',
+            );
+        }
+      }),
+    );
+    addTearDown(api.close);
+
+    final management = api as TsPhoneManagementGateway;
+    final created = await management.createWorkspace('Catalytic cycle');
+    final preflight = await management.workspaceDeletionPreflight('ts_001');
+    await management.purgeWorkspace('ts_001', preflight.managementRevision);
+
+    expect(created.workspace.id, 'ts_001');
+    expect(created.session.sessionId, 'session_1');
+    expect(preflight.canDelete, isTrue);
+    expect(requestIndex, 3);
+  });
+
+  test('binds managed session creation and activation requests', () async {
+    var requestIndex = 0;
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        if (requestIndex++ == 0) {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/v4/workspaces/ts_001/sessions');
+          expect(jsonDecode(request.body), <String, Object?>{
+            'accessMode': 'observer',
+            'name': 'Review path',
+            'model': 'cpa/gpt-5.6-sol',
+          });
+          return _apiResponse(
+            _sessionJson(accessMode: 'observer'),
+            statusCode: 201,
+          );
+        }
+        expect(request.method, 'POST');
+        expect(
+          request.url.path,
+          '/api/v4/workspaces/ts_001/sessions/session_1/activate',
+        );
+        expect(jsonDecode(request.body), <String, Object?>{
+          'managementRevision': _managementRevision,
+        });
+        return _apiResponse(
+          _sessionJson(
+            accessMode: 'observer',
+            runtimeState: 'idle',
+            canActivate: false,
+            canPrompt: true,
+          ),
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    final management = api as TsPhoneManagementGateway;
+    final created = await management.createSession(
+      'ts_001',
+      accessMode: SessionAccessMode.observer,
+      name: 'Review path',
+      model: 'cpa/gpt-5.6-sol',
+    );
+    final active = await management.activateSession(
+      'ts_001',
+      created.sessionId,
+      created.managementRevision,
+    );
+
+    expect(active.runtimeState, RuntimeState.idle);
+    expect(active.canPrompt, isTrue);
+    expect(requestIndex, 2);
+  });
+
   test('requests and parses a structured timeline page', () async {
     final api = TsPhoneApi(
       settings,
@@ -374,3 +520,50 @@ void main() {
     );
   });
 }
+
+const _managementRevision = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+Map<String, Object?> _workspaceJson({String lifecycleState = 'active'}) =>
+    <String, Object?>{
+      'id': 'ts_001',
+      'name': 'Catalytic cycle',
+      'runtimeState': 'offline',
+      'isStreaming': false,
+      'liveSessionCount': 0,
+      'sessionCount': 1,
+      'lifecycleState': lifecycleState,
+      'managementRevision': _managementRevision,
+      'managed': true,
+    };
+
+Map<String, Object?> _sessionJson({
+  String lifecycleState = 'active',
+  String accessMode = 'controller',
+  String runtimeState = 'offline',
+  bool canActivate = true,
+  bool canPrompt = false,
+}) => <String, Object?>{
+  'sessionId': 'session_1',
+  'sessionRevision': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  'activeAgentRunId': null,
+  'runtimeState': runtimeState,
+  'isStreaming': false,
+  'accessMode': accessMode,
+  'historyAvailable': false,
+  'historyOnly': false,
+  'canPrompt': canPrompt,
+  'capabilities': <String>[],
+  'lifecycleState': lifecycleState,
+  'managementRevision': _managementRevision,
+  'managed': true,
+  'canActivate': canActivate,
+};
+
+http.Response _apiResponse(Object? data, {int statusCode = 200}) =>
+    http.Response(
+      jsonEncode(<String, Object?>{
+        'apiVersion': 'ts-phone-api/4',
+        'data': data,
+      }),
+      statusCode,
+    );

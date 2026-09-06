@@ -3,15 +3,23 @@ import type { AddressInfo } from "node:net";
 import { BridgeIpcServer } from "./bridge/ipc-server.js";
 import type { ServerConfig } from "./config.js";
 import { HttpError, RuntimeError } from "./errors.js";
+import { ManagementStore } from "./management-store.js";
 import { WorkspaceHub } from "./runtime/workspace-hub.js";
+import { WorkerSupervisor } from "./runtime/worker-supervisor.js";
 import { assertBearerAuthorization, ensureBearerToken, ensureBridgeSecret } from "./security.js";
 import {
   API_VERSION,
   SERVICE_VERSION,
   type AbortInput,
   type ApprovalInput,
+  type CreateSessionInput,
+  type CreateWorkspaceInput,
+  type LifecycleInput,
+  type LifecycleState,
   type MessagePageRequest,
   type PromptInput,
+  type PurgeInput,
+  type RenameInput,
   type TimelinePageRequest,
 } from "./types.js";
 
@@ -30,7 +38,14 @@ export async function createTsPhoneHttpServer(config: ServerConfig): Promise<TsP
     ensureBearerToken(config.stateDir),
     ensureBridgeSecret(config.bridgeSecretPath),
   ]);
-  const hub = new WorkspaceHub(config, bridgeSecret);
+  const management = await ManagementStore.open(config.stateDir);
+  const workers = new WorkerSupervisor(
+    config.tspiPath,
+    config.shutdownTimeoutMs,
+    config.bridgeSocketPath,
+    config.bridgeSecretPath,
+  );
+  const hub = new WorkspaceHub(config, bridgeSecret, management, workers);
   const bridgeServer = new BridgeIpcServer(config, (socket, registration) => hub.attachBridge(socket, registration));
   const server = createServer((request, response) => {
     void handleRequest(config, hub, token, request, response).catch((error) => sendError(response, error));
@@ -72,7 +87,7 @@ export async function createTsPhoneHttpServer(config: ServerConfig): Promise<TsP
         });
       }
       await bridgeServer.close();
-      hub.close();
+      await hub.close();
     },
   };
 }
@@ -98,7 +113,12 @@ async function handleRequest(
     return;
   }
   if (method === "GET" && url.pathname === "/api/v4/workspaces") {
-    sendData(response, 200, await hub.listWorkspaces());
+    sendData(response, 200, await hub.listWorkspaces(validateLifecycleQuery(url)));
+    return;
+  }
+  if (method === "POST" && url.pathname === "/api/v4/workspaces") {
+    const input = validateCreateWorkspace(await readJsonBody(request, config.maxBodyBytes));
+    sendData(response, 201, await hub.createWorkspace(input));
     return;
   }
 
@@ -112,15 +132,85 @@ async function handleRequest(
     sendData(response, 200, await hub.getWorkspace(workspaceId));
     return;
   }
+  if (resource === undefined && method === "PATCH") {
+    const input = validateRename(await readJsonBody(request, config.maxBodyBytes));
+    sendData(response, 200, await hub.renameWorkspace(workspaceId, input));
+    return;
+  }
+  if (segments.length === 5 && method === "POST"
+    && (resource === "archive" || resource === "restore" || resource === "trash" || resource === "purge")) {
+    const input = await readJsonBody(request, config.maxBodyBytes);
+    if (resource === "archive") {
+      sendData(response, 200, await hub.archiveWorkspace(workspaceId, validateLifecycle(input)));
+      return;
+    }
+    if (resource === "restore") {
+      sendData(response, 200, await hub.restoreWorkspace(workspaceId, validateLifecycle(input)));
+      return;
+    }
+    if (resource === "trash") {
+      sendData(response, 200, await hub.trashWorkspace(workspaceId, validateLifecycle(input)));
+      return;
+    }
+    if (resource === "purge") {
+      await hub.purgeWorkspace(workspaceId, validatePurge(input));
+      sendData(response, 200, { purged: true });
+      return;
+    }
+  }
+  if (resource === "deletion-preflight" && segments.length === 5 && method === "GET") {
+    assertNoQuery(url, "Deletion preflight");
+    sendData(response, 200, await hub.workspaceDeletionPreflight(workspaceId));
+    return;
+  }
   if (resource !== "sessions") {
     throw new HttpError(404, "not_found", "API endpoint was not found");
   }
   if (segments.length === 5 && method === "GET") {
-    sendData(response, 200, await hub.listSessions(workspaceId));
+    sendData(response, 200, await hub.listSessions(workspaceId, validateLifecycleQuery(url)));
+    return;
+  }
+  if (segments.length === 5 && method === "POST") {
+    const input = validateCreateSession(await readJsonBody(request, config.maxBodyBytes));
+    sendData(response, 201, await hub.createSession(workspaceId, input));
     return;
   }
   const sessionId = segments[5] || "";
   const sessionResource = segments[6];
+  if (sessionResource === undefined && segments.length === 6 && method === "PATCH") {
+    const input = validateRename(await readJsonBody(request, config.maxBodyBytes));
+    sendData(response, 200, await hub.renameSession(workspaceId, sessionId, input));
+    return;
+  }
+  if (segments.length === 7 && method === "POST"
+    && (sessionResource === "archive"
+      || sessionResource === "restore"
+      || sessionResource === "trash"
+      || sessionResource === "purge"
+      || sessionResource === "activate")) {
+    const input = await readJsonBody(request, config.maxBodyBytes);
+    if (sessionResource === "archive") {
+      sendData(response, 200, await hub.archiveSession(workspaceId, sessionId, validateLifecycle(input)));
+      return;
+    }
+    if (sessionResource === "restore") {
+      sendData(response, 200, await hub.restoreSession(workspaceId, sessionId, validateLifecycle(input)));
+      return;
+    }
+    if (sessionResource === "trash") {
+      sendData(response, 200, await hub.trashSession(workspaceId, sessionId, validateLifecycle(input)));
+      return;
+    }
+    if (sessionResource === "purge") {
+      await hub.purgeSession(workspaceId, sessionId, validatePurge(input));
+      sendData(response, 200, { purged: true });
+      return;
+    }
+    if (sessionResource === "activate") {
+      sendData(response, 200, await hub.activateSession(workspaceId, sessionId, validateLifecycle(input)));
+      return;
+    }
+  }
   if (sessionResource === "messages" && segments.length === 7) {
     if (method === "GET") {
       sendData(response, 200, await hub.getMessages(workspaceId, sessionId, validateMessagePageRequest(url)));
@@ -159,6 +249,28 @@ async function handleRequest(
     return;
   }
   throw new HttpError(404, "not_found", "API endpoint was not found");
+}
+
+function validateLifecycleQuery(url: URL): LifecycleState {
+  for (const key of url.searchParams.keys()) {
+    if (key !== "state") {
+      throw new HttpError(400, "invalid_lifecycle_query", "List endpoints only accept the state query parameter");
+    }
+  }
+  if (url.searchParams.getAll("state").length > 1) {
+    throw new HttpError(400, "invalid_lifecycle_query", "The state query parameter must not be repeated");
+  }
+  const state = url.searchParams.get("state") ?? "active";
+  if (state !== "active" && state !== "archived" && state !== "trashed") {
+    throw new HttpError(400, "invalid_lifecycle_state", "state must be active, archived, or trashed");
+  }
+  return state;
+}
+
+function assertNoQuery(url: URL, label: string): void {
+  if ([...url.searchParams.keys()].length > 0) {
+    throw new HttpError(400, "invalid_query", `${label} does not accept query parameters`);
+  }
 }
 
 function validateMessagePageRequest(url: URL): MessagePageRequest {
@@ -276,6 +388,97 @@ function validatePrompt(value: unknown): PromptInput {
   return { message, clientMessageId: value.clientMessageId, sessionRevision: value.sessionRevision };
 }
 
+function validateCreateWorkspace(value: unknown): CreateWorkspaceInput {
+  if (!isObject(value)
+    || Object.keys(value).length !== 1
+    || typeof value.name !== "string") {
+    throw new HttpError(400, "invalid_workspace_create", "name is required and no other fields are accepted");
+  }
+  return { name: validateDisplayName(value.name) };
+}
+
+function validateCreateSession(value: unknown): CreateSessionInput {
+  if (!isObject(value)) {
+    throw new HttpError(400, "invalid_session_create", "Session input must be an object");
+  }
+  const keys = Object.keys(value);
+  if (keys.some((key) => key !== "name" && key !== "model" && key !== "accessMode")
+    || (value.name !== undefined && typeof value.name !== "string")
+    || (value.model !== undefined && typeof value.model !== "string")
+    || (value.accessMode !== "controller" && value.accessMode !== "observer")) {
+    throw new HttpError(400, "invalid_session_create", "accessMode is required; name and model are optional");
+  }
+  return {
+    accessMode: value.accessMode,
+    ...(value.name === undefined ? {} : { name: validateDisplayName(value.name) }),
+    ...(value.model === undefined ? {} : { model: validateModel(value.model) }),
+  };
+}
+
+function validateRename(value: unknown): RenameInput {
+  if (!isObject(value)
+    || Object.keys(value).length !== 2
+    || typeof value.name !== "string"
+    || typeof value.managementRevision !== "string") {
+    throw new HttpError(400, "invalid_rename", "name and managementRevision are required");
+  }
+  return {
+    name: validateDisplayName(value.name),
+    managementRevision: validateManagementRevision(value.managementRevision),
+  };
+}
+
+function validateLifecycle(value: unknown): LifecycleInput {
+  if (!isObject(value)
+    || Object.keys(value).length !== 1
+    || typeof value.managementRevision !== "string") {
+    throw new HttpError(400, "invalid_lifecycle_change", "managementRevision is required");
+  }
+  return { managementRevision: validateManagementRevision(value.managementRevision) };
+}
+
+function validatePurge(value: unknown): PurgeInput {
+  if (!isObject(value)
+    || Object.keys(value).length !== 2
+    || typeof value.managementRevision !== "string"
+    || typeof value.confirmation !== "string") {
+    throw new HttpError(400, "invalid_purge", "managementRevision and confirmation are required");
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value.confirmation)) {
+    throw new HttpError(400, "invalid_purge_confirmation", "confirmation is invalid");
+  }
+  return {
+    managementRevision: validateManagementRevision(value.managementRevision),
+    confirmation: value.confirmation,
+  };
+}
+
+function validateDisplayName(value: string): string {
+  if (value.trim() !== value
+    || value.length < 1
+    || value.length > 120
+    || /[\u0000-\u001f\u007f]/.test(value)) {
+    throw new HttpError(400, "invalid_display_name", "name must contain 1 to 120 visible characters without surrounding whitespace");
+  }
+  return value;
+}
+
+function validateModel(value: string): string {
+  if (value.length < 1
+    || value.length > 200
+    || !/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value)) {
+    throw new HttpError(400, "invalid_model", "model is invalid");
+  }
+  return value;
+}
+
+function validateManagementRevision(value: string): string {
+  if (value !== "unmanaged" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)) {
+    throw new HttpError(400, "invalid_management_revision", "managementRevision is invalid");
+  }
+  return value;
+}
+
 function validateApproval(value: unknown): ApprovalInput {
   if (!isObject(value)
     || Object.keys(value).length !== 2
@@ -379,9 +582,11 @@ function sendError(response: ServerResponse, error: unknown): void {
     return;
   }
   if (error instanceof RuntimeError) {
-    const status = error.code === "command_ambiguous"
-      ? 504
-      : (error.code === "agent_not_running" || error.code === "agent_run_stale" ? 409 : 502);
+    const status = error.code === "purge_recovery_failed"
+      ? 500
+      : error.code === "command_ambiguous"
+        ? 504
+        : (error.code === "agent_not_running" || error.code === "agent_run_stale" ? 409 : 502);
     sendJson(response, status, { apiVersion: API_VERSION, error: { code: error.code, message: error.message } });
     return;
   }

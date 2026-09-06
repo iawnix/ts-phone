@@ -27,6 +27,10 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ReadWritePaths=/home/iaw/.local/state/ts-phone
+ReadWritePaths=/home/iaw/TS-pi-agent/workspaces
+ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/runtime-cache
+ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
+ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
 
 [Install]
 WantedBy=default.target

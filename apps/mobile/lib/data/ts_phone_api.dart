@@ -39,6 +39,10 @@ enum TsPhoneProblemCode {
   approvalStale,
   approvalMissing,
   agentRunChanged,
+  managementChanged,
+  resourcesBusy,
+  preflightUnavailable,
+  managementCapacity,
 }
 
 class TsPhoneProblem {
@@ -62,6 +66,22 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
     );
   }
   if (error is TsPhoneApiException) {
+    final managementCode = switch (error.code) {
+      'workspace_management_changed' ||
+      'session_management_changed' => TsPhoneProblemCode.managementChanged,
+      'workspace_delete_blocked' ||
+      'workspace_has_active_workers' ||
+      'controller_session_active' ||
+      'session_active' ||
+      'session_has_pending_approvals' => TsPhoneProblemCode.resourcesBusy,
+      'workspace_preflight_unavailable' ||
+      'worker_unavailable' => TsPhoneProblemCode.preflightUnavailable,
+      'management_capacity_exceeded' => TsPhoneProblemCode.managementCapacity,
+      _ => null,
+    };
+    if (managementCode != null) {
+      return TsPhoneProblem(TsPhoneProblemKind.request, managementCode);
+    }
     if (error.statusCode == 401 || error.statusCode == 403) {
       return const TsPhoneProblem(
         TsPhoneProblemKind.authentication,
@@ -268,7 +288,76 @@ abstract interface class TsPhoneGateway {
   void close();
 }
 
-class TsPhoneApi implements TsPhoneGateway {
+abstract interface class TsPhoneManagementGateway {
+  Future<List<WorkspaceSummary>> listWorkspacesByLifecycle(
+    LifecycleState lifecycleState,
+  );
+  Future<WorkspaceCreationResult> createWorkspace(String name);
+  Future<WorkspaceSummary> renameWorkspace(
+    String workspaceId,
+    String managementRevision,
+    String name,
+  );
+  Future<WorkspaceSummary> archiveWorkspace(
+    String workspaceId,
+    String managementRevision,
+  );
+  Future<WorkspaceSummary> restoreWorkspace(
+    String workspaceId,
+    String managementRevision,
+  );
+  Future<WorkspaceSummary> trashWorkspace(
+    String workspaceId,
+    String managementRevision,
+  );
+  Future<void> purgeWorkspace(String workspaceId, String managementRevision);
+  Future<WorkspaceDeletionPreflight> workspaceDeletionPreflight(
+    String workspaceId,
+  );
+  Future<List<SessionSummary>> listSessionsByLifecycle(
+    String workspaceId,
+    LifecycleState lifecycleState,
+  );
+  Future<SessionSummary> createSession(
+    String workspaceId, {
+    required SessionAccessMode accessMode,
+    String? name,
+    String? model,
+  });
+  Future<SessionSummary> renameSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+    String name,
+  );
+  Future<SessionSummary> archiveSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  );
+  Future<SessionSummary> restoreSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  );
+  Future<SessionSummary> trashSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  );
+  Future<void> purgeSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  );
+  Future<SessionSummary> activateSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  );
+}
+
+class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
   TsPhoneApi(
     this.settings, {
     http.Client? client,
@@ -292,7 +381,18 @@ class TsPhoneApi implements TsPhoneGateway {
 
   @override
   Future<List<WorkspaceSummary>> listWorkspaces() async {
-    final data = await _request('GET', 'workspaces');
+    return listWorkspacesByLifecycle(LifecycleState.active);
+  }
+
+  @override
+  Future<List<WorkspaceSummary>> listWorkspacesByLifecycle(
+    LifecycleState lifecycleState,
+  ) async {
+    final data = await _request(
+      'GET',
+      'workspaces',
+      queryParameters: <String, String>{'state': lifecycleState.wireName},
+    );
     if (data is! List) throw const FormatException('Workspace list is invalid');
     return data
         .map((value) => WorkspaceSummary.fromJson(_asMap(value, 'Workspace')))
@@ -301,11 +401,212 @@ class TsPhoneApi implements TsPhoneGateway {
 
   @override
   Future<List<SessionSummary>> listSessions(String workspaceId) async {
-    final data = await _request('GET', _workspacePath(workspaceId, 'sessions'));
+    return listSessionsByLifecycle(workspaceId, LifecycleState.active);
+  }
+
+  @override
+  Future<List<SessionSummary>> listSessionsByLifecycle(
+    String workspaceId,
+    LifecycleState lifecycleState,
+  ) async {
+    final data = await _request(
+      'GET',
+      _workspacePath(workspaceId, 'sessions'),
+      queryParameters: <String, String>{'state': lifecycleState.wireName},
+    );
     if (data is! List) throw const FormatException('Session list is invalid');
     return data
         .map((value) => SessionSummary.fromJson(_asMap(value, 'Session')))
         .toList(growable: false);
+  }
+
+  @override
+  Future<WorkspaceCreationResult> createWorkspace(String name) async {
+    final value = await _request('POST', 'workspaces', body: {'name': name});
+    return WorkspaceCreationResult.fromJson(
+      _asMap(value, 'Workspace creation'),
+    );
+  }
+
+  @override
+  Future<WorkspaceSummary> renameWorkspace(
+    String workspaceId,
+    String managementRevision,
+    String name,
+  ) => _workspaceMutation(
+    workspaceId,
+    '',
+    method: 'PATCH',
+    body: {'name': name, 'managementRevision': managementRevision},
+  );
+
+  @override
+  Future<WorkspaceSummary> archiveWorkspace(
+    String workspaceId,
+    String managementRevision,
+  ) => _workspaceLifecycle(workspaceId, 'archive', managementRevision);
+
+  @override
+  Future<WorkspaceSummary> restoreWorkspace(
+    String workspaceId,
+    String managementRevision,
+  ) => _workspaceLifecycle(workspaceId, 'restore', managementRevision);
+
+  @override
+  Future<WorkspaceSummary> trashWorkspace(
+    String workspaceId,
+    String managementRevision,
+  ) => _workspaceLifecycle(workspaceId, 'trash', managementRevision);
+
+  @override
+  Future<void> purgeWorkspace(
+    String workspaceId,
+    String managementRevision,
+  ) async {
+    await _request(
+      'POST',
+      _workspacePath(workspaceId, 'purge'),
+      body: {
+        'managementRevision': managementRevision,
+        'confirmation': workspaceId,
+      },
+    );
+  }
+
+  @override
+  Future<WorkspaceDeletionPreflight> workspaceDeletionPreflight(
+    String workspaceId,
+  ) async {
+    final value = await _request(
+      'GET',
+      _workspacePath(workspaceId, 'deletion-preflight'),
+    );
+    return WorkspaceDeletionPreflight.fromJson(
+      _asMap(value, 'Workspace deletion preflight'),
+    );
+  }
+
+  @override
+  Future<SessionSummary> createSession(
+    String workspaceId, {
+    required SessionAccessMode accessMode,
+    String? name,
+    String? model,
+  }) async {
+    final value = await _request(
+      'POST',
+      _workspacePath(workspaceId, 'sessions'),
+      body: {'accessMode': accessMode.name, 'name': ?name, 'model': ?model},
+    );
+    return SessionSummary.fromJson(_asMap(value, 'Session creation'));
+  }
+
+  @override
+  Future<SessionSummary> renameSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+    String name,
+  ) => _sessionMutation(
+    workspaceId,
+    sessionId,
+    '',
+    method: 'PATCH',
+    body: {'name': name, 'managementRevision': managementRevision},
+  );
+
+  @override
+  Future<SessionSummary> archiveSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  ) => _sessionLifecycle(workspaceId, sessionId, 'archive', managementRevision);
+
+  @override
+  Future<SessionSummary> restoreSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  ) => _sessionLifecycle(workspaceId, sessionId, 'restore', managementRevision);
+
+  @override
+  Future<SessionSummary> trashSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  ) => _sessionLifecycle(workspaceId, sessionId, 'trash', managementRevision);
+
+  @override
+  Future<void> purgeSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  ) async {
+    await _request(
+      'POST',
+      _sessionPath(workspaceId, sessionId, 'purge'),
+      body: {
+        'managementRevision': managementRevision,
+        'confirmation': sessionId,
+      },
+    );
+  }
+
+  @override
+  Future<SessionSummary> activateSession(
+    String workspaceId,
+    String sessionId,
+    String managementRevision,
+  ) =>
+      _sessionLifecycle(workspaceId, sessionId, 'activate', managementRevision);
+
+  Future<WorkspaceSummary> _workspaceLifecycle(
+    String workspaceId,
+    String action,
+    String managementRevision,
+  ) => _workspaceMutation(
+    workspaceId,
+    action,
+    body: {'managementRevision': managementRevision},
+  );
+
+  Future<WorkspaceSummary> _workspaceMutation(
+    String workspaceId,
+    String resource, {
+    String method = 'POST',
+    required Map<String, Object?> body,
+  }) async {
+    final path = resource.isEmpty
+        ? 'workspaces/${Uri.encodeComponent(workspaceId)}'
+        : _workspacePath(workspaceId, resource);
+    final value = await _request(method, path, body: body);
+    return WorkspaceSummary.fromJson(_asMap(value, 'Workspace mutation'));
+  }
+
+  Future<SessionSummary> _sessionLifecycle(
+    String workspaceId,
+    String sessionId,
+    String action,
+    String managementRevision,
+  ) => _sessionMutation(
+    workspaceId,
+    sessionId,
+    action,
+    body: {'managementRevision': managementRevision},
+  );
+
+  Future<SessionSummary> _sessionMutation(
+    String workspaceId,
+    String sessionId,
+    String resource, {
+    String method = 'POST',
+    required Map<String, Object?> body,
+  }) async {
+    final path = resource.isEmpty
+        ? '${_workspacePath(workspaceId, 'sessions')}/${Uri.encodeComponent(sessionId)}'
+        : _sessionPath(workspaceId, sessionId, resource);
+    final value = await _request(method, path, body: body);
+    return SessionSummary.fromJson(_asMap(value, 'Session mutation'));
   }
 
   @override

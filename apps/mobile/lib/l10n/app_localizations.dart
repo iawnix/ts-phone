@@ -419,20 +419,266 @@ abstract class AppLocalizations {
   /// No description provided for @noWorkspacesTitle.
   ///
   /// In en, this message translates to:
-  /// **'No research workspaces'**
+  /// **'No projects yet'**
   String get noWorkspacesTitle;
 
   /// No description provided for @noWorkspacesMessage.
   ///
   /// In en, this message translates to:
-  /// **'Check the workspace configuration on the TS Phone server.'**
+  /// **'Create a project to start a separate TSPi research workspace.'**
   String get noWorkspacesMessage;
 
   /// No description provided for @workspaces.
   ///
   /// In en, this message translates to:
-  /// **'Workspaces'**
+  /// **'Projects'**
   String get workspaces;
+
+  /// No description provided for @activeItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get activeItems;
+
+  /// No description provided for @archivedItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived'**
+  String get archivedItems;
+
+  /// No description provided for @recentlyDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently Deleted'**
+  String get recentlyDeleted;
+
+  /// No description provided for @newProject.
+  ///
+  /// In en, this message translates to:
+  /// **'New project'**
+  String get newProject;
+
+  /// No description provided for @projectName.
+  ///
+  /// In en, this message translates to:
+  /// **'Project name'**
+  String get projectName;
+
+  /// No description provided for @createProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Create project'**
+  String get createProject;
+
+  /// No description provided for @newSession.
+  ///
+  /// In en, this message translates to:
+  /// **'New session'**
+  String get newSession;
+
+  /// No description provided for @sessionNameOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Session name (optional)'**
+  String get sessionNameOptional;
+
+  /// No description provided for @modelOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Model (optional)'**
+  String get modelOptional;
+
+  /// No description provided for @createSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Create session'**
+  String get createSession;
+
+  /// No description provided for @manage.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get manage;
+
+  /// No description provided for @rename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get rename;
+
+  /// No description provided for @archive.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get archive;
+
+  /// No description provided for @restore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get restore;
+
+  /// No description provided for @moveToRecentlyDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to Recently Deleted'**
+  String get moveToRecentlyDeleted;
+
+  /// No description provided for @deletePermanently.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete permanently'**
+  String get deletePermanently;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
+
+  /// No description provided for @startSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Start session'**
+  String get startSession;
+
+  /// No description provided for @startingSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting session'**
+  String get startingSession;
+
+  /// No description provided for @projectDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete project?'**
+  String get projectDeleteTitle;
+
+  /// No description provided for @projectDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This hides the project in Recently Deleted until you restore or permanently delete it.'**
+  String get projectDeleteMessage;
+
+  /// No description provided for @sessionDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete session?'**
+  String get sessionDeleteTitle;
+
+  /// No description provided for @sessionDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Only this conversation history is moved to Recently Deleted. Scientific project data is not removed.'**
+  String get sessionDeleteMessage;
+
+  /// No description provided for @permanentDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete permanently?'**
+  String get permanentDeleteTitle;
+
+  /// No description provided for @permanentDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This action cannot be undone. Enter {resourceId} to continue.'**
+  String permanentDeleteMessage(String resourceId);
+
+  /// No description provided for @confirmationValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmation'**
+  String get confirmationValue;
+
+  /// No description provided for @deletionBlockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Project cannot be deleted'**
+  String get deletionBlockedTitle;
+
+  /// No description provided for @deletionBlockedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve active workers, remote calculations, approvals, and remote effects first.'**
+  String get deletionBlockedMessage;
+
+  /// No description provided for @activeWorkers.
+  ///
+  /// In en, this message translates to:
+  /// **'Active sessions'**
+  String get activeWorkers;
+
+  /// No description provided for @problemManagementChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'This project or session has changed. Refresh and try again.'**
+  String get problemManagementChanged;
+
+  /// No description provided for @problemResourcesBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'A session is still active or work remains unresolved. Finish it before continuing.'**
+  String get problemResourcesBusy;
+
+  /// No description provided for @problemPreflightUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'TSPi could not verify this operation. Check the Host\'s TSPi configuration and try again.'**
+  String get problemPreflightUnavailable;
+
+  /// No description provided for @problemManagementCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Project and session storage is full. Remove unneeded items before adding more.'**
+  String get problemManagementCapacity;
+
+  /// No description provided for @remoteCalculations.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote calculations'**
+  String get remoteCalculations;
+
+  /// No description provided for @pendingApprovals.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending approvals'**
+  String get pendingApprovals;
+
+  /// No description provided for @unresolvedRemoteEffects.
+  ///
+  /// In en, this message translates to:
+  /// **'Unresolved remote effects'**
+  String get unresolvedRemoteEffects;
+
+  /// No description provided for @archiveEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No archived items'**
+  String get archiveEmptyTitle;
+
+  /// No description provided for @trashEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently Deleted is empty'**
+  String get trashEmptyTitle;
+
+  /// No description provided for @archivedItemsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived items stay available here until restored or deleted.'**
+  String get archivedItemsMessage;
+
+  /// No description provided for @recentlyDeletedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted items can be restored before permanent removal.'**
+  String get recentlyDeletedMessage;
 
   /// No description provided for @liveSessionCount.
   ///
@@ -527,13 +773,13 @@ abstract class AppLocalizations {
   /// No description provided for @noSessionHistoryTitle.
   ///
   /// In en, this message translates to:
-  /// **'No session history'**
+  /// **'No sessions yet'**
   String get noSessionHistoryTitle;
 
   /// No description provided for @noSessionHistoryMessage.
   ///
   /// In en, this message translates to:
-  /// **'Start TSPi for this workspace on your computer. Its session history will appear here.'**
+  /// **'Create a session to begin or continue work in this project.'**
   String get noSessionHistoryMessage;
 
   /// No description provided for @copyStartCommand.

@@ -12,24 +12,22 @@ The application and FRP data ports remain on loopback. The Aliyun security
 group must not expose 22113; only Nginx 443 is public. FRP's control port should
 be restricted to known clients.
 
-Server version 0.6.0 restores validated disk sessions, serves both compatible
-message history and a capability-advertised structured research timeline, and
-validates bounded Root Agent runtime snapshots. Mobile version 0.13.0 displays
-bounded TS activities, Pi branches, the active model, and Pi-estimated context
-usage, and switches to live capabilities when the matching Bridge reconnects.
+Server version 0.7.0 adds persistent project/session management and guarded
+Worker activation and deletion. Mobile version 0.14.0 adds matching management
+screens, localized lifecycle views, and an accessible connection icon. Existing
+history, research timelines, active model, and context usage remain available.
 Mobile and server release numbers are independent; compatibility is governed by
 the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.6.0 | API v4, Events v3, Bridge v3, structured timeline and runtime snapshot |
-| TSPi package | 0.12.0 | Bridge v3, runtime metadata, and controller/observer launch policy |
-| Mobile app | 0.13.0+37 | API v4, adaptive navigation, accessible visual effects, and fenced Stop requests |
+| TS Phone server | 0.7.0 | API v4, Events v3, Bridge v3, persistent management and lifecycle guards |
+| TSPi package | 0.13.0 | Bridge v3, exact session Workers, preflight/2 and guard/1 |
+| Mobile app | 0.14.0+38 | API v4, project/session management and accessible status icons |
 
-This is the current release compatibility set. The production-signed
-0.13.0+37 Android artifacts and the complete TSPi 0.12.0 Package are recorded
-in `artifacts.md`. Each release remains valid only with its manifest-bound
-protocol set; do not mix components from different sets.
+This is the source compatibility set for this change; it does not assert that
+production has been upgraded. Previous installed releases remain recorded in
+`artifacts.md`. Each release is bound to its manifest's protocol set.
 
 ## 1. Build The TS Phone Component
 
@@ -54,7 +52,9 @@ python3 deploy/build-component-release.py \
 ~~~
 
 The component builder owns the server typecheck, tests, and production build,
-all from a private capture of the committed source. The Android build embeds
+all from a private capture of the committed source. Android source capture
+checks that the Settings identity matches `pubspec.yaml` before invoking Gradle.
+The Android build embeds
 that source identity in each signed artifact and writes a matching attestation.
 It validates the complete APK/AAB set in private staging, publishes it under a
 content-addressed `dist/android-releases/` directory, and only then atomically
@@ -135,6 +135,8 @@ scientific turn merely to upgrade transport.
    above.
 2. Preserve `/home/iaw/.config/ts-phone/server.env`, `auth.token`, and
    `bridge.secret` outside the release.
+   Set `TS_PHONE_TSPI=/home/iaw/TS-pi-agent/TSPi`; without it the Host remains a
+   read-only session browser and cannot activate managed sessions.
 3. Make the user service invoke the suite-owned stable launcher. For the
    standard installation, its effective service settings must include:
 
@@ -144,7 +146,18 @@ WorkingDirectory=/home/iaw/TS-pi-agent
 EnvironmentFile=/home/iaw/.config/ts-phone/server.env
 ExecStart=
 ExecStart=/home/iaw/TS-pi-agent/TSPhoneServer
+ReadWritePaths=/home/iaw/.local/state/ts-phone
+ReadWritePaths=/home/iaw/TS-pi-agent/workspaces
+ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/runtime-cache
+ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
+ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
 ~~~
+
+`ProtectHome=read-only` applies to TSPi child processes too. The explicit paths
+above are required for workspace/Pi sessions and the managed Python/cache state.
+Keep all other Home paths read-only. If a notification provider must refresh a
+credential, add only that provider's private state directory through a local
+systemd drop-in; do not make the whole skill, config tree, or Home writable.
 
 4. Reload and restart the broker, then verify the exact API contract:
 
@@ -155,8 +168,9 @@ systemctl --user status ts-phone.service --no-pager
 curl --fail --silent --show-error http://127.0.0.1:22113/healthz
 ~~~
 
-5. Exit and restart each phone-mode TSPi process only after its active turn has
-   finished, then start the desired workspace controller:
+5. Exit legacy phone-mode TSPi processes only after their active turn has
+   finished. The app can then activate a managed controller through the Host.
+   Manual startup remains available for diagnostics:
 
 ~~~bash
 cd /home/iaw/TS-pi-agent
@@ -242,6 +256,12 @@ In the app, verify:
     reaches the total count when the total is at most 2000.
 12. Select a historical Pi branch and verify the composer becomes read-only,
     then return to the current branch and verify sending is restored.
+13. Create and rename a project and conversation, then archive and restore both.
+14. Move a project with no remote work to Recently Deleted, restart the Host,
+    restore it, and confirm its scientific state and Pi history are unchanged.
+15. Verify a project with an active Worker or unresolved remote effect cannot be
+    moved to Recently Deleted. Permanently delete only a disposable test project
+    after entering its exact ID.
 
 Use harmless read-only prompts for the first transport checks.
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.6.0
+  version: 0.7.0
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -33,6 +33,8 @@ paths:
   /api/v4/workspaces:
     get:
       operationId: listWorkspaces
+      parameters:
+        - $ref: "#/components/parameters/lifecycleState"
       responses:
         "200":
           description: Registered TSPi workspaces and aggregate live-session state
@@ -47,6 +49,22 @@ paths:
                         type: array
                         items: { $ref: "#/components/schemas/Workspace" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { $ref: "#/components/schemas/DisplayName" }
+              additionalProperties: false
+      responses:
+        "201": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v4/workspaces/{workspaceId}:
     get:
       operationId: getWorkspace
@@ -56,11 +74,69 @@ paths:
         "200": { $ref: "#/components/responses/Success" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: renameWorkspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody:
+        $ref: "#/components/requestBodies/Rename"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+  /api/v4/workspaces/{workspaceId}/archive:
+    post:
+      operationId: archiveWorkspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/restore:
+    post:
+      operationId: restoreWorkspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/trash:
+    post:
+      operationId: trashWorkspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" }, "503": { $ref: "#/components/responses/ServiceUnavailable" } }
+  /api/v4/workspaces/{workspaceId}/purge:
+    post:
+      operationId: purgeWorkspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody: { $ref: "#/components/requestBodies/Purge" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" }, "503": { $ref: "#/components/responses/ServiceUnavailable" } }
+  /api/v4/workspaces/{workspaceId}/deletion-preflight:
+    get:
+      operationId: workspaceDeletionPreflight
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      responses:
+        "200":
+          description: Deterministic project deletion blockers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WorkspaceDeletionPreflight" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /api/v4/workspaces/{workspaceId}/sessions:
     get:
       operationId: listSessions
       parameters:
         - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/lifecycleState"
       responses:
         "200":
           description: Live and workspace-local persisted Pi sessions
@@ -76,6 +152,74 @@ paths:
                         items: { $ref: "#/components/schemas/Session" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: createSession
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accessMode]
+              properties:
+                name: { $ref: "#/components/schemas/DisplayName" }
+                model: { type: string, minLength: 1, maxLength: 200, pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]*$" }
+                accessMode: { enum: [controller, observer] }
+              additionalProperties: false
+      responses:
+        "201": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}:
+    patch:
+      operationId: renameSession
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody: { $ref: "#/components/requestBodies/Rename" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/archive:
+    post:
+      operationId: archiveSession
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/restore:
+    post:
+      operationId: restoreSession
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/trash:
+    post:
+      operationId: trashSession
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/purge:
+    post:
+      operationId: purgeSession
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody: { $ref: "#/components/requestBodies/Purge" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/activate:
+    post:
+      operationId: activateSession
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" }, "502": { $ref: "#/components/responses/ServiceUnavailable" }, "504": { $ref: "#/components/responses/ServiceUnavailable" } }
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/messages:
     get:
       operationId: getMessages
@@ -258,6 +402,11 @@ components:
       type: http
       scheme: bearer
   parameters:
+    lifecycleState:
+      name: state
+      in: query
+      required: false
+      schema: { $ref: "#/components/schemas/LifecycleState" }
     workspaceId:
       name: workspaceId
       in: path
@@ -297,6 +446,16 @@ components:
     SessionRevision:
       type: string
       pattern: "^[0-9a-f-]{36}$"
+    ManagementRevision:
+      oneOf:
+        - { const: unmanaged }
+        - { type: string, format: uuid }
+    LifecycleState:
+      enum: [active, archived, trashed]
+    DisplayName:
+      type: string
+      minLength: 1
+      maxLength: 120
     ActiveAgentRunId:
       oneOf:
         - { $ref: "#/components/schemas/BoundedId" }
@@ -317,7 +476,7 @@ components:
         - interaction.approval
     Workspace:
       type: object
-      required: [id, name, runtimeState, isStreaming, liveSessionCount, sessionCount]
+      required: [id, name, runtimeState, isStreaming, liveSessionCount, sessionCount, lifecycleState, managementRevision, managed]
       properties:
         id: { type: string }
         name: { type: string }
@@ -325,10 +484,15 @@ components:
         isStreaming: { type: boolean }
         liveSessionCount: { type: integer, minimum: 0 }
         sessionCount: { type: integer, minimum: 0 }
+        lifecycleState: { $ref: "#/components/schemas/LifecycleState" }
+        managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
+        managed: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: string, format: date-time }
       additionalProperties: false
     Session:
       type: object
-      required: [sessionId, sessionRevision, activeAgentRunId, runtimeState, isStreaming, accessMode, capabilities]
+      required: [sessionId, sessionRevision, activeAgentRunId, runtimeState, isStreaming, accessMode, capabilities, lifecycleState, managementRevision, managed, canActivate]
       properties:
         sessionId: { $ref: "#/components/schemas/BoundedId" }
         sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
@@ -352,6 +516,24 @@ components:
           type: array
           uniqueItems: true
           items: { $ref: "#/components/schemas/SessionCapability" }
+        lifecycleState: { $ref: "#/components/schemas/LifecycleState" }
+        managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
+        managed: { type: boolean }
+        canActivate: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: string, format: date-time }
+      additionalProperties: false
+    WorkspaceDeletionPreflight:
+      type: object
+      required: [workspaceId, managementRevision, activeWorkers, remoteCalculations, pendingApprovals, unresolvedRemoteEffects, canDelete]
+      properties:
+        workspaceId: { type: string }
+        managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
+        activeWorkers: { type: integer, minimum: 0 }
+        remoteCalculations: { type: integer, minimum: 0 }
+        pendingApprovals: { type: integer, minimum: 0 }
+        unresolvedRemoteEffects: { type: integer, minimum: 0 }
+        canDelete: { type: boolean }
       additionalProperties: false
     SessionRuntime:
       type: object
@@ -533,3 +715,41 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    ServiceUnavailable:
+      description: TSPi Worker or deterministic lifecycle preflight is unavailable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  requestBodies:
+    Rename:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, managementRevision]
+            properties:
+              name: { $ref: "#/components/schemas/DisplayName" }
+              managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
+            additionalProperties: false
+    Lifecycle:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [managementRevision]
+            properties:
+              managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
+            additionalProperties: false
+    Purge:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [managementRevision, confirmation]
+            properties:
+              managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
+              confirmation: { type: string, minLength: 1, maxLength: 160 }
+            additionalProperties: false

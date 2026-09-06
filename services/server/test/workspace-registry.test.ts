@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, symlink, truncate, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rename, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -366,6 +366,36 @@ test("registry rejects malformed, symbolic-link, and oversized session histories
   index = await registry.listPersistedSessionIds(workspace);
   assert.equal(index.complete, false);
   assert.equal(index.sessions.has("session-unsafe"), false);
+});
+
+test("registry refuses session quarantine through a replaced sessions directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ts-phone-quarantine-parent-"));
+  const workspaceRoot = join(root, "ts_001");
+  const sessionsRoot = join(workspaceRoot, ".pi", "sessions");
+  await mkdir(sessionsRoot, { recursive: true });
+  const sessionFile = join(sessionsRoot, "session.jsonl");
+  await writeFile(sessionFile, `${JSON.stringify({
+    type: "session",
+    version: 3,
+    id: "session_1",
+    timestamp: new Date().toISOString(),
+    cwd: workspaceRoot,
+  })}\n`);
+  const registry = new WorkspaceRegistry(root);
+  const workspace = await registry.get("ts_001");
+  const persisted = (await registry.listPersistedSessionIds(workspace)).sessions
+    .get("session_1");
+  assert.ok(persisted);
+
+  const relocated = join(root, "relocated-sessions");
+  await rename(sessionsRoot, relocated);
+  await symlink(relocated, sessionsRoot);
+  await assert.rejects(
+    () => registry.quarantineSession(workspace, persisted),
+    (error: unknown) => (
+      error instanceof HttpError && error.code === "session_history_unsafe"
+    ),
+  );
 });
 
 test("registry rejects a duplicated message cursor", async () => {

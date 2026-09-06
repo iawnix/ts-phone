@@ -23,7 +23,7 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     };
     assert.deepEqual(version.data, {
       apiVersion: "ts-phone-api/4",
-      serviceVersion: "0.6.0",
+      serviceVersion: "0.7.0",
     });
     assert.equal((await api(fixture, "/api/v3/version")).status, 404);
 
@@ -851,9 +851,11 @@ async function startFixture(maxBodyBytes = 128 * 1024): Promise<Fixture> {
     port: 0,
     workspaceRoot,
     stateDir: join(root, "state"),
+    tspiPath: undefined,
     bridgeSocketPath: join(root, "run", "bridge.sock"),
     bridgeSecretPath: join(root, "state", "bridge.secret"),
     commandTimeoutMs: 2_000,
+    shutdownTimeoutMs: 2_000,
     bridgeHeartbeatTimeoutMs: 10_000,
     bridgeMaxRecordBytes: 1024 * 1024,
     maxBodyBytes,

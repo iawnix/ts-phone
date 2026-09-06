@@ -172,13 +172,139 @@ class AppLocalizationsZh extends AppLocalizations {
   String get researchDirectoriesRefreshed => '研究目录已刷新';
 
   @override
-  String get noWorkspacesTitle => '没有可用研究目录';
+  String get noWorkspacesTitle => '还没有项目';
 
   @override
-  String get noWorkspacesMessage => '请检查 TS Phone 服务端的工作区配置。';
+  String get noWorkspacesMessage => '新建项目后，即可在独立的 TSPi 研究工作区中开始研究。';
 
   @override
-  String get workspaces => '工作区';
+  String get workspaces => '项目';
+
+  @override
+  String get activeItems => '当前';
+
+  @override
+  String get archivedItems => '已归档';
+
+  @override
+  String get recentlyDeleted => '最近删除';
+
+  @override
+  String get newProject => '新建项目';
+
+  @override
+  String get projectName => '项目名称';
+
+  @override
+  String get createProject => '创建项目';
+
+  @override
+  String get newSession => '新建会话';
+
+  @override
+  String get sessionNameOptional => '会话名称（可选）';
+
+  @override
+  String get modelOptional => '模型（可选）';
+
+  @override
+  String get createSession => '创建会话';
+
+  @override
+  String get manage => '管理';
+
+  @override
+  String get rename => '重命名';
+
+  @override
+  String get archive => '归档';
+
+  @override
+  String get restore => '恢复';
+
+  @override
+  String get moveToRecentlyDeleted => '移到最近删除';
+
+  @override
+  String get deletePermanently => '永久删除';
+
+  @override
+  String get cancel => '取消';
+
+  @override
+  String get save => '保存';
+
+  @override
+  String get startSession => '启动会话';
+
+  @override
+  String get startingSession => '正在启动会话';
+
+  @override
+  String get projectDeleteTitle => '删除项目？';
+
+  @override
+  String get projectDeleteMessage => '项目将移到“最近删除”，直到你恢复或永久删除它。';
+
+  @override
+  String get sessionDeleteTitle => '删除会话？';
+
+  @override
+  String get sessionDeleteMessage => '只会移除此对话历史，不会删除项目中的科学状态。';
+
+  @override
+  String get permanentDeleteTitle => '永久删除？';
+
+  @override
+  String permanentDeleteMessage(String resourceId) {
+    return '此操作无法撤销。请输入 $resourceId 继续。';
+  }
+
+  @override
+  String get confirmationValue => '确认内容';
+
+  @override
+  String get deletionBlockedTitle => '当前无法删除项目';
+
+  @override
+  String get deletionBlockedMessage => '请先处理活动 Worker、远程计算、待确认操作和未决远程效果。';
+
+  @override
+  String get activeWorkers => '运行中的会话';
+
+  @override
+  String get problemManagementChanged => '项目或会话已发生变化，请刷新后重试。';
+
+  @override
+  String get problemResourcesBusy => '仍有运行中的会话或未处理的任务，请完成后再继续。';
+
+  @override
+  String get problemPreflightUnavailable =>
+      'TSPi 暂时无法核验此操作，请检查 Host 的 TSPi 配置后重试。';
+
+  @override
+  String get problemManagementCapacity => '项目和会话管理存储已满，请清理不再需要的内容后重试。';
+
+  @override
+  String get remoteCalculations => '远程计算';
+
+  @override
+  String get pendingApprovals => '待确认操作';
+
+  @override
+  String get unresolvedRemoteEffects => '未决远程效果';
+
+  @override
+  String get archiveEmptyTitle => '没有已归档内容';
+
+  @override
+  String get trashEmptyTitle => '最近删除为空';
+
+  @override
+  String get archivedItemsMessage => '归档内容会保留在这里，可随时恢复或删除。';
+
+  @override
+  String get recentlyDeletedMessage => '永久删除前，仍可从这里恢复。';
 
   @override
   String liveSessionCount(int count) {
@@ -232,10 +358,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get refreshSessions => '刷新会话';
 
   @override
-  String get noSessionHistoryTitle => '没有会话历史';
+  String get noSessionHistoryTitle => '还没有会话';
 
   @override
-  String get noSessionHistoryMessage => '在电脑端启动该工作区的 TSPi 后，会话历史会显示在这里。';
+  String get noSessionHistoryMessage => '新建会话以开始或继续这个项目中的研究。';
 
   @override
   String get copyStartCommand => '复制启动命令';

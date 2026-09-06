@@ -174,14 +174,148 @@ class AppLocalizationsEn extends AppLocalizations {
   String get researchDirectoriesRefreshed => 'Research workspaces refreshed';
 
   @override
-  String get noWorkspacesTitle => 'No research workspaces';
+  String get noWorkspacesTitle => 'No projects yet';
 
   @override
   String get noWorkspacesMessage =>
-      'Check the workspace configuration on the TS Phone server.';
+      'Create a project to start a separate TSPi research workspace.';
 
   @override
-  String get workspaces => 'Workspaces';
+  String get workspaces => 'Projects';
+
+  @override
+  String get activeItems => 'Active';
+
+  @override
+  String get archivedItems => 'Archived';
+
+  @override
+  String get recentlyDeleted => 'Recently Deleted';
+
+  @override
+  String get newProject => 'New project';
+
+  @override
+  String get projectName => 'Project name';
+
+  @override
+  String get createProject => 'Create project';
+
+  @override
+  String get newSession => 'New session';
+
+  @override
+  String get sessionNameOptional => 'Session name (optional)';
+
+  @override
+  String get modelOptional => 'Model (optional)';
+
+  @override
+  String get createSession => 'Create session';
+
+  @override
+  String get manage => 'Manage';
+
+  @override
+  String get rename => 'Rename';
+
+  @override
+  String get archive => 'Archive';
+
+  @override
+  String get restore => 'Restore';
+
+  @override
+  String get moveToRecentlyDeleted => 'Move to Recently Deleted';
+
+  @override
+  String get deletePermanently => 'Delete permanently';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get startSession => 'Start session';
+
+  @override
+  String get startingSession => 'Starting session';
+
+  @override
+  String get projectDeleteTitle => 'Delete project?';
+
+  @override
+  String get projectDeleteMessage =>
+      'This hides the project in Recently Deleted until you restore or permanently delete it.';
+
+  @override
+  String get sessionDeleteTitle => 'Delete session?';
+
+  @override
+  String get sessionDeleteMessage =>
+      'Only this conversation history is moved to Recently Deleted. Scientific project data is not removed.';
+
+  @override
+  String get permanentDeleteTitle => 'Delete permanently?';
+
+  @override
+  String permanentDeleteMessage(String resourceId) {
+    return 'This action cannot be undone. Enter $resourceId to continue.';
+  }
+
+  @override
+  String get confirmationValue => 'Confirmation';
+
+  @override
+  String get deletionBlockedTitle => 'Project cannot be deleted';
+
+  @override
+  String get deletionBlockedMessage =>
+      'Resolve active workers, remote calculations, approvals, and remote effects first.';
+
+  @override
+  String get activeWorkers => 'Active sessions';
+
+  @override
+  String get problemManagementChanged =>
+      'This project or session has changed. Refresh and try again.';
+
+  @override
+  String get problemResourcesBusy =>
+      'A session is still active or work remains unresolved. Finish it before continuing.';
+
+  @override
+  String get problemPreflightUnavailable =>
+      'TSPi could not verify this operation. Check the Host\'s TSPi configuration and try again.';
+
+  @override
+  String get problemManagementCapacity =>
+      'Project and session storage is full. Remove unneeded items before adding more.';
+
+  @override
+  String get remoteCalculations => 'Remote calculations';
+
+  @override
+  String get pendingApprovals => 'Pending approvals';
+
+  @override
+  String get unresolvedRemoteEffects => 'Unresolved remote effects';
+
+  @override
+  String get archiveEmptyTitle => 'No archived items';
+
+  @override
+  String get trashEmptyTitle => 'Recently Deleted is empty';
+
+  @override
+  String get archivedItemsMessage =>
+      'Archived items stay available here until restored or deleted.';
+
+  @override
+  String get recentlyDeletedMessage =>
+      'Deleted items can be restored before permanent removal.';
 
   @override
   String liveSessionCount(int count) {
@@ -241,11 +375,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refreshSessions => 'Refresh sessions';
 
   @override
-  String get noSessionHistoryTitle => 'No session history';
+  String get noSessionHistoryTitle => 'No sessions yet';
 
   @override
   String get noSessionHistoryMessage =>
-      'Start TSPi for this workspace on your computer. Its session history will appear here.';
+      'Create a session to begin or continue work in this project.';
 
   @override
   String get copyStartCommand => 'Copy start command';

@@ -12,6 +12,7 @@ import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
 import '../chat/chat_page.dart';
+import '../management/management_dialogs.dart';
 
 typedef SessionGatewayBuilder =
     TsPhoneGateway Function(ConnectionSettings settings);
@@ -40,7 +41,23 @@ class _SessionListPageState extends State<SessionListPage>
   List<SessionSummary>? _sessions;
   TsPhoneProblem? _problem;
   bool _refreshing = false;
+  int _refreshGeneration = 0;
   String? _openingSessionId;
+  String? _mutatingSessionId;
+  bool _creatingSession = false;
+  LifecycleState _lifecycleState = LifecycleState.active;
+
+  TsPhoneManagementGateway? get _managementApi {
+    final api = _api;
+    return api is TsPhoneManagementGateway
+        ? api as TsPhoneManagementGateway
+        : null;
+  }
+
+  bool get _interactionLocked =>
+      _openingSessionId != null ||
+      _mutatingSessionId != null ||
+      _creatingSession;
 
   @override
   void initState() {
@@ -67,44 +84,231 @@ class _SessionListPageState extends State<SessionListPage>
     super.dispose();
   }
 
-  Future<void> _refresh({bool announce = false}) async {
-    if (_refreshing) return;
+  Future<void> _refresh({bool announce = false, bool force = false}) async {
+    if (_refreshing && !force) return;
+    final generation = ++_refreshGeneration;
     setState(() => _refreshing = true);
     if (announce) ActionFeedback.tap();
     try {
-      final sessions = await _api.listSessions(widget.workspace.id);
-      if (!mounted) return;
+      final management = _managementApi;
+      final sessions = management == null
+          ? await _api.listSessions(widget.workspace.id)
+          : await management.listSessionsByLifecycle(
+              widget.workspace.id,
+              _lifecycleState,
+            );
+      if (!mounted || generation != _refreshGeneration) return;
       setState(() {
         _sessions = _prioritizeSessions(sessions);
         _problem = null;
       });
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _refreshGeneration) return;
       if (announce) ActionFeedback.error();
       setState(() => _problem = describeTsPhoneProblem(error));
     } finally {
-      if (mounted) setState(() => _refreshing = false);
+      if (mounted && generation == _refreshGeneration) {
+        setState(() => _refreshing = false);
+      }
     }
   }
 
   Future<void> _open(SessionSummary session) async {
-    if (_openingSessionId != null) return;
+    if (_interactionLocked || session.lifecycleState != LifecycleState.active) {
+      return;
+    }
+    if (!session.canPrompt &&
+        !session.historyAvailable &&
+        !(session.canActivate && _managementApi != null)) {
+      return;
+    }
     setState(() => _openingSessionId = session.sessionId);
     ActionFeedback.selection();
     try {
+      var selected = session;
+      final management = _managementApi;
+      if (!selected.canPrompt && selected.canActivate && management != null) {
+        selected = await management.activateSession(
+          widget.workspace.id,
+          selected.sessionId,
+          selected.managementRevision,
+        );
+      }
+      if (!mounted) return;
       await pushTsPhonePage<void>(
         context: context,
         builder: (context) => ChatPage(
           settings: widget.settings,
           workspace: widget.workspace,
-          session: session,
+          session: selected,
           recoveredSession:
-              session.runtimeState == RuntimeState.recoveryRequired,
+              selected.runtimeState == RuntimeState.recoveryRequired,
         ),
       );
       if (mounted) await _refresh();
+    } on Object catch (error) {
+      if (mounted) _showProblem(error);
     } finally {
       if (mounted) setState(() => _openingSessionId = null);
+    }
+  }
+
+  void _selectLifecycle(LifecycleState value) {
+    if (_lifecycleState == value || _interactionLocked) return;
+    ActionFeedback.selection();
+    setState(() {
+      _lifecycleState = value;
+      _sessions = null;
+      _problem = null;
+    });
+    unawaited(_refresh(force: true));
+  }
+
+  Future<void> _createManagedSession() async {
+    final management = _managementApi;
+    if (management == null || _interactionLocked) return;
+    final draft = await showSessionCreator(context);
+    if (!mounted || draft == null) return;
+    setState(() => _creatingSession = true);
+    try {
+      final created = await management.createSession(
+        widget.workspace.id,
+        accessMode: draft.accessMode,
+        name: draft.name,
+        model: draft.model,
+      );
+      if (!mounted) return;
+      setState(() {
+        _creatingSession = false;
+        _lifecycleState = LifecycleState.active;
+      });
+      await _refresh(force: true);
+      if (mounted &&
+          (created.canPrompt ||
+              created.historyAvailable ||
+              (created.canActivate && _managementApi != null))) {
+        await _open(created);
+      }
+    } on Object catch (error) {
+      if (mounted) _showProblem(error);
+    } finally {
+      if (mounted && _creatingSession) {
+        setState(() => _creatingSession = false);
+      }
+    }
+  }
+
+  Future<void> _renameSession(SessionSummary session) async {
+    final name = await showNameEditor(
+      context,
+      title: context.l10n.rename,
+      fieldLabel: context.l10n.sessionNameOptional,
+      actionLabel: context.l10n.save,
+      initialValue: session.sessionName ?? '',
+    );
+    if (!mounted || name == null || name == session.sessionName) return;
+    await _runSessionMutation(
+      session.sessionId,
+      (management) => management.renameSession(
+        widget.workspace.id,
+        session.sessionId,
+        session.managementRevision,
+        name,
+      ),
+    );
+  }
+
+  Future<void> _archiveSession(SessionSummary session) => _runSessionMutation(
+    session.sessionId,
+    (management) => management.archiveSession(
+      widget.workspace.id,
+      session.sessionId,
+      session.managementRevision,
+    ),
+  );
+
+  Future<void> _restoreSession(SessionSummary session) => _runSessionMutation(
+    session.sessionId,
+    (management) => management.restoreSession(
+      widget.workspace.id,
+      session.sessionId,
+      session.managementRevision,
+    ),
+  );
+
+  Future<void> _trashSession(SessionSummary session) async {
+    if (!await confirmMoveToTrash(context, project: false) || !mounted) {
+      return;
+    }
+    await _runSessionMutation(
+      session.sessionId,
+      (management) => management.trashSession(
+        widget.workspace.id,
+        session.sessionId,
+        session.managementRevision,
+      ),
+    );
+  }
+
+  Future<void> _purgeSession(SessionSummary session) async {
+    if (!await confirmPermanentDeletion(
+          context,
+          resourceId: session.sessionId,
+        ) ||
+        !mounted) {
+      return;
+    }
+    await _runSessionMutation(
+      session.sessionId,
+      (management) => management.purgeSession(
+        widget.workspace.id,
+        session.sessionId,
+        session.managementRevision,
+      ),
+    );
+  }
+
+  Future<void> _runSessionMutation(
+    String sessionId,
+    Future<void> Function(TsPhoneManagementGateway management) mutation,
+  ) async {
+    final management = _managementApi;
+    if (management == null || _interactionLocked) return;
+    setState(() => _mutatingSessionId = sessionId);
+    try {
+      await mutation(management);
+      if (mounted) await _refresh(force: true);
+    } on Object catch (error) {
+      if (mounted) _showProblem(error);
+    } finally {
+      if (mounted) setState(() => _mutatingSessionId = null);
+    }
+  }
+
+  void _showProblem(Object error) {
+    ActionFeedback.error();
+    final message = describeTsPhoneProblem(
+      error,
+    ).localizedMessage(context.l10n);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+      );
+  }
+
+  void _handleSessionAction(SessionSummary session, _SessionAction action) {
+    switch (action) {
+      case _SessionAction.rename:
+        unawaited(_renameSession(session));
+      case _SessionAction.archive:
+        unawaited(_archiveSession(session));
+      case _SessionAction.restore:
+        unawaited(_restoreSession(session));
+      case _SessionAction.trash:
+        unawaited(_trashSession(session));
+      case _SessionAction.purge:
+        unawaited(_purgeSession(session));
     }
   }
 
@@ -132,6 +336,19 @@ class _SessionListPageState extends State<SessionListPage>
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
         title: Text(widget.workspace.name),
         actions: <Widget>[
+          if (_managementApi != null &&
+              _lifecycleState == LifecycleState.active)
+            IconButton(
+              key: const ValueKey<String>('create-session'),
+              onPressed: _interactionLocked ? null : _createManagedSession,
+              tooltip: l10n.newSession,
+              icon: _creatingSession
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_comment_outlined),
+            ),
           IconButton(
             onPressed: _refreshing ? null : () => _refresh(announce: true),
             tooltip: _refreshing ? l10n.refreshing : l10n.refreshSessions,
@@ -169,27 +386,71 @@ class _SessionListPageState extends State<SessionListPage>
       return _SessionError(problem: _problem!, onRetry: _refresh);
     }
     if (_sessions!.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(0, 72, 0, 24),
-          children: <Widget>[
-            TsEmptyState(
-              icon: Icons.history_rounded,
-              title: l10n.noSessionHistoryTitle,
-              message: l10n.noSessionHistoryMessage,
-              action: FilledButton.icon(
-                onPressed: _copyStartCommand,
-                icon: const Icon(Icons.copy_rounded),
-                label: Text(l10n.copyStartCommand),
+      return Column(
+        children: <Widget>[
+          if (_managementApi != null)
+            Padding(
+              padding: const EdgeInsets.only(top: TsPhoneSpacing.medium),
+              child: LifecycleSwitcher(
+                value: _lifecycleState,
+                onChanged: _selectLifecycle,
               ),
             ),
-          ],
-        ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(0, 72, 0, 24),
+                children: <Widget>[
+                  TsEmptyState(
+                    icon: switch (_lifecycleState) {
+                      LifecycleState.active => Icons.chat_bubble_outline,
+                      LifecycleState.archived => Icons.archive_outlined,
+                      LifecycleState.trashed => Icons.delete_outline,
+                    },
+                    title: switch (_lifecycleState) {
+                      LifecycleState.active => l10n.noSessionHistoryTitle,
+                      LifecycleState.archived => l10n.archiveEmptyTitle,
+                      LifecycleState.trashed => l10n.trashEmptyTitle,
+                    },
+                    message: switch (_lifecycleState) {
+                      LifecycleState.active => l10n.noSessionHistoryMessage,
+                      LifecycleState.archived => l10n.archivedItemsMessage,
+                      LifecycleState.trashed => l10n.recentlyDeletedMessage,
+                    },
+                    action: _lifecycleState == LifecycleState.active
+                        ? _managementApi != null
+                              ? FilledButton.icon(
+                                  onPressed: _interactionLocked
+                                      ? null
+                                      : _createManagedSession,
+                                  icon: const Icon(Icons.add_comment_outlined),
+                                  label: Text(l10n.createSession),
+                                )
+                              : FilledButton.icon(
+                                  onPressed: _copyStartCommand,
+                                  icon: const Icon(Icons.copy_rounded),
+                                  label: Text(l10n.copyStartCommand),
+                                )
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       );
     }
     return Column(
       children: <Widget>[
+        if (_managementApi != null)
+          Padding(
+            padding: const EdgeInsets.only(top: TsPhoneSpacing.medium),
+            child: LifecycleSwitcher(
+              value: _lifecycleState,
+              onChanged: _selectLifecycle,
+            ),
+          ),
         if (_problem != null)
           TsInfoBand(
             icon: Icons.cloud_off_outlined,
@@ -216,9 +477,19 @@ class _SessionListPageState extends State<SessionListPage>
                 final session = _sessions![index - 1];
                 return _SessionTile(
                   session: session,
-                  opening: _openingSessionId == session.sessionId,
-                  onTap: _openingSessionId == null
+                  busy:
+                      _openingSessionId == session.sessionId ||
+                      _mutatingSessionId == session.sessionId,
+                  onTap:
+                      !_interactionLocked &&
+                          _lifecycleState == LifecycleState.active &&
+                          (session.canPrompt ||
+                              session.historyAvailable ||
+                              session.canActivate)
                       ? () => _open(session)
+                      : null,
+                  onAction: _managementApi != null && !_interactionLocked
+                      ? (action) => _handleSessionAction(session, action)
                       : null,
                 );
               },
@@ -229,6 +500,8 @@ class _SessionListPageState extends State<SessionListPage>
     );
   }
 }
+
+enum _SessionAction { rename, archive, restore, trash, purge }
 
 List<SessionSummary> _prioritizeSessions(List<SessionSummary> sessions) {
   final indexed = sessions.asMap().entries.toList(growable: false);
@@ -256,13 +529,15 @@ int _sessionDisplayPriority(SessionSummary session) {
 class _SessionTile extends StatelessWidget {
   const _SessionTile({
     required this.session,
-    required this.opening,
+    required this.busy,
     required this.onTap,
+    required this.onAction,
   });
 
   final SessionSummary session;
-  final bool opening;
+  final bool busy;
   final VoidCallback? onTap;
+  final ValueChanged<_SessionAction>? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -291,13 +566,17 @@ class _SessionTile extends StatelessWidget {
       statusColor: stateColor,
       icon: accessIcon,
       title: session.localizedDisplayName(l10n),
-      titleTrailing: TsInlineStatus(
-        label: session.runtimeState.localizedCompactLabel(l10n),
-        color: stateColor,
-        pulsing:
-            session.runtimeState == RuntimeState.running ||
-            session.runtimeState == RuntimeState.connecting,
-      ),
+      titleTrailing: session.runtimeState == RuntimeState.idle
+          ? TsReadyStatusIcon(
+              label: session.runtimeState.localizedCompactLabel(l10n),
+            )
+          : TsInlineStatus(
+              label: session.runtimeState.localizedCompactLabel(l10n),
+              color: stateColor,
+              pulsing:
+                  session.runtimeState == RuntimeState.running ||
+                  session.runtimeState == RuntimeState.connecting,
+            ),
       subtitle: accessLabel,
       details: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -321,19 +600,88 @@ class _SessionTile extends StatelessWidget {
           ),
         ],
       ),
-      trailing: opening
+      trailing: busy
           ? Semantics(
               label: l10n.opening,
               liveRegion: true,
-              child: const ExcludeSemantics(
+              child: ExcludeSemantics(
                 child: SizedBox.square(
+                  key: ValueKey<String>('session-opening-${session.sessionId}'),
                   dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: const CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
             )
-          : null,
+          : onAction == null
+          ? null
+          : _SessionMenu(
+              lifecycleState: session.lifecycleState,
+              onSelected: onAction!,
+            ),
       onTap: onTap,
+    );
+  }
+}
+
+class _SessionMenu extends StatelessWidget {
+  const _SessionMenu({required this.lifecycleState, required this.onSelected});
+
+  final LifecycleState lifecycleState;
+  final ValueChanged<_SessionAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final actions = switch (lifecycleState) {
+      LifecycleState.active => <(_SessionAction, IconData, String)>[
+        (_SessionAction.rename, Icons.edit_outlined, l10n.rename),
+        (_SessionAction.archive, Icons.archive_outlined, l10n.archive),
+        (
+          _SessionAction.trash,
+          Icons.delete_outline,
+          l10n.moveToRecentlyDeleted,
+        ),
+      ],
+      LifecycleState.archived => <(_SessionAction, IconData, String)>[
+        (_SessionAction.rename, Icons.edit_outlined, l10n.rename),
+        (_SessionAction.restore, Icons.unarchive_outlined, l10n.restore),
+        (
+          _SessionAction.trash,
+          Icons.delete_outline,
+          l10n.moveToRecentlyDeleted,
+        ),
+      ],
+      LifecycleState.trashed => <(_SessionAction, IconData, String)>[
+        (
+          _SessionAction.restore,
+          Icons.restore_from_trash_outlined,
+          l10n.restore,
+        ),
+        (
+          _SessionAction.purge,
+          Icons.delete_forever_outlined,
+          l10n.deletePermanently,
+        ),
+      ],
+    };
+    return PopupMenuButton<_SessionAction>(
+      tooltip: l10n.manage,
+      icon: const Icon(Icons.more_horiz_rounded),
+      onSelected: onSelected,
+      itemBuilder: (context) => actions
+          .map(
+            (entry) => PopupMenuItem<_SessionAction>(
+              value: entry.$1,
+              child: Row(
+                children: <Widget>[
+                  Icon(entry.$2, size: 20),
+                  const SizedBox(width: TsPhoneSpacing.medium),
+                  Flexible(child: Text(entry.$3)),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
     );
   }
 }

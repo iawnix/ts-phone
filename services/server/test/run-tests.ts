@@ -7,3 +7,7 @@ import "./event-journal.test.js";
 import "./message-projection.test.js";
 import "./timeline-projection.test.js";
 import "./http-server.test.js";
+import "./management-http.test.js";
+import "./management-store.test.js";
+import "./worker-supervisor.test.js";
+import "./workspace-management-runtime.test.js";

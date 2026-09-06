@@ -18,13 +18,16 @@ against a compromised Aliyun host.
 
 ## Remote Input Boundary
 
-The phone API accepts only a natural-language message plus opaque session
-identifiers and revision fences. It has no fields for filesystem paths, shell,
-environment variables, process management, model credentials, or raw Pi RPC.
+The phone API does not accept arbitrary filesystem paths, shell commands,
+environment variables, model credentials, or raw Pi RPC. It does expose fixed
+project/session lifecycle actions. With `TS_PHONE_TSPI` configured, a valid
+Bearer token can create a workspace directory, start or stop Host-owned TSPi
+Workers, archive or trash resources, and request permanent deletion.
 
-This does not make natural language harmless. A valid token can read projected
-conversation content and submit prompts to every live session. Protect the
-token as a high-value credential.
+The Host validates names, IDs, lifecycle revisions, and the fixed TSPi
+entrypoint; these checks do not make the token low privilege. A valid token can
+read projected conversations, start a controller, and submit prompts. Protect it
+as a high-value credential.
 
 Controller sessions give phone-origin turns the same Tool authority as local
 TUI turns. Registered tools, including write, shell, compute, render, report,
@@ -37,6 +40,17 @@ input. Only read, grep, find, ls, ts_workspace_context, and
 ts_remote_inspect are allowed. All other tools fail closed. The broker also
 rejects any approval request from an observer.
 
+Permanent project deletion additionally requires an exact-ID confirmation and
+a current TSPi preflight showing no active Worker, remote calculation, pending
+approval, or unresolved remote effect. Any preflight or operational-integrity
+failure blocks the action. A manually launched Root Agent also blocks deletion,
+even without a Bridge connection. Host mutations retain TSPi's writer lock
+through quarantine and deletion, verify the resolved workspace path, and reject
+new Bridge registrations while guarded. Permanent session deletion removes only the validated
+Pi JSONL history; it does not remove scientific workspace data. Recently Deleted
+is retained until an explicit restore or permanent delete action, with no
+automatic cleanup timer.
+
 ## Multi-Session Boundary
 
 The TSPi launcher and broker enforce complementary controls:
@@ -44,6 +58,8 @@ The TSPi launcher and broker enforce complementary controls:
 - the Root Agent file lock permits one controller process per workspace;
 - lock contention in phone mode creates an independent observer Pi session;
 - the broker permits one live controller and multiple observers;
+- the broker can start only its configured absolute TSPi executable and passes
+  structured workspace/session/model/access arguments rather than a command;
 - duplicate live registration of the same sessionId is rejected;
 - command and event identity includes workspaceId and sessionId;
 - mutable commands also require the current sessionRevision;

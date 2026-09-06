@@ -409,6 +409,28 @@ class TsSegmentedControl<T> extends StatelessWidget {
   }
 }
 
+/// Compact success state for rows where text would duplicate the primary
+/// label. The tooltip and semantic label keep the icon understandable.
+class TsReadyStatusIcon extends StatelessWidget {
+  const TsReadyStatusIcon({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = TsPhoneStatusTheme.resolve(context).connected;
+    return Semantics(
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: ExcludeSemantics(
+          child: Icon(Icons.check_circle_rounded, size: 19, color: color),
+        ),
+      ),
+    );
+  }
+}
+
 class TsInfoBand extends StatelessWidget {
   const TsInfoBand({
     super.key,

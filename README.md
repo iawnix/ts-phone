@@ -15,6 +15,7 @@ TSPi; it is not a general-purpose Pi client or a research runtime by itself.
 ## What it does
 
 - Browse live and persisted Pi sessions, including earlier conversation branches.
+- Create, rename, archive, restore, and delete projects and conversations.
 - Follow messages, tool calls, research activity, failures, and run status over SSE.
 - See the active model and Pi's context-window estimate when the Bridge reports them.
 - Use an English or Chinese interface with light and dark themes, large text, and reduced motion.
@@ -31,15 +32,16 @@ reverse proxy
     | loopback HTTP
     v
 TS Phone broker
-    |
-    | authenticated Unix socket
-    v
-TSPi Bridge <-> Pi session
+    |                 |
+    | starts Worker   | authenticated Unix socket
+    v                 v
+TSPi/Pi process <-> TSPi Bridge
 ```
 
-TSPi owns the research workspace, Pi processes, and session files. The broker
-handles phone authentication, routing, live events, and persisted history. It
-does not start Pi or keep a second conversation database.
+TSPi owns scientific state and Pi session files. The Host handles phone
+authentication, project/session metadata, live routing, persisted history, and
+the lifecycle of TSPi Workers it starts. It never stores a second copy of a
+conversation.
 
 A workspace can have one live controller and multiple observers. TSPi owns the
 single-writer lock and observer tool policy. The broker takes the session mode
@@ -54,7 +56,7 @@ from its local Bridge and refuses a second controller.
 
 - Node.js 22.19 or newer and npm for the broker
 - Flutter 3.44 or newer with Dart `>=3.12.0 <4.0.0` for mobile development
-- A compatible TSPi installation; source version 0.12.0 uses Bridge v3
+- TSPi 0.13.0 for managed sessions and lifecycle guards; Bridge v3 for live transport
 - An HTTPS origin reachable from the phone for remote use
 
 The broker listens only on `127.0.0.1` or `::1`. A reverse proxy must terminate
@@ -73,6 +75,7 @@ cd ts-phone
 npm ci
 
 export TS_PHONE_WORKSPACES=/absolute/path/to/tspi/workspaces
+export TS_PHONE_TSPI=/absolute/path/to/tspi/TSPi
 export TS_PHONE_STATE_DIR=/absolute/path/to/ts-phone-dev/state
 export TS_PHONE_BRIDGE_SOCKET=/absolute/path/to/ts-phone-dev/run/bridge.sock
 export TS_PHONE_BRIDGE_SECRET_FILE=/absolute/path/to/ts-phone-dev/state/bridge.secret
@@ -90,7 +93,9 @@ curl http://127.0.0.1:22113/healthz
 TS_PHONE_STATE_DIR=/absolute/path/to/ts-phone-dev/state npm run ctl -- token
 ```
 
-Start a phone-enabled TSPi session with the same Bridge socket and secret:
+With `TS_PHONE_TSPI` configured, create or open a session in the app and the
+Host starts the matching TSPi Worker. A manually started phone session remains
+supported for diagnostics:
 
 ```bash
 TS_PHONE_BRIDGE_SOCKET=/absolute/path/to/ts-phone-dev/run/bridge.sock \
@@ -143,9 +148,15 @@ Android signing and component packaging are maintainer workflows documented in
 
 ## Security
 
-Treat the API token as remote controller access. It can read session history
-and submit prompts. In controller mode, phone turns have the same registered
+Treat the API token as remote controller access. It can create projects and
+sessions, start TSPi Workers, submit prompts, change lifecycle state, and request
+permanent deletion. In controller mode, phone turns have the same registered
 tool authority as local controller turns. Use an observer for read-only tools.
+
+Project deletion is fail-closed: TSPi must report no active Worker, remote
+calculation, pending approval, or unresolved remote effect. Recently Deleted is
+manual retention, not a timed cleanup service. Permanent deletion requires the
+exact resource ID and cannot be undone.
 
 The projection drops thinking and raw provider records, but it is not a secret
 redaction layer. Visible text, tool arguments, and tool results can still
@@ -159,10 +170,13 @@ from another device.
 
 | Component | Current status |
 | --- | --- |
-| Broker | 0.6.0; API v4, Events v3, Bridge v3 |
-| Android | App 0.13.0+37; verified production-signed release; Android 7.0 or newer |
-| TSPi compatibility | TSPi 0.12.0; API v4 and Bridge v3 |
+| Broker | 0.7.0; API v4, Events v3, Bridge v3 |
+| Android | App 0.14.0+38; Android 7.0 or newer |
+| TSPi compatibility | TSPi 0.13.0; exact-session Workers and lifecycle guards |
 | iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
+
+These are source versions. See [release records](docs/artifacts.md) for published
+artifacts; changing this table does not deploy an upgrade.
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 export const API_VERSION = "ts-phone-api/4" as const;
 export const EVENT_VERSION = "ts-phone-events/3" as const;
-export const SERVICE_VERSION = "0.6.0" as const;
+export const SERVICE_VERSION = "0.7.0" as const;
 
 export type RuntimeState =
   | "offline"
@@ -10,6 +10,7 @@ export type RuntimeState =
   | "recovery_required";
 
 export type SessionAccessMode = "controller" | "observer";
+export type LifecycleState = "active" | "archived" | "trashed";
 
 export type SessionCapability =
   | "history.messages"
@@ -30,6 +31,11 @@ export interface WorkspaceSummary {
   isStreaming: boolean;
   liveSessionCount: number;
   sessionCount: number;
+  lifecycleState: LifecycleState;
+  managementRevision: string;
+  managed: boolean;
+  updatedAt?: string;
+  deletedAt?: string;
 }
 
 export interface SessionSummary {
@@ -46,6 +52,52 @@ export interface SessionSummary {
   historyOnly?: boolean;
   canPrompt?: boolean;
   capabilities: SessionCapability[];
+  lifecycleState: LifecycleState;
+  managementRevision: string;
+  managed: boolean;
+  canActivate: boolean;
+  updatedAt?: string;
+  deletedAt?: string;
+}
+
+export interface CreateWorkspaceInput {
+  name: string;
+}
+
+export interface CreateSessionInput {
+  name?: string;
+  model?: string;
+  accessMode: SessionAccessMode;
+}
+
+export interface RenameInput {
+  name: string;
+  managementRevision: string;
+}
+
+export interface LifecycleInput {
+  managementRevision: string;
+}
+
+export interface PurgeInput extends LifecycleInput {
+  confirmation: string;
+}
+
+export interface ActivateInput extends LifecycleInput {}
+
+export interface WorkspaceCreationResult {
+  workspace: WorkspaceSummary;
+  session: SessionSummary;
+}
+
+export interface WorkspaceDeletionPreflight {
+  workspaceId: string;
+  managementRevision: string;
+  activeWorkers: number;
+  remoteCalculations: number;
+  pendingApprovals: number;
+  unresolvedRemoteEffects: number;
+  canDelete: boolean;
 }
 
 export interface SessionRuntimeSnapshot {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -48,6 +49,27 @@ from release_builder import (  # noqa: E402
 
 
 class ReleaseBuilderTests(unittest.TestCase):
+    def test_android_capture_rejects_mismatched_identity_before_build(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "mobile_build_attestation", DEPLOY / "mobile-build-attestation.py"
+        )
+        assert spec is not None and spec.loader is not None
+        cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cli)
+        with tempfile.TemporaryDirectory() as temporary:
+            captured = Path(temporary) / "source"
+            output = Path(temporary) / "snapshot.json"
+            with (
+                mock.patch.object(cli, "capture_source_tree", return_value={}),
+                mock.patch.object(cli, "read_mobile_version", side_effect=ComponentReleaseError("app identity mismatch")) as validate,
+                mock.patch.object(cli, "atomic_write_json") as publish,
+                mock.patch("sys.stderr"),
+            ):
+                status = cli.main(["capture", "--destination", str(captured), "--output", str(output)])
+                self.assertEqual(status, 1)
+                validate.assert_called_once_with(captured / "apps" / "mobile" / "pubspec.yaml")
+                publish.assert_not_called()
+
     def test_component_archive_limit_matches_the_package_member_limit(self) -> None:
         self.assertEqual(MAX_COMPONENT_ARCHIVE_BYTES, MAX_COMPONENT_BOUND_MEMBER_BYTES)
 
@@ -664,7 +686,9 @@ class ReleaseBuilderTests(unittest.TestCase):
 
     def test_current_protocol_documents_bind_lifecycle_and_versions(self) -> None:
         root = DEPLOY.parent
-        self.assertEqual(validate_protocol_documents(root, "0.6.0"), EXPECTED_PROTOCOLS)
+        version = read_server_version(root)
+        read_mobile_version(root / "apps" / "mobile" / "pubspec.yaml")
+        self.assertEqual(validate_protocol_documents(root, version), EXPECTED_PROTOCOLS)
         events = json.loads((root / "packages" / "protocol" / "events.schema.json").read_text(encoding="utf-8"))
         lifecycle = events["$defs"]["agentRunEvent"]
         self.assertEqual(set(lifecycle["required"]), {"type", "origin", "turnId", "agentRunId"})

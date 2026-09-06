@@ -6,15 +6,20 @@ TS Phone separates scientific state, conversation history, and transport state:
 2. Each Pi session JSONL owns its conversation history.
 3. TS Phone owns authentication, live bridge registration, bounded event
    journals, command fencing, and transient recovery state.
+4. TS Phone `management.json` owns display names, model/access preferences, and
+   project/session lifecycle state. It contains neither scientific records nor
+   conversation messages.
 
-The phone API has no dedicated field for a filesystem path, process command,
+The phone API has no field for an arbitrary filesystem path, process command,
 environment override, or raw Pi RPC record. Natural-language messages can still
-contain sensitive or operational text. The server never starts Pi. The TSPi
-launcher starts each visible Pi process and loads the package-owned
+contain sensitive or operational text. When `TS_PHONE_TSPI` is configured, the
+Host starts and stops only the fixed TSPi Worker entrypoint. That launcher owns
+workspace bootstrap, the Root Agent lock, Pi RPC mode, and the package-owned
 ts-phone-bridge extension.
 
 ~~~text
-Flutter -> HTTPS/SSE -> TS Phone broker -> Unix socket -> visible TSPi/Pi
+Flutter -> HTTPS/SSE -> TS Phone Host -> WorkerSupervisor -> TSPi/Pi
+                                  \---- Unix socket <---- Bridge
 ~~~
 
 ## Release Ownership
@@ -46,6 +51,45 @@ starts a service or installs an APK onto a device.
 
 ## Workspace And Session Ownership
 
+`management.json` is an owner-only, atomically replaced Host document. A
+managed project records its display name, lifecycle state, revision, timestamps,
+and managed sessions. A managed session records its display name, optional model
+preference, access mode, lifecycle state, revision, and timestamps. Numeric
+workspace/session IDs remain routing identities; renaming never changes a
+filesystem path or Pi session identity.
+
+Both reads and writes enforce a 1 MiB UTF-8 limit. An over-capacity change fails
+before creating a temporary file and preserves the previous disk and memory
+snapshot.
+
+The lifecycle is `active`, `archived`, or `trashed`. Recently Deleted has no
+background expiry: data remains until explicit restoration or permanent
+deletion. Session deletion quarantines only its validated Pi JSONL. Project
+deletion quarantines the complete workspace and first runs TSPi's read-only
+scientific preflight. Active Workers, remote calculations, pending approvals,
+unresolved remote effects, or unverifiable operational state block deletion.
+This includes a manually started Root Agent that has never connected a Bridge.
+The Host verifies the absolute workspace path in the private TSPi reply.
+
+Before moving a project to Recently Deleted or purging project/session files,
+the Host opens `--lifecycle-guard`. TSPi acquires the same Root Agent lock used
+by interactive launches, reports a bounded preflight, and holds the lock until
+Host stdin closes. The Host blocks new Bridge registration during that
+operation and checks guard liveness before filesystem/metadata changes. Idle
+Host-owned Workers can be stopped; external Controllers are never stopped by
+these actions. The ordinary preflight endpoint is read-only and never reserves
+the workspace. Both operations require `TS_PHONE_TSPI` to be configured.
+
+Permanent deletion spans the Host metadata file and filesystem, so it cannot be
+a single filesystem transaction. The Host serializes mutations, renames the
+target to a same-filesystem quarantine, removes its management record, and only
+then deletes the quarantine. If deletion fails, it attempts to restore the
+remaining target and exact prior management snapshot. Recursive removal can
+already have removed files, so a failed purge requires inspection before retry.
+Incomplete compensation is surfaced as
+`purge_recovery_failed` and requires operator inspection; it is never reported
+as a successful deletion.
+
 A workspace record owns a map keyed by sessionId. Every session record has its
 own optional persisted-history reference, optional bridge connection, snapshot,
 event journal, prompt deduplication map, approval set, runtime state, and
@@ -64,10 +108,10 @@ WorkspaceRecord
     └── runtime state
 ~~~
 
-Exactly one live controller is allowed per workspace. The controller holds the
-Root Agent file lock and starts Pi with continue, preserving the canonical
-working session. If a phone launch finds that lock held, it starts a new Pi
-session without continue and registers as an observer.
+Exactly one live controller is allowed per workspace. A Host-started controller
+acquires the Root Agent file lock and opens the requested Pi session ID in RPC
+mode. A requested observer never acquires that write lock. Manually invoked
+`TSPi --phone` retains the lock-contention fallback to an independent observer.
 
 Observers are not passive mirrors. They can receive phone or local prompts and
 use a strict read-only tool allowlist. They cannot modify the scientific
