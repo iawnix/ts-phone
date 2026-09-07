@@ -101,6 +101,7 @@ class ChatController extends ChangeNotifier {
     required this.accessMode,
     String? initialSessionTitle,
     SessionRuntimeSnapshot? initialSessionRuntime,
+    String? initialPromptProblem,
     String? initialActiveAgentRunId,
     bool initialHistoryAvailable = false,
     bool? initialCanPrompt,
@@ -121,6 +122,7 @@ class ChatController extends ChangeNotifier {
        _sessionRevision = initialSessionRevision,
        _sessionTitle = initialSessionTitle,
        _sessionRuntime = initialSessionRuntime,
+       _promptProblem = initialPromptProblem,
        _activeAgentRunId = initialActiveAgentRunId {
     if (initialPreview != null && initialPreview.revision == _sessionRevision) {
       _timelineHistory = initialPreview.history;
@@ -130,6 +132,9 @@ class ChatController extends ChangeNotifier {
           : null;
       _hasMoreHistory = initialPreview.hasMore;
       _nextBefore = initialPreview.before;
+      _viewingHistoryWindow = initialPreview.viewingHistoryWindow;
+      _hasLaterHistory = initialPreview.hasLater;
+      _nextAfter = initialPreview.after;
       _loadedEarlierHistory = true;
       if (initialPreview.history != null) {
         _setTimelineItems(initialPreview.items);
@@ -165,6 +170,7 @@ class ChatController extends ChangeNotifier {
   final ValueNotifier<String?> _streamingTextUpdates = ValueNotifier(null);
   final Set<String> _handledApprovalIdentities = <String>{};
   final Set<String> _receivedPhoneMessageIdentities = <String>{};
+  final Set<String> _acceptedPhoneMessageIdentities = <String>{};
   List<ChatMessage> _messages = const <ChatMessage>[];
   List<String?> _messageIds = const <String?>[];
   List<SessionTimelineItem> _timelineItems = const <SessionTimelineItem>[];
@@ -177,6 +183,7 @@ class ChatController extends ChangeNotifier {
   ChatActivity? _activity;
   TsPhoneProblem? _operationProblem;
   TsPhoneProblem? _eventProblem;
+  String? _promptProblem;
   String? _lastEventId;
   String _sessionRevision;
   String? _sessionTitle;
@@ -198,6 +205,10 @@ class ChatController extends ChangeNotifier {
   bool _hasMoreHistory = false;
   bool _loadedEarlierHistory = false;
   String? _nextBefore;
+  String? _nextAfter;
+  bool _hasLaterHistory = false;
+  bool _viewingHistoryWindow = false;
+  bool _historyNavigationInProgress = false;
   List<String> _latestSnapshotMessageIds = const <String>[];
   List<String> _latestTimelineItemIds = const <String>[];
   String? _selectedBranchId;
@@ -222,7 +233,14 @@ class ChatController extends ChangeNotifier {
   bool get hasStreamingText => _streamingTextChunks != null;
   ValueListenable<String?> get streamingTextUpdates => _streamingTextUpdates;
   ChatActivity? get activity => _activity;
-  TsPhoneProblem? get problem => _operationProblem ?? _eventProblem;
+  TsPhoneProblem? get problem =>
+      _operationProblem ??
+      (_promptProblem == null
+          ? null
+          : describeTsPhoneProblem(
+              TsPhoneApiException('Model not ready', code: _promptProblem),
+            )) ??
+      _eventProblem;
   bool get isSynchronizing => _snapshotSyncInProgress;
   String? get sessionTitle => _sessionTitle;
   SessionRuntimeSnapshot? get sessionRuntime => _sessionRuntime;
@@ -249,10 +267,19 @@ class ChatController extends ChangeNotifier {
   bool get canRefresh => _historyAvailable || _runtimeState.isAvailable;
   bool get loadingEarlierMessages => _loadingEarlierMessages;
   bool get loadingAllHistory => _loadingAllHistory;
+  bool get viewingHistoryWindow => _viewingHistoryWindow;
+  bool get historyNavigationInProgress => _historyNavigationInProgress;
+  bool get canLoadLaterMessages =>
+      _hasLaterHistory && _nextAfter != null && !_historyNavigationInProgress;
   bool get canLoadEarlierMessages =>
-      _hasMoreHistory && _nextBefore != null && !_loadingEarlierMessages;
+      _hasMoreHistory &&
+      _nextBefore != null &&
+      !_loadingEarlierMessages &&
+      !_historyNavigationInProgress;
   bool get canSend =>
       _canPrompt &&
+      _promptProblem == null &&
+      !_historyNavigationInProgress &&
       !viewingInactiveBranch &&
       _runtimeState.isAvailable &&
       _snapshotReady &&
@@ -282,6 +309,9 @@ class ChatController extends ChangeNotifier {
     history: _timelineHistory,
     hasMore: _hasMoreHistory,
     before: _nextBefore,
+    hasLater: _hasLaterHistory,
+    after: _nextAfter,
+    viewingHistoryWindow: _viewingHistoryWindow,
   );
 
   Future<void> acceptActivation(SessionSummary session) async {
@@ -302,6 +332,7 @@ class ChatController extends ChangeNotifier {
     _sessionRevision = session.sessionRevision;
     _activeAgentRunId = session.activeAgentRunId;
     _sessionRuntime = session.runtime;
+    _promptProblem = session.promptProblem;
     _snapshotReady = false;
     _lastEventId = null;
     _loadedEarlierHistory = false;
@@ -315,14 +346,17 @@ class ChatController extends ChangeNotifier {
 
   Future<void> refreshMessages() => _refreshMessages();
 
-  Future<void> _refreshMessages({bool allowUnavailable = false}) {
+  Future<void> _refreshMessages({
+    bool allowUnavailable = false,
+    bool resetView = false,
+  }) {
     final existing = _snapshotSynchronization;
     if (existing != null) return existing;
     if ((!allowUnavailable && !canRefresh) || _disposed) {
       return Future<void>.value();
     }
     late final Future<void> tracked;
-    tracked = _synchronizeMessages().whenComplete(() {
+    tracked = _synchronizeMessages(resetView: resetView).whenComplete(() {
       if (identical(_snapshotSynchronization, tracked)) {
         _snapshotSynchronization = null;
       }
@@ -331,7 +365,7 @@ class ChatController extends ChangeNotifier {
     return tracked;
   }
 
-  Future<void> _synchronizeMessages() async {
+  Future<void> _synchronizeMessages({bool resetView = false}) async {
     _cancelStreamRender();
     _snapshotSyncInProgress = true;
     _snapshotReady = false;
@@ -362,7 +396,10 @@ class ChatController extends ChangeNotifier {
         }
         final revisionChanged = snapshot.sessionRevision != _sessionRevision;
         _applySnapshotAgentRun(snapshot.activeAgentRunId);
-        _applyTimelineSnapshot(snapshot, reset: revisionChanged);
+        if (resetView || revisionChanged || !_viewingHistoryWindow) {
+          _applyTimelineSnapshot(snapshot, reset: revisionChanged || resetView);
+          _viewingHistoryWindow = false;
+        }
         _sessionRevision = snapshot.sessionRevision;
         _lastEventId = snapshot.lastEventId;
       } else {
@@ -375,7 +412,10 @@ class ChatController extends ChangeNotifier {
         }
         final revisionChanged = snapshot.sessionRevision != _sessionRevision;
         _applySnapshotAgentRun(snapshot.activeAgentRunId);
-        _applyMessageSnapshot(snapshot, reset: revisionChanged);
+        if (resetView || revisionChanged || !_viewingHistoryWindow) {
+          _applyMessageSnapshot(snapshot, reset: revisionChanged || resetView);
+          _viewingHistoryWindow = false;
+        }
         _sessionRevision = snapshot.sessionRevision;
         _lastEventId = snapshot.lastEventId;
       }
@@ -399,6 +439,7 @@ class ChatController extends ChangeNotifier {
     final before = _nextBefore;
     if (_disposed ||
         _loadingEarlierMessages ||
+        _historyNavigationInProgress ||
         !_hasMoreHistory ||
         before == null) {
       return false;
@@ -416,6 +457,124 @@ class ChatController extends ChangeNotifier {
       return false;
     } finally {
       _loadingEarlierMessages = false;
+      if (!_disposed) _notify();
+    }
+  }
+
+  Future<bool> jumpToStart() async {
+    if (!_hasMoreHistory) return true;
+    return _readForwardHistory(fromStart: true);
+  }
+
+  Future<bool> loadLaterMessages() => _readForwardHistory(fromStart: false);
+
+  Future<bool> returnToLatest() async {
+    if (_historyNavigationInProgress ||
+        _loadingEarlierMessages ||
+        _loadingAllHistory) {
+      return false;
+    }
+    await _snapshotSynchronization;
+    await _refreshMessages(resetView: true);
+    return !_disposed && !_viewingHistoryWindow && _snapshotReady;
+  }
+
+  Future<bool> _readForwardHistory({required bool fromStart}) async {
+    final gateway = api is TsPhoneHistoryGateway
+        ? api as TsPhoneHistoryGateway
+        : null;
+    if (_disposed ||
+        _historyNavigationInProgress ||
+        _snapshotSyncInProgress ||
+        _loadingEarlierMessages ||
+        _loadingAllHistory ||
+        (!fromStart && !canLoadLaterMessages)) {
+      return false;
+    }
+    if (gateway == null || !_capabilities.contains('history.seek')) {
+      _setError(
+        const TsPhoneApiException(
+          'History navigation requires an updated host',
+          code: 'management_unsupported',
+        ),
+      );
+      return false;
+    }
+    final revision = _sessionRevision;
+    final branch = _selectedBranchId;
+    final after = fromStart ? null : _nextAfter;
+    _historyNavigationInProgress = true;
+    _operationProblem = null;
+    _notify();
+    try {
+      if (usesStructuredTimeline) {
+        final page = await gateway.getTimelineWindow(
+          workspaceId,
+          sessionId,
+          fromStart: fromStart,
+          after: after,
+          branch: branch,
+          limit: _timelinePageSize,
+        );
+        if (_disposed || revision != _sessionRevision) return false;
+        if (page.sessionId != sessionId ||
+            page.sessionRevision != revision ||
+            (branch == null
+                ? !page.history.selectedBranchIsActive
+                : page.history.selectedBranchId != branch)) {
+          throw const FormatException(
+            'History belongs to another session branch',
+          );
+        }
+        if (fromStart && page.hasMore ||
+            page.hasLater && page.nextAfter == after) {
+          throw const FormatException(
+            'History navigation did not reach the requested position',
+          );
+        }
+        if (fromStart) {
+          _applyTimelineSnapshot(page, reset: true);
+        } else {
+          _mergeTimelinePage(page.items);
+          _timelineHistory = page.history;
+        }
+        _hasLaterHistory = page.hasLater;
+        _nextAfter = page.nextAfter;
+      } else {
+        final page = await gateway.getMessageWindow(
+          workspaceId,
+          sessionId,
+          fromStart: fromStart,
+          after: after,
+          limit: _historyPageSize,
+        );
+        if (_disposed || revision != _sessionRevision) return false;
+        if (page.sessionId != sessionId ||
+            page.sessionRevision != revision ||
+            page.messageIds == null ||
+            fromStart && page.hasMore ||
+            page.hasLater && page.nextAfter == after) {
+          throw const FormatException(
+            'History navigation returned an invalid page',
+          );
+        }
+        if (fromStart) {
+          _applyMessageSnapshot(page, reset: true);
+        } else {
+          _mergeMessagePage(_parseMessagePage(page.messages, page.messageIds));
+        }
+        _hasLaterHistory = page.hasLater;
+        _nextAfter = page.nextAfter;
+      }
+      _viewingHistoryWindow = true;
+      _loadedEarlierHistory = true;
+      _clearStreamingText();
+      return true;
+    } on Object catch (error) {
+      if (!_disposed) _setError(error);
+      return false;
+    } finally {
+      _historyNavigationInProgress = false;
       if (!_disposed) _notify();
     }
   }
@@ -444,12 +603,16 @@ class ChatController extends ChangeNotifier {
   Future<void> selectTimelineBranch(String branchId) async {
     if (_disposed ||
         _snapshotSyncInProgress ||
+        _historyNavigationInProgress ||
         _loadingEarlierMessages ||
         branchId == _timelineHistory?.selectedBranchId ||
         !timelineBranches.any((branch) => branch.id == branchId)) {
       return;
     }
     _selectedBranchId = branchId;
+    _viewingHistoryWindow = false;
+    _hasLaterHistory = false;
+    _nextAfter = null;
     _loadedEarlierHistory = false;
     _hasMoreHistory = false;
     _nextBefore = null;
@@ -556,6 +719,8 @@ class ChatController extends ChangeNotifier {
   Future<bool> send(String value) async {
     final message = value.trim();
     if (message.isEmpty || _commandInFlight || !canSend) return false;
+    if (_viewingHistoryWindow && !await returnToLatest()) return false;
+    if (!canSend) return false;
     final revision = _sessionRevision;
     final clientMessageId = clientMessageIdFactory();
     final messageIdentity = '$revision\u0000$clientMessageId';
@@ -591,10 +756,29 @@ class ChatController extends ChangeNotifier {
       return true;
     } on Object catch (error) {
       if (_disposed) return false;
-      if (_receivedPhoneMessageIdentities.contains(messageIdentity)) {
+      if (_acceptedPhoneMessageIdentities.contains(messageIdentity)) {
         return true;
       }
-      _removePendingOutgoing(clientMessageId);
+      final definitive =
+          error is TsPhoneApiException &&
+          (const {
+                'model_unavailable',
+                'model_auth_missing',
+                'model_check_failed',
+                'prompt_rejected',
+              }.contains(error.code) ||
+              error.statusCode != null &&
+                  error.statusCode! >= 400 &&
+                  error.statusCode! < 500);
+      if (!definitive) {
+        _updateOutgoingDelivery(clientMessageId, ChatDeliveryState.uncertain);
+        _operationProblem = const TsPhoneProblem(
+          TsPhoneProblemKind.request,
+          TsPhoneProblemCode.deliveryUncertain,
+        );
+        return false;
+      }
+      _removePendingOutgoing(clientMessageId, includeReceived: true);
       _setError(error);
       return false;
     } finally {
@@ -811,6 +995,9 @@ class ChatController extends ChangeNotifier {
     _lastEventId = null;
     _hasMoreHistory = false;
     _nextBefore = null;
+    _nextAfter = null;
+    _hasLaterHistory = false;
+    _viewingHistoryWindow = false;
     _loadedEarlierHistory = false;
     _timelineHistory = null;
     _selectedBranchId = null;
@@ -917,12 +1104,18 @@ class ChatController extends ChangeNotifier {
 
   void _handleEvent(TsPhoneEvent event) {
     final payload = _asMap(event.payload);
-    if (viewingInactiveBranch && _isLiveContentEvent(event.type)) return;
+    if (_isLiveContentEvent(event.type) &&
+        (viewingInactiveBranch ||
+            ((_viewingHistoryWindow || _historyNavigationInProgress) &&
+                event.type != 'approval.request'))) {
+      return;
+    }
     var deferStreamRender = false;
     var flushStreamRender = false;
     var notifyController = true;
     switch (event.type) {
       case 'session_state':
+        _promptProblem = payload?['promptProblem'] as String?;
         final previous = _runtimeState;
         late final RuntimeState nextState;
         try {
@@ -958,8 +1151,12 @@ class ChatController extends ChangeNotifier {
           unawaited(refreshMessages());
         }
       case 'session.snapshot':
+        _promptProblem = payload?['promptProblem'] as String?;
         final messages = payload?['messages'];
-        if (messages is List && !usesStructuredTimeline) {
+        if (messages is List &&
+            !usesStructuredTimeline &&
+            !_viewingHistoryWindow &&
+            !_historyNavigationInProgress) {
           try {
             _applyMessageSnapshot(
               TsPhoneMessageSnapshot(
@@ -1005,12 +1202,23 @@ class ChatController extends ChangeNotifier {
             ? payload!['canPrompt']! as bool
             : true;
         _snapshotReady = true;
-        if (usesStructuredTimeline) unawaited(refreshMessages());
+        if (usesStructuredTimeline &&
+            !_viewingHistoryWindow &&
+            !_historyNavigationInProgress) {
+          unawaited(refreshMessages());
+        }
       case 'input':
         final text = payload?['text'];
         if (text is String && text.isNotEmpty) {
           _applyInputEvent(event, payload!, text);
         }
+      case 'runtime.error':
+        _setError(
+          TsPhoneApiException(
+            'Pi runtime error',
+            code: payload?['code'] as String?,
+          ),
+        );
       case 'agent_start':
         _applyRunState(
           RuntimeState.running,
@@ -1031,7 +1239,11 @@ class ChatController extends ChangeNotifier {
         _setRuntimeState(RuntimeState.idle);
         _clearStreamingText();
         _activity = null;
-        if (usesStructuredTimeline) unawaited(refreshMessages());
+        if (usesStructuredTimeline &&
+            !_viewingHistoryWindow &&
+            !_historyNavigationInProgress) {
+          unawaited(refreshMessages());
+        }
       case 'message_start':
         final message = _asMap(payload?['message']);
         if (message?['role'] == 'assistant') _startStreamingText();
@@ -1312,6 +1524,14 @@ class ChatController extends ChangeNotifier {
       return;
     }
     if (identity != null) {
+      if (payload['preflightAccepted'] == true) {
+        _acceptedPhoneMessageIdentities.add(identity);
+        while (_acceptedPhoneMessageIdentities.length > 200) {
+          _acceptedPhoneMessageIdentities.remove(
+            _acceptedPhoneMessageIdentities.first,
+          );
+        }
+      }
       _receivedPhoneMessageIdentities.add(identity);
       while (_receivedPhoneMessageIdentities.length > 200) {
         _receivedPhoneMessageIdentities.remove(
@@ -1401,7 +1621,10 @@ class ChatController extends ChangeNotifier {
     _setMessages(updated, _messageIds);
   }
 
-  void _removePendingOutgoing(String clientMessageId) {
+  void _removePendingOutgoing(
+    String clientMessageId, {
+    bool includeReceived = false,
+  }) {
     if (usesStructuredTimeline) {
       _setTimelineItems(
         _timelineItems
@@ -1409,7 +1632,7 @@ class ChatController extends ChangeNotifier {
               (item) =>
                   item is! TimelineMessageItem ||
                   item.message.clientMessageId != clientMessageId ||
-                  item.message.deliveryState == null,
+                  (!includeReceived && item.message.deliveryState == null),
             )
             .toList(growable: false),
       );
@@ -1420,7 +1643,7 @@ class ChatController extends ChangeNotifier {
     for (var index = 0; index < _messages.length; index += 1) {
       final message = _messages[index];
       if (message.clientMessageId == clientMessageId &&
-          message.deliveryState != null) {
+          (includeReceived || message.deliveryState != null)) {
         continue;
       }
       messages.add(message);
@@ -1468,6 +1691,8 @@ class ChatController extends ChangeNotifier {
         : snapshot.history.selectedBranchId;
     _capabilities = snapshot.capabilities;
     _canPrompt = snapshot.capabilities.contains(promptCapability);
+    _hasLaterHistory = snapshot.hasLater;
+    _nextAfter = snapshot.nextAfter;
     if (replaceHistory) _loadedEarlierHistory = false;
     if (replaceHistory || !_loadedEarlierHistory) {
       _hasMoreHistory = snapshot.hasMore;
@@ -1589,7 +1814,7 @@ class ChatController extends ChangeNotifier {
     final messages = <ChatMessage>[];
     final messageIds = <String?>[];
     for (final item in _timelineItems.whereType<TimelineMessageItem>()) {
-      if (item.message.text.isEmpty && item.message.tools.isEmpty) continue;
+      if (!item.message.hasVisibleContent) continue;
       messages.add(item.message);
       messageIds.add(
         RegExp(r'^[0-9a-f]{8}$').hasMatch(item.id) ? item.id : null,
@@ -1611,6 +1836,8 @@ class ChatController extends ChangeNotifier {
       throw const FormatException('Message pagination cursor is invalid');
     }
     final parsed = _parseMessagePage(snapshot.messages, rawIds);
+    _hasLaterHistory = snapshot.hasLater;
+    _nextAfter = snapshot.nextAfter;
     final branchChanged =
         !reset &&
         rawIds != null &&
@@ -1696,7 +1923,7 @@ class ChatController extends ChangeNotifier {
     for (var index = 0; index < raw.length; index += 1) {
       try {
         final message = ChatMessage.fromJson(raw[index]);
-        if (message.text.isNotEmpty || message.tools.isNotEmpty) {
+        if (message.hasVisibleContent) {
           messages.add(message);
           messageIds.add(rawIds?[index]);
         }

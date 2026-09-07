@@ -219,6 +219,69 @@ void main() {
     expect(page.nextBefore, '00000009');
   });
 
+  test('requests start and forward windows with validated cursors', () async {
+    var requestCount = 0;
+    var invalidCursor = false;
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        if (requestCount++ == 0) {
+          expect(request.url.queryParameters, {'edge': 'start', 'limit': '50'});
+        } else {
+          expect(request.url.queryParameters, {
+            'after': '00000001',
+            'limit': '50',
+          });
+        }
+        return http.Response(
+          jsonEncode({
+            'apiVersion': 'ts-phone-api/4',
+            'data': {
+              'sessionId': 'session-test',
+              'sessionRevision': 'revision-1',
+              'activeAgentRunId': null,
+              'messages': [
+                {'role': 'user', 'content': 'first'},
+              ],
+              'messageIds': ['00000001'],
+              'hasMore': false,
+              'hasLater': true,
+              'nextAfter': invalidCursor ? '00000002' : '00000001',
+              'lastEventId': 'epoch:1',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    final first = await api.getMessageWindow(
+      'ts_001',
+      'session-test',
+      fromStart: true,
+      limit: 50,
+    );
+    expect(first.hasMore, isFalse);
+    expect(first.hasLater, isTrue);
+    expect(first.nextAfter, '00000001');
+    await api.getMessageWindow(
+      'ts_001',
+      'session-test',
+      after: first.nextAfter,
+      limit: 50,
+    );
+    invalidCursor = true;
+    await expectLater(
+      api.getMessageWindow(
+        'ts_001',
+        'session-test',
+        after: first.nextAfter,
+        limit: 50,
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('parses optional disk-history session capabilities', () async {
     final api = TsPhoneApi(
       settings,

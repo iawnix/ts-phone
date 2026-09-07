@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -17,6 +18,53 @@ import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
 
 void main() {
   const token = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
+  for (final copyFails in [false, true]) {
+    testWidgets('service address copy reports its actual result: $copyFails', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const serverUrl = 'https://phone.example.test';
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            if (copyFails) throw PlatformException(code: 'unavailable');
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        _settingsApp(
+          locale: const Locale('zh'),
+          connection: ConnectionSettings(serverUrl: serverUrl, token: token),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('TS Phone 服务地址'), findsOneWidget);
+      expect(find.text('Endpoint'), findsNothing);
+      final copy = find.byKey(const ValueKey('copy-server-address'));
+      await tester.ensureVisible(copy);
+      await tester.tap(copy);
+      await tester.pumpAndSettle();
+      expect(copied, copyFails ? isNull : serverUrl);
+      expect(find.text(copyFails ? '无法复制服务地址' : '已复制服务地址'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('settings keep connection actions explicit and branding quiet', (
     WidgetTester tester,

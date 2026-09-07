@@ -7,8 +7,72 @@ import type { ServerConfig } from "../src/config.js";
 import { createTsPhoneHttpServer } from "../src/http-server.js";
 import { readBearerToken } from "../src/security.js";
 import { connectFakeBridge, type FakeBridge } from "./helpers.js";
+import { writeFakeTspi } from "./fake-tspi.js";
 
 const ZERO_REVISION = "00000000-0000-0000-0000-000000000000";
+
+test("owned Worker prompts use RPC preflight and publish one accepted input", async () => {
+  const fixture = await startFixture();
+  fixture.config.tspiPath = join(fixture.config.stateDir, "fake-TSPi.mjs");
+  await writeFakeTspi(fixture.config.tspiPath, fixture.config.workspaceRoot);
+  await restartFixture(fixture);
+  try {
+    const session = await fixture.application.hub.createSession("ts_001", { accessMode: "controller" });
+    const activation = fixture.application.hub.activateSession("ts_001", session.sessionId, { managementRevision: session.managementRevision });
+    await waitFor(async () => (await fixture.application.hub.listSessions("ts_001"))[0]?.runtimeState, "connecting");
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, { sessionId: session.sessionId });
+    await activation;
+    await waitForState(fixture, "idle");
+    const journal = await fixture.application.hub.journal("ts_001", session.sessionId);
+    const messagesPath = `/api/v4/workspaces/ts_001/sessions/${session.sessionId}/messages`;
+    const prompt = (clientMessageId: string, message: string) => api(fixture, messagesPath, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientMessageId, message, sessionRevision: journal.epoch }),
+    });
+    fixture.bridge.publish("input", { text: "reject-before-model", source: "rpc", origin: "phone" });
+    const rejected = await prompt("rejected", "reject-before-model");
+    assert.equal(rejected.status, 409);
+    assert.doesNotMatch(await rejected.text(), /private-test-key/);
+    assert.equal(journal.since(undefined).filter(event => event.type === "input").length, 0);
+    const accepted = await prompt("accepted", "hello");
+    assert.equal(accepted.status, 202);
+    assert.equal((await prompt("accepted", "hello")).status, 202);
+    const inputs = journal.since(undefined).filter(event => event.type === "input");
+    assert.equal(inputs.length, 1);
+    assert.deepEqual(inputs[0]!.payload, {
+      type: "input", source: "rpc", origin: "phone", preflightAccepted: true,
+      text: "hello", clientMessageId: "accepted",
+    });
+    assert.equal(fixture.bridge.receivedCommands.filter(command => command.type === "command.prompt").length, 0);
+  } finally {
+    await fixture.bridge?.close();
+    await fixture.application.close();
+  }
+});
+
+test("a connected bridge with an unready model is not promptable", async () => {
+  for (const options of [
+    { model: "unknown/unknown", expected: "model_unavailable" },
+    { promptProblem: "model_auth_missing" as const, expected: "model_auth_missing" },
+  ]) {
+    const fixture = await startFixture();
+    try {
+      fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, options);
+      await waitForState(fixture, "idle");
+      const sessions = (await (await api(fixture, "/api/v4/workspaces/ts_001/sessions")).json() as { data: any[] }).data;
+      assert.equal(sessions[0].canPrompt, false);
+      assert.equal(sessions[0].promptProblem, options.expected);
+      assert.equal(sessions[0].capabilities.includes("command.prompt"), false);
+      const rejected = await sendPrompt(fixture, "not-ready", "must not send");
+      assert.equal(rejected.status, 409);
+      assert.equal((await rejected.json() as { error: { code: string } }).error.code, options.expected);
+      assert.equal(fixture.bridge.receivedCommands.length, 0);
+    } finally {
+      await fixture.bridge?.close();
+      await fixture.application.close();
+    }
+  }
+});
 
 test("HTTP API keeps an offline workspace read-only until its TSPi bridge connects", async () => {
   const fixture = await startFixture();
@@ -23,7 +87,7 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     };
     assert.deepEqual(version.data, {
       apiVersion: "ts-phone-api/4",
-      serviceVersion: "0.7.0",
+      serviceVersion: "0.7.1",
     });
     assert.equal((await api(fixture, "/api/v3/version")).status, 404);
 
@@ -113,6 +177,7 @@ test("service restart restores disk history as a read-only session", async () =>
       "activity.tools",
       "history.timeline",
       "history.pagination",
+      "history.seek",
       "history.branches",
       "activity.subagents",
       "activity.research",
@@ -276,6 +341,21 @@ test("message history pages use stable Pi entry cursors", async () => {
     };
     assert.deepEqual(earlierPayload.data.messageIds, ["000001f4", "000001f5"]);
     assert.equal(earlierPayload.data.nextBefore, "000001f4");
+
+    for (const resource of ["messages", "timeline"]) {
+      const firstResponse = await api(fixture, `/api/v4/workspaces/ts_001/sessions/${sessionId}/${resource}?edge=start&limit=2`);
+      assert.equal(firstResponse.status, 200);
+      const first = (await firstResponse.json() as { data: any }).data;
+      assert.equal(first.hasMore, false);
+      assert.equal(first.hasLater, true);
+      assert.equal(first.nextAfter, "00000001");
+      const nextResponse = await api(fixture, `/api/v4/workspaces/ts_001/sessions/${sessionId}/${resource}?after=${first.nextAfter}&limit=2`);
+      const next = (await nextResponse.json() as { data: any }).data;
+      assert.deepEqual(next.messageIds ?? next.items.map((item: any) => item.id), ["00000002", "00000003"]);
+      for (const query of ["edge=end", "edge=start&after=00000001", "after=00000001&before=00000002", "after=00000001&after=00000002"]) {
+        assert.equal((await api(fixture, `/api/v4/workspaces/ts_001/sessions/${sessionId}/${resource}?${query}`)).status, 400);
+      }
+    }
 
     const unknown = await api(
       fixture,

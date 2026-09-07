@@ -190,6 +190,7 @@
         "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,160}$" },
         "sessionName": { "type": "string", "minLength": 1, "maxLength": 500 },
         "model": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "promptProblem": { "enum": ["model_unavailable", "model_auth_missing", "model_check_failed"] },
         "runtime": { "$ref": "#/$defs/sessionRuntime" },
         "thinkingLevel": { "type": "string", "minLength": 1, "maxLength": 100 },
         "isStreaming": { "type": "boolean" },

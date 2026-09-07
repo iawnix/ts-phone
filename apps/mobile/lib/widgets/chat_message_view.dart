@@ -307,6 +307,7 @@ class _UserMessageMetadata extends StatelessWidget {
     final deliveryLabel = switch (deliveryState) {
       ChatDeliveryState.sending => context.l10n.messageSending,
       ChatDeliveryState.synchronizing => context.l10n.messageSynchronizing,
+      ChatDeliveryState.uncertain => context.l10n.messageDeliveryUncertain,
       null => null,
     };
     final localTime = timestamp?.toLocal();

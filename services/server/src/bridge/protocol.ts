@@ -203,6 +203,7 @@ function parseSnapshot(value: unknown): BridgeSessionSnapshot {
       "sessionId",
       "sessionName",
       "model",
+      "promptProblem",
       "runtime",
       "thinkingLevel",
       "isStreaming",
@@ -246,6 +247,12 @@ function parseSnapshot(value: unknown): BridgeSessionSnapshot {
   }
   if (snapshot.sessionName !== undefined) parsed.sessionName = requiredString(snapshot.sessionName, "sessionName", 500);
   if (snapshot.model !== undefined) parsed.model = requiredString(snapshot.model, "model", 500);
+  if (snapshot.promptProblem !== undefined) {
+    if (snapshot.promptProblem !== "model_unavailable" && snapshot.promptProblem !== "model_auth_missing" && snapshot.promptProblem !== "model_check_failed") {
+      throw new Error("snapshot.promptProblem is invalid");
+    }
+    parsed.promptProblem = snapshot.promptProblem;
+  }
   if (snapshot.runtime !== undefined) parsed.runtime = parseSessionRuntime(snapshot.runtime);
   if (snapshot.thinkingLevel !== undefined) {
     parsed.thinkingLevel = requiredString(snapshot.thinkingLevel, "thinkingLevel", 100);

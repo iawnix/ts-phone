@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.7.0
+  version: 0.7.1
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -223,9 +223,12 @@ paths:
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/messages:
     get:
       operationId: getMessages
+      description: Omit all position parameters for the tail. With history.seek, choose only one of before, after, or edge.
       parameters:
         - $ref: "#/components/parameters/workspaceId"
         - $ref: "#/components/parameters/sessionId"
+        - $ref: "#/components/parameters/historyAfter"
+        - $ref: "#/components/parameters/historyEdge"
         - name: before
           in: query
           required: false
@@ -310,9 +313,12 @@ paths:
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/timeline:
     get:
       operationId: getTimeline
+      description: Omit all position parameters for the branch tail. With history.seek, choose only one of before, after, or edge.
       parameters:
         - $ref: "#/components/parameters/workspaceId"
         - $ref: "#/components/parameters/sessionId"
+        - $ref: "#/components/parameters/historyAfter"
+        - $ref: "#/components/parameters/historyEdge"
         - name: before
           in: query
           required: false
@@ -402,6 +408,18 @@ components:
       type: http
       scheme: bearer
   parameters:
+    historyAfter:
+      name: after
+      in: query
+      required: false
+      description: Return the page immediately after this stable Pi entry id; exclusive with before and edge
+      schema: { type: string, pattern: "^[0-9a-f]{8}$" }
+    historyEdge:
+      name: edge
+      in: query
+      required: false
+      description: Read the first bounded page, not the entire history; exclusive with before and after
+      schema: { type: string, enum: [start] }
     lifecycleState:
       name: state
       in: query
@@ -467,6 +485,7 @@ components:
         - history.messages
         - history.timeline
         - history.pagination
+        - history.seek
         - history.branches
         - activity.tools
         - activity.subagents
@@ -482,8 +501,8 @@ components:
         name: { type: string }
         runtimeState: { $ref: "#/components/schemas/RuntimeState" }
         isStreaming: { type: boolean }
-        liveSessionCount: { type: integer, minimum: 0 }
-        sessionCount: { type: integer, minimum: 0 }
+        liveSessionCount: { type: integer, minimum: 0, description: Live sessions whose lifecycle is active }
+        sessionCount: { type: integer, minimum: 0, description: Sessions whose lifecycle is active; excludes archived and trashed }
         lifecycleState: { $ref: "#/components/schemas/LifecycleState" }
         managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
         managed: { type: boolean }
@@ -499,6 +518,9 @@ components:
         activeAgentRunId: { $ref: "#/components/schemas/ActiveAgentRunId" }
         sessionName: { type: string }
         model: { type: string }
+        promptProblem:
+          enum: [model_unavailable, model_auth_missing, model_check_failed]
+          description: Local model readiness failure; independent of Phone Bearer authentication
         runtime: { $ref: "#/components/schemas/SessionRuntime" }
         runtimeState: { $ref: "#/components/schemas/RuntimeState" }
         isStreaming: { type: boolean }
@@ -511,7 +533,7 @@ components:
           description: The session is currently a read-only disk-history view
         canPrompt:
           type: boolean
-          description: A live Bridge currently accepts session commands
+          description: The active session has a live Bridge and no known local model readiness failure
         capabilities:
           type: array
           uniqueItems: true
@@ -585,6 +607,14 @@ components:
           type: string
           pattern: "^[0-9a-f]{8}$"
           description: Cursor for the next earlier page; present exactly when hasMore is true
+        hasLater:
+          type: boolean
+          default: false
+          description: More projected messages exist after this page
+        nextAfter:
+          type: string
+          pattern: "^[0-9a-f]{8}$"
+          description: Cursor for the next later page; present exactly when hasLater is true
         lastEventId:
           type: string
           minLength: 1
@@ -683,6 +713,8 @@ components:
         history: { $ref: "#/components/schemas/TimelineHistory" }
         hasMore: { type: boolean }
         nextBefore: { type: string, pattern: "^[0-9a-f]{8}$" }
+        hasLater: { type: boolean, default: false }
+        nextAfter: { type: string, pattern: "^[0-9a-f]{8}$" }
         lastEventId: { type: string, minLength: 1 }
         capabilities:
           type: array

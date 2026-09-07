@@ -171,8 +171,8 @@ from another device.
 
 | Component | Current status |
 | --- | --- |
-| Broker | 0.7.0; API v4, Events v3, Bridge v3 |
-| Android | App 0.16.0+41; Android 7.0 or newer |
+| Broker | 0.7.1; API v4, Events v3, Bridge v3 |
+| Android | App 0.16.1+42; Android 7.0 or newer |
 | TSPi compatibility | TSPi 0.13.0; exact-session Workers and lifecycle guards |
 | iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
 

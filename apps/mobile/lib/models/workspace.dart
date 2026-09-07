@@ -216,6 +216,7 @@ class SessionSummary {
     required this.accessMode,
     this.sessionName,
     this.model,
+    this.promptProblem,
     this.runtime,
     this.activeAgentRunId,
     this.historyAvailable = false,
@@ -283,6 +284,7 @@ class SessionSummary {
       sessionRevision: sessionRevision,
       sessionName: json['sessionName'] as String?,
       model: json['model'] as String?,
+      promptProblem: json['promptProblem'] as String?,
       runtime: rawRuntime == null
           ? null
           : SessionRuntimeSnapshot.fromJson(
@@ -315,6 +317,7 @@ class SessionSummary {
   final String sessionRevision;
   final String? sessionName;
   final String? model;
+  final String? promptProblem;
   final SessionRuntimeSnapshot? runtime;
   final String? activeAgentRunId;
   final RuntimeState runtimeState;

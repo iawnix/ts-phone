@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app_identity.dart';
 import '../../data/ts_phone_api.dart';
@@ -265,6 +266,44 @@ class _SettingsPageState extends State<SettingsPage> {
                                           l10n.notConfigured,
                                       stacked: true,
                                       selectable: connection != null,
+                                      trailing: connection == null
+                                          ? null
+                                          : IconButton(
+                                              key: const ValueKey<String>(
+                                                'copy-server-address',
+                                              ),
+                                              tooltip: l10n.copyServerAddress,
+                                              icon: const Icon(
+                                                Icons.content_copy_rounded,
+                                                size: 18,
+                                              ),
+                                              onPressed: () async {
+                                                var copied = false;
+                                                try {
+                                                  await Clipboard.setData(
+                                                    ClipboardData(
+                                                      text:
+                                                          connection.serverUrl,
+                                                    ),
+                                                  );
+                                                  copied = true;
+                                                } on Object {
+                                                  /* Clipboard availability is platform-dependent. */
+                                                }
+                                                if (!context.mounted) return;
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      copied
+                                                          ? l10n.serverAddressCopied
+                                                          : l10n.copyServerAddressFailed,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
                                     ),
                                     const _SettingsDivider(),
                                     _DiagnosticRow(
@@ -667,6 +706,7 @@ class _DiagnosticRow extends StatelessWidget {
     this.valueColor,
     this.stacked = false,
     this.selectable = false,
+    this.trailing,
   });
 
   final String label;
@@ -674,6 +714,7 @@ class _DiagnosticRow extends StatelessWidget {
   final Color? valueColor;
   final bool stacked;
   final bool selectable;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -710,7 +751,14 @@ class _DiagnosticRow extends StatelessWidget {
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(label, style: theme.textTheme.bodyMedium),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(label, style: theme.textTheme.bodyMedium),
+                      ),
+                      ?trailing,
+                    ],
+                  ),
                   const SizedBox(height: TsPhoneSpacing.xSmall),
                   valueWidget,
                 ],

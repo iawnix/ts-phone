@@ -30,6 +30,8 @@ export async function connectFakeBridge(
     accessMode?: "controller" | "observer";
     instanceEpoch?: string;
     abortErrorCode?: "agent_not_running" | "agent_run_stale";
+    model?: string;
+    promptProblem?: "model_auth_missing" | "model_unavailable" | "model_check_failed";
   } = {},
 ): Promise<FakeBridge> {
   const socket = createConnection(config.bridgeSocketPath);
@@ -109,7 +111,8 @@ export async function connectFakeBridge(
       snapshot: {
         sessionId,
         sessionName: `Fake ${sessionId}`,
-        model: "test/fake-model",
+        model: options.model ?? "test/fake-model",
+        ...(options.promptProblem ? { promptProblem: options.promptProblem } : {}),
         ...(includeRuntime ? {
           runtime: {
             schemaVersion: "ts-phone-session-runtime/1",

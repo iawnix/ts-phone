@@ -104,6 +104,10 @@ export class WorkspaceHub {
     this.#bridgeSecret = bridgeSecret;
     this.#management = management;
     this.#workers = workers;
+    workers.onRuntimeError = (request, error) => {
+      const session = this.#records.get(request.workspaceId)?.sessions.get(request.sessionId);
+      if (session) session.journal.publish("runtime.error", { code: error.code });
+    };
     this.#registry = registry;
     this.#staleTimer = setInterval(() => this.#closeStaleConnections(), 10_000);
     this.#staleTimer.unref();
@@ -614,7 +618,7 @@ export class WorkspaceHub {
     await this.#reconcileSessions(workspace);
     const session = workspace.sessions.get(sessionId);
     if (!session) throw new HttpError(404, "session_not_found", "TSPi session was not found");
-    if (isLive(session) && request.before === undefined) {
+    if (isLive(session) && request.before === undefined && request.after === undefined && request.edge === undefined) {
       if (!session.snapshot || !session.snapshotEventId) {
         throw new HttpError(409, "bridge_connecting", "TSPi bridge has not published a session snapshot yet");
       }
@@ -688,8 +692,20 @@ export class WorkspaceHub {
     this.#assertRevision(session, input.sessionRevision);
     const existing = session.messageCommands.get(input.clientMessageId);
     if (existing) return existing;
+    const problem = promptProblem(session);
+    if (problem) throw new HttpError(409, problem, "The TSPi model is not ready to receive messages");
     const connection = session.connection!;
-    const command = connection.sendCommand({
+    const command = (this.#workers.owns(workspaceId, sessionId)
+      ? this.#workers.prompt(workspaceId, sessionId, input.message, session.state === "running").then(() => {
+        if (session.connection !== connection) {
+          throw new RuntimeError("command_ambiguous", "Session changed while waiting for Pi prompt acknowledgement");
+        }
+        session.journal.publish("input", {
+          type: "input", source: "rpc", origin: "phone", preflightAccepted: true,
+          text: input.message, clientMessageId: input.clientMessageId,
+        }, { instanceEpoch: connection.instanceEpoch, sessionGeneration: connection.sessionGeneration });
+      })
+      : connection.sendCommand({
       protocolVersion: BRIDGE_PROTOCOL_VERSION,
       type: "command.prompt",
       workspaceId,
@@ -698,7 +714,7 @@ export class WorkspaceHub {
       sessionGeneration: connection.sessionGeneration,
       clientMessageId: input.clientMessageId,
       message: input.message,
-    }).catch((error) => {
+    })).catch((error) => {
       if (error instanceof RuntimeError && (error.code === "command_ambiguous" || error.code === "bridge_disconnected")) {
         session.state = "recovery_required";
         this.#publishState(session);
@@ -839,7 +855,8 @@ export class WorkspaceHub {
           accessMode: session.accessMode,
           historyAvailable: Boolean(session.persisted),
           historyOnly: false,
-          canPrompt: true,
+          canPrompt: canPrompt(session),
+          promptProblem: promptProblem(session),
           capabilities: capabilitiesForSession(session),
         },
         identity,
@@ -861,6 +878,11 @@ export class WorkspaceHub {
       }, identity);
       return;
     }
+    // Native input is emitted before preflight; owned RPC prompts are published
+    // above only after the request-correlated acknowledgement arrives.
+    if (bridgeRecord.eventType === "input"
+      && this.#workers.owns(session.workspaceId, session.sessionId)
+      && (bridgeRecord.payload as { source?: unknown } | null)?.source === "rpc") return;
     if (bridgeRecord.eventType === "agent_start") {
       const agentRunId = agentRunIdFromEvent(bridgeRecord.payload, "agent_start");
       if (session.activeAgentRunId && session.activeAgentRunId !== agentRunId) {
@@ -1044,7 +1066,9 @@ export class WorkspaceHub {
 
   #workspaceSummary(workspace: WorkspaceRecord): WorkspaceSummary {
     const metadata = this.#management.workspace(workspace.workspace.id);
-    const sessions = [...workspace.sessions.values()];
+    const sessions = [...workspace.sessions.values()].filter((session) => (
+      (this.#management.session(workspace.workspace.id, session.sessionId)?.lifecycleState ?? "active") === "active"
+    ));
     const live = sessions.filter((session) => session.connection && !session.connection.closed);
     const state = aggregateState(sessions.map((session) => session.state));
     return {
@@ -1080,7 +1104,8 @@ export class WorkspaceHub {
       accessMode: metadata?.accessMode ?? session.accessMode,
       historyAvailable,
       historyOnly: session.state === "offline" && !live && historyAvailable,
-      canPrompt: live && lifecycleState === "active",
+      canPrompt: canPrompt(session) && lifecycleState === "active",
+      ...(promptProblem(session) ? { promptProblem: promptProblem(session)! } : {}),
       capabilities: capabilitiesForSession(session),
       lifecycleState,
       managementRevision: metadata?.managementRevision ?? "unmanaged",
@@ -1118,7 +1143,8 @@ export class WorkspaceHub {
       accessMode: session.accessMode,
       historyAvailable: Boolean(session.persisted),
       historyOnly: session.state === "offline" && !isLive(session) && Boolean(session.persisted),
-      canPrompt: isLive(session),
+      canPrompt: canPrompt(session),
+      promptProblem: promptProblem(session),
       capabilities: capabilitiesForSession(session),
     }, connection ? {
       instanceEpoch: connection.instanceEpoch,
@@ -1424,6 +1450,18 @@ function isLive(session: SessionRecord): boolean {
   return Boolean(session.connection && !session.connection.closed);
 }
 
+function promptProblem(session: SessionRecord): SessionSnapshot["promptProblem"] {
+  if (!isLive(session)) return undefined;
+  if (session.snapshot?.promptProblem) return session.snapshot.promptProblem;
+  const model = session.snapshot?.model;
+  if (!model || model === "unknown/unknown") return "model_unavailable";
+  return undefined;
+}
+
+function canPrompt(session: SessionRecord): boolean {
+  return isLive(session) && !promptProblem(session);
+}
+
 function capabilitiesForSession(
   session: SessionRecord,
   activeBranch = true,
@@ -1433,13 +1471,15 @@ function capabilitiesForSession(
     capabilities.push(
       "history.timeline",
       "history.pagination",
+      "history.seek",
       "history.branches",
       "activity.subagents",
       "activity.research",
     );
   }
   if (activeBranch && isLive(session)) {
-    capabilities.push("command.prompt", "command.abort", "interaction.approval");
+    if (canPrompt(session)) capabilities.push("command.prompt");
+    capabilities.push("command.abort", "interaction.approval");
   }
   return capabilities;
 }

@@ -1,6 +1,6 @@
 export const API_VERSION = "ts-phone-api/4" as const;
 export const EVENT_VERSION = "ts-phone-events/3" as const;
-export const SERVICE_VERSION = "0.7.0" as const;
+export const SERVICE_VERSION = "0.7.1" as const;
 
 export type RuntimeState =
   | "offline"
@@ -16,6 +16,7 @@ export type SessionCapability =
   | "history.messages"
   | "history.timeline"
   | "history.pagination"
+  | "history.seek"
   | "history.branches"
   | "activity.tools"
   | "activity.subagents"
@@ -44,6 +45,7 @@ export interface SessionSummary {
   activeAgentRunId: string | null;
   sessionName?: string;
   model?: string;
+  promptProblem?: PromptProblem;
   runtime?: SessionRuntimeSnapshot;
   runtimeState: RuntimeState;
   isStreaming: boolean;
@@ -114,10 +116,13 @@ export interface SessionRuntimeSnapshot {
   updatedAt: string;
 }
 
+export type PromptProblem = "model_unavailable" | "model_auth_missing" | "model_check_failed";
+
 export interface SessionSnapshot {
   sessionId: string;
   sessionName?: string;
   model?: string;
+  promptProblem?: PromptProblem;
   runtime?: SessionRuntimeSnapshot;
   thinkingLevel?: string;
   isStreaming: boolean;
@@ -132,6 +137,8 @@ export interface MessagePage {
   messageIds?: string[];
   hasMore: boolean;
   nextBefore?: string;
+  hasLater?: boolean;
+  nextAfter?: string;
 }
 
 export interface MessageSnapshot extends MessagePage {
@@ -143,6 +150,8 @@ export interface MessageSnapshot extends MessagePage {
 
 export interface MessagePageRequest {
   before?: string;
+  after?: string;
+  edge?: "start";
   limit: number;
 }
 
@@ -212,6 +221,8 @@ export interface TimelinePage {
   history: TimelineHistorySummary;
   hasMore: boolean;
   nextBefore?: string;
+  hasLater?: boolean;
+  nextAfter?: string;
 }
 
 export interface TimelineSnapshot extends TimelinePage {

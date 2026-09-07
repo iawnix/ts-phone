@@ -32,6 +32,9 @@ class ChatHistoryPreview {
     required this.history,
     required this.hasMore,
     required this.before,
+    this.hasLater = false,
+    this.after,
+    this.viewingHistoryWindow = false,
   });
 
   final String revision;
@@ -41,6 +44,9 @@ class ChatHistoryPreview {
   final TimelineHistorySummary? history;
   final bool hasMore;
   final String? before;
+  final bool hasLater;
+  final String? after;
+  final bool viewingHistoryWindow;
 
   bool get isBounded {
     if (messages.length + items.length > 1000) return false;

@@ -73,6 +73,10 @@ test("project and session management is durable, revisioned, and lifecycle-filte
     let session = await data<Record<string, unknown>>(createSessionResponse);
     assert.equal(session.sessionId, "session_2");
     assert.equal(session.accessMode, "observer");
+    const sessionCount = async () => (await data<Record<string, unknown>>(
+      await request("/api/v4/workspaces/ts_002"),
+    )).sessionCount;
+    assert.equal(await sessionCount(), 2);
 
     const archiveSessionResponse = await request(
       "/api/v4/workspaces/ts_002/sessions/session_2/archive",
@@ -81,6 +85,7 @@ test("project and session management is durable, revisioned, and lifecycle-filte
     assert.equal(archiveSessionResponse.status, 200);
     session = await data<Record<string, unknown>>(archiveSessionResponse);
     assert.equal(session.lifecycleState, "archived");
+    assert.equal(await sessionCount(), 1);
     const activeSessions = await data<Array<Record<string, unknown>>>(
       await request("/api/v4/workspaces/ts_002/sessions"),
     );
@@ -95,12 +100,14 @@ test("project and session management is durable, revisioned, and lifecycle-filte
       json("POST", { managementRevision: session.managementRevision }),
     );
     session = await data<Record<string, unknown>>(restoreSessionResponse);
+    assert.equal(await sessionCount(), 2);
     const trashSessionResponse = await request(
       "/api/v4/workspaces/ts_002/sessions/session_2/trash",
       json("POST", { managementRevision: session.managementRevision }),
     );
     session = await data<Record<string, unknown>>(trashSessionResponse);
     assert.equal(session.lifecycleState, "trashed");
+    assert.equal(await sessionCount(), 1);
     assert.equal(typeof session.deletedAt, "string");
     assert.equal(session.purgeAfter, undefined);
     const purgeSessionResponse = await request(

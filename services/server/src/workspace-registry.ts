@@ -4,14 +4,13 @@ import { lstat, mkdir, open, readdir, realpath, rename, rm, type FileHandle } fr
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { HttpError } from "./errors.js";
+import { historyPage } from "./history-page.js";
 import {
   MAX_SNAPSHOT_MESSAGES,
-  boundProjectedMessageRecords,
   projectMessage,
   type ProjectedMessageRecord,
 } from "./message-projection.js";
 import {
-  boundTimelineItems,
   projectTimeline,
   timelineBranchSummary,
   timelineHistorySummary,
@@ -251,17 +250,13 @@ export class WorkspaceRegistry {
     request: MessagePageRequest = { limit: MAX_SNAPSHOT_MESSAGES },
   ): Promise<MessagePage> {
     validatePageRequest(request, "message");
-    const graph = await this.#readPersistedSessionGraph(workspace, session, request.before);
+    const graph = await this.#readPersistedSessionGraph(workspace, session, request.before ?? request.after);
     const messages = activeBranchMessages(graph.entries, graph.activeLeafId);
-    const end = pageEnd(messages, request.before, "Message");
-    const bounded = boundProjectedMessageRecords(messages.slice(0, end), request.limit);
-    if (end > 0 && bounded.records.length === 0) throw historyUnavailable();
-    const hasMore = bounded.omitted > 0;
+    const { records, ...pagination } = historyPage(messages, request);
     return {
-      messages: bounded.records.map((record) => record.message),
-      messageIds: bounded.records.map((record) => record.id),
-      hasMore,
-      ...(hasMore && bounded.records[0] ? { nextBefore: bounded.records[0].id } : {}),
+      messages: records.map((record) => record.message),
+      messageIds: records.map((record) => record.id),
+      ...pagination,
     };
   }
 
@@ -274,7 +269,7 @@ export class WorkspaceRegistry {
     if (request.branch !== undefined && !PI_MESSAGE_ID_PATTERN.test(request.branch)) {
       throw new HttpError(400, "invalid_timeline_branch", "Timeline branch is invalid");
     }
-    const graph = await this.#readPersistedSessionGraph(workspace, session, request.before);
+    const graph = await this.#readPersistedSessionGraph(workspace, session, request.before ?? request.after);
     const selectedLeafId = request.branch ?? graph.activeLeafId;
     if (request.branch !== undefined && !graph.leafIds.includes(request.branch)) {
       throw new HttpError(
@@ -285,25 +280,21 @@ export class WorkspaceRegistry {
     }
     const selectedEntries = activeBranchEntries(graph.entries, selectedLeafId);
     const projection = projectTimeline(selectedEntries);
-    const end = pageEnd(projection.items, request.before, "Timeline");
-    const bounded = boundTimelineItems(projection.items.slice(0, end), request.limit);
-    if (end > 0 && bounded.items.length === 0) throw historyUnavailable();
-    const hasMore = bounded.omitted > 0;
+    const { records, ...pagination } = historyPage(projection.items, request);
     const branches = graph.leafIds.map((leafId) => timelineBranchSummary(
       leafId,
       leafId === graph.activeLeafId,
       activeBranchEntries(graph.entries, leafId),
     ));
     return {
-      items: bounded.items,
+      items: records,
       history: timelineHistorySummary({
         ...(graph.activeLeafId ? { activeBranchId: graph.activeLeafId } : {}),
         ...(selectedLeafId ? { selectedBranchId: selectedLeafId } : {}),
         branches,
         projection,
       }),
-      hasMore,
-      ...(hasMore && bounded.items[0] ? { nextBefore: bounded.items[0].id } : {}),
+      ...pagination,
     };
   }
 
@@ -578,22 +569,12 @@ function validatePageRequest(request: MessagePageRequest, resource: "message" | 
   if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > MAX_SNAPSHOT_MESSAGES) {
     throw new HttpError(400, `invalid_${resource}_limit`, `${capitalize(resource)} page limit must be between 1 and 500`);
   }
-  if (request.before !== undefined && !PI_MESSAGE_ID_PATTERN.test(request.before)) {
+  if ([request.before, request.after].some((cursor) => cursor !== undefined && !PI_MESSAGE_ID_PATTERN.test(cursor))) {
     throw new HttpError(400, `invalid_${resource}_cursor`, `${capitalize(resource)} cursor is invalid`);
   }
-}
-
-function pageEnd(records: readonly { id: string }[], before: string | undefined, resource: string): number {
-  if (before === undefined) return records.length;
-  const end = records.findIndex((record) => record.id === before);
-  if (end < 0) {
-    throw new HttpError(
-      409,
-      "session_history_cursor_invalid",
-      `${resource} cursor is not present in this session history`,
-    );
+  if (request.edge !== undefined && request.edge !== "start") {
+    throw new HttpError(400, `invalid_${resource}_query`, "History edge is invalid");
   }
-  return end;
 }
 
 function capitalize(value: string): string {

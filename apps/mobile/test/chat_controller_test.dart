@@ -9,6 +9,320 @@ import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 
 void main() {
+  test('empty assistant outcomes survive history refresh', () async {
+    final api = FakeGateway()
+      ..snapshot = const TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        messages: [
+          {'role': 'assistant', 'content': [], 'outputState': 'failed'},
+          {'role': 'assistant', 'content': [], 'outputState': 'aborted'},
+        ],
+        lastEventId: 'epoch:0',
+      );
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: api.snapshot.sessionRevision,
+      initialRuntimeState: RuntimeState.idle,
+      accessMode: SessionAccessMode.controller,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    expect(controller.messages.map((message) => message.outputState), [
+      AssistantOutputState.failed,
+      AssistantOutputState.aborted,
+    ]);
+    await controller.refreshMessages();
+    expect(controller.messages.length, 2);
+  });
+
+  test(
+    'history seek follows active appends without changing explicit branches',
+    () async {
+      var leaf = '00000003';
+      TsPhoneTimelineSnapshot page(
+        int index, {
+        bool earlier = false,
+        bool later = false,
+      }) => timelineSnapshot(
+        items: [
+          TimelineMessageItem(
+            id: index.toRadixString(16).padLeft(8, '0'),
+            turnId: '00000000',
+            message: ChatMessage.fromJson(userMessage('message-$index')),
+          ),
+        ],
+        totalItems: 6,
+        hasMore: earlier,
+        nextBefore: earlier ? index.toRadixString(16).padLeft(8, '0') : null,
+        hasLater: later,
+        nextAfter: later ? index.toRadixString(16).padLeft(8, '0') : null,
+        selectedBranchId: leaf,
+        activeBranchId: leaf,
+      );
+      final api = FakeGateway()
+        ..timelineResponder = ({before, branch}) async =>
+            page(3, earlier: true);
+      api.timelineWindowResponder =
+          ({after, required fromStart, branch, required limit}) async {
+            expect(branch, isNull);
+            if (fromStart) {
+              leaf = '00000004';
+              return page(0, later: true);
+            }
+            expect(after, '00000000');
+            leaf = '00000005';
+            return page(1, earlier: true, later: true);
+          };
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+        initialCapabilities: {timelineCapability, 'history.seek'},
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(await controller.jumpToStart(), isTrue);
+      expect(await controller.loadLaterMessages(), isTrue);
+      expect(controller.messages.map((message) => message.text), [
+        'message-0',
+        'message-1',
+      ]);
+      expect(controller.timelineHistory?.selectedBranchId, '00000005');
+      expect(controller.viewingInactiveBranch, isFalse);
+    },
+  );
+
+  test(
+    'history seek is bounded, keeps live events out, and reloads the real tail',
+    () async {
+      const revision = '11111111-1111-4111-8111-111111111111';
+      TsPhoneMessageSnapshot page(
+        int start,
+        int end, {
+        bool later = false,
+      }) => TsPhoneMessageSnapshot(
+        sessionId: 'session-test',
+        sessionRevision: revision,
+        messages: [for (var i = start; i < end; i++) userMessage('message-$i')],
+        messageIds: [
+          for (var i = start; i < end; i++) i.toRadixString(16).padLeft(8, '0'),
+        ],
+        hasMore: start > 0,
+        nextBefore: start > 0 ? start.toRadixString(16).padLeft(8, '0') : null,
+        hasLater: later,
+        nextAfter: later ? (end - 1).toRadixString(16).padLeft(8, '0') : null,
+        lastEventId: 'epoch:0',
+      );
+      final api = FakeGateway()..snapshot = page(502, 505);
+      var requests = 0;
+      api.windowResponder =
+          ({after, required fromStart, required limit}) async {
+            requests++;
+            expect(limit, 200);
+            if (fromStart) {
+              expect(after, isNull);
+              return page(0, 2, later: true);
+            }
+            expect(after, '00000001');
+            return page(2, 4, later: true);
+          };
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: revision,
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+        initialCapabilities: {'history.seek'},
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(await controller.jumpToStart(), isTrue);
+      expect(requests, 1);
+      expect(controller.messages.map((m) => m.text), [
+        'message-0',
+        'message-1',
+      ]);
+      api.addEvent('message_end', {
+        'message': assistantMessage('new live reply'),
+      });
+      api.addEvent('session.snapshot', {
+        'isStreaming': false,
+        'messages': [userMessage('latest snapshot')],
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.messages.length, 2);
+      expect(await controller.loadLaterMessages(), isTrue);
+      expect(controller.messages.map((m) => m.text), [
+        'message-0',
+        'message-1',
+        'message-2',
+        'message-3',
+      ]);
+      api.snapshot = page(504, 506);
+      expect(await controller.returnToLatest(), isTrue);
+      expect(controller.viewingHistoryWindow, isFalse);
+      expect(controller.messages.map((m) => m.text), [
+        'message-504',
+        'message-505',
+      ]);
+      expect(requests, 2);
+    },
+  );
+
+  test(
+    'failed seek preserves the previous list and branch selection',
+    () async {
+      final api = FakeGateway()
+        ..timelineResponder = ({before, branch}) async => timelineSnapshot(
+          items: [
+            TimelineMessageItem(
+              id: '00000002',
+              turnId: '00000001',
+              message: ChatMessage.fromJson(userMessage('branch tail')),
+            ),
+          ],
+          totalItems: 2,
+          hasMore: true,
+          nextBefore: '00000002',
+          selectedBranchId: '00000002',
+          includeCommands: false,
+          branches: const [
+            TimelineBranchSummary(
+              id: '00000002',
+              active: false,
+              itemCount: 2,
+              messageCount: 2,
+              activityCount: 0,
+              turnCount: 1,
+            ),
+          ],
+        );
+      api.timelineWindowResponder =
+          ({after, required fromStart, branch, required limit}) async {
+            expect(branch, '00000002');
+            expect(fromStart, isTrue);
+            expect(limit, 50);
+            throw const TsPhoneApiException('Read failed', statusCode: 409);
+          };
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+        initialCapabilities: {timelineCapability, 'history.seek'},
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(await controller.jumpToStart(), isFalse);
+      expect(controller.messages.single.text, 'branch tail');
+      expect(controller.timelineHistory?.selectedBranchId, '00000002');
+      expect(controller.canSend, isFalse);
+    },
+  );
+
+  test(
+    'model readiness is independent from phone authentication and survives snapshots',
+    () async {
+      final api = FakeGateway();
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+        initialPromptProblem: 'model_unavailable',
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.canSend, isFalse);
+      expect(controller.problem?.code, TsPhoneProblemCode.modelUnavailable);
+      api.addEvent('session.snapshot', {
+        'isStreaming': false,
+        'messages': [],
+        'canPrompt': false,
+        'promptProblem': 'model_auth_missing',
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.problem?.kind, TsPhoneProblemKind.request);
+      expect(controller.problem?.code, TsPhoneProblemCode.modelAuthMissing);
+      api.addEvent('session_state', {'state': 'idle', 'canPrompt': true});
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.problem, isNull);
+      expect(controller.canSend, isTrue);
+    },
+  );
+
+  test('an early input event cannot hide a rejected preflight', () async {
+    final pending = Completer<void>();
+    final api = FakeGateway()..nextSend = pending.future;
+    final controller = ChatController(
+      api: api,
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+      initialRuntimeState: RuntimeState.idle,
+      accessMode: SessionAccessMode.controller,
+      clientMessageIdFactory: () => 'phone-preflight',
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    final send = controller.send('please review');
+    api.addEvent('input', {
+      'text': 'please review',
+      'origin': 'phone',
+      'clientMessageId': 'phone-preflight',
+    });
+    await Future<void>.delayed(Duration.zero);
+    pending.completeError(
+      const TsPhoneApiException(
+        'No API key',
+        statusCode: 409,
+        code: 'model_auth_missing',
+      ),
+    );
+    expect(await send, isFalse);
+    expect(controller.problem?.code, TsPhoneProblemCode.modelAuthMissing);
+    expect(
+      controller.messages.where((m) => m.clientMessageId == 'phone-preflight'),
+      isEmpty,
+    );
+  });
+
+  test(
+    'transport failure retains an uncertain message and never retries it',
+    () async {
+      final api = FakeGateway()
+        ..sendError = const TsPhoneApiException('Unavailable', statusCode: 503);
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(await controller.send('only once'), isFalse);
+      expect(
+        controller.messages.last.deliveryState,
+        ChatDeliveryState.uncertain,
+      );
+      expect(controller.problem?.code, TsPhoneProblemCode.deliveryUncertain);
+      expect(api.sendCalls, 1);
+    },
+  );
+
   test(
     'cached history renders immediately but never grants command authority',
     () async {
@@ -1024,9 +1338,9 @@ void main() {
     () async {
       final api = FakeGateway()
         ..sendError = const TsPhoneApiException(
-          'Unavailable',
-          statusCode: 503,
-          code: 'service_unavailable',
+          'Rejected before model execution',
+          statusCode: 409,
+          code: 'prompt_rejected',
         );
       final controller = ChatController(
         api: api,
@@ -1045,7 +1359,7 @@ void main() {
         controller.messages.any((message) => message.text == 'retry me'),
         isFalse,
       );
-      expect(controller.problem?.code, TsPhoneProblemCode.serviceUnavailable);
+      expect(controller.problem?.code, TsPhoneProblemCode.promptRejected);
     },
   );
 
@@ -1695,13 +2009,51 @@ Map<String, Object?> sessionRuntimeJson({
   'updatedAt': '2026-08-31T06:32:18.000Z',
 };
 
-class FakeGateway implements TsPhoneGateway {
+class FakeGateway implements TsPhoneGateway, TsPhoneHistoryGateway {
+  Future<TsPhoneMessageSnapshot> Function({
+    String? after,
+    required bool fromStart,
+    required int limit,
+  })?
+  windowResponder;
+  Future<TsPhoneTimelineSnapshot> Function({
+    String? after,
+    required bool fromStart,
+    String? branch,
+    required int limit,
+  })?
+  timelineWindowResponder;
+
+  @override
+  Future<TsPhoneMessageSnapshot> getMessageWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    required int limit,
+  }) => windowResponder!(after: after, fromStart: fromStart, limit: limit);
+
+  @override
+  Future<TsPhoneTimelineSnapshot> getTimelineWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    String? branch,
+    required int limit,
+  }) => timelineWindowResponder!(
+    after: after,
+    fromStart: fromStart,
+    branch: branch,
+    limit: limit,
+  );
   final StreamController<TsPhoneEvent> _events =
       StreamController<TsPhoneEvent>.broadcast();
   int _sequence = 0;
   int eventConnectionCount = 0;
   int messageSnapshotCalls = 0;
   int abortCalls = 0;
+  int sendCalls = 0;
   String? lastAbortAgentRunId;
   final List<String?> lastEventIds = <String?>[];
   String? lastMessage;
@@ -1844,6 +2196,7 @@ class FakeGateway implements TsPhoneGateway {
     String message, {
     required String clientMessageId,
   }) async {
+    sendCalls += 1;
     final pending = nextSend;
     nextSend = null;
     if (pending != null) await pending;
@@ -1876,7 +2229,10 @@ TsPhoneTimelineSnapshot timelineSnapshot({
   required int totalItems,
   bool hasMore = false,
   String? nextBefore,
+  bool hasLater = false,
+  String? nextAfter,
   String selectedBranchId = '00000003',
+  String activeBranchId = '00000003',
   bool includeCommands = true,
   List<TimelineBranchSummary>? branches,
 }) {
@@ -1901,16 +2257,19 @@ TsPhoneTimelineSnapshot timelineSnapshot({
       messageCount: totalItems,
       activityCount: 0,
       turnCount: 1,
-      activeBranchId: '00000003',
+      activeBranchId: activeBranchId,
       selectedBranchId: selectedBranchId,
       branches: resolvedBranches,
     ),
     hasMore: hasMore,
     nextBefore: nextBefore,
+    hasLater: hasLater,
+    nextAfter: nextAfter,
     lastEventId: 'epoch:0',
     capabilities: <String>{
       timelineCapability,
       timelinePaginationCapability,
+      'history.seek',
       timelineBranchesCapability,
       if (includeCommands) promptCapability,
       if (includeCommands) abortCapability,

@@ -123,7 +123,52 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'Endpoint';
+  String get endpoint => 'TS Phone server address';
+
+  @override
+  String get copyServerAddress => 'Copy server address';
+
+  @override
+  String get serverAddressCopied => 'Server address copied';
+
+  @override
+  String get copyServerAddressFailed => 'Could not copy server address';
+
+  @override
+  String get loadLaterMessages => 'Load later messages';
+
+  @override
+  String get problemModelUnavailable =>
+      'No model is ready in this TSPi session. Check the model selection on the host.';
+
+  @override
+  String get problemModelAuthMissing =>
+      'The model needs authentication on the TSPi host. Your TS Phone connection is still valid.';
+
+  @override
+  String get problemModelCheckFailed =>
+      'The TSPi host could not verify the model configuration.';
+
+  @override
+  String get problemRuntimeExtensionError =>
+      'An extension failed in this TSPi session. Check the latest messages and host logs.';
+
+  @override
+  String get problemPromptRejected =>
+      'Pi rejected this message before model execution. Your draft has been kept.';
+
+  @override
+  String get problemDeliveryUncertain =>
+      'Message delivery is unconfirmed. Check the latest history before sending again.';
+
+  @override
+  String get messageDeliveryUncertain => 'Delivery unconfirmed';
+
+  @override
+  String get sessionConfiguredModel => 'Startup model';
+
+  @override
+  String get sessionLastModel => 'Last used model';
 
   @override
   String get auth => 'Auth';

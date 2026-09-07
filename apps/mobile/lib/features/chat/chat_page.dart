@@ -69,6 +69,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final TextEditingController _composer = TextEditingController();
   final FocusNode _composerFocus = FocusNode();
   final ScrollController _scroll = ScrollController();
+  final GlobalKey _timelineKey = GlobalKey(debugLabel: 'chat-timeline');
   final GlobalKey _bottomDockKey = GlobalKey(debugLabel: 'chat-bottom-dock');
   final Queue<ExtensionUiRequest> _pendingUiRequests =
       Queue<ExtensionUiRequest>();
@@ -77,6 +78,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _scrollUpdateScheduled = false;
   bool _scrollingToStart = false;
   bool _scrollingToLatest = false;
+  bool _preservingReadingPosition = false;
   bool _showJumpToStart = false;
   bool _showJumpToLatest = false;
   bool _drainingUiRequests = false;
@@ -105,6 +107,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       initialSessionRevision: widget.session.sessionRevision,
       initialSessionTitle: widget.session.sessionName,
       initialSessionRuntime: widget.session.runtime,
+      initialPromptProblem: widget.session.promptProblem,
       initialActiveAgentRunId: widget.session.activeAgentRunId,
       initialRuntimeState: widget.session.runtimeState,
       accessMode: widget.session.accessMode,
@@ -245,7 +248,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     final userScrolling =
         notification is UserScrollNotification &&
         notification.direction != ScrollDirection.idle;
-    if (userStarted || userScrolling) {
+    if (userStarted ||
+        (userScrolling && !_scrollingToStart && !_scrollingToLatest)) {
       _setScrollMode(_ChatScrollMode.reading);
     }
 
@@ -253,10 +257,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         notification is ScrollEndNotification ||
         (notification is UserScrollNotification &&
             notification.direction == ScrollDirection.idle);
-    if (userStopped && _isAtTail(notification.metrics)) {
+    if (userStopped &&
+        _isAtTail(notification.metrics) &&
+        !_controller.viewingHistoryWindow &&
+        !_scrollingToStart) {
       _setScrollMode(_ChatScrollMode.following);
     }
     if ((userScrolling || userStopped) &&
+        !_scrollingToStart &&
+        !_scrollingToLatest &&
+        !_preservingReadingPosition &&
         notification.metrics.extentBefore <= 48 &&
         _controller.canLoadEarlierMessages) {
       unawaited(_loadEarlierMessages());
@@ -296,9 +306,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _isAtTail(ScrollMetrics metrics) => metrics.extentAfter <= 24;
 
   void _updateTimelineNavigationVisibility(ScrollMetrics metrics) {
-    final showStart = metrics.extentBefore > _jumpToStartThreshold;
+    final showStart =
+        metrics.extentBefore > _jumpToStartThreshold ||
+        _controller.canLoadEarlierMessages;
     final showLatest =
-        _scrollMode == _ChatScrollMode.reading && !_isAtTail(metrics);
+        _controller.viewingHistoryWindow ||
+        (_scrollMode == _ChatScrollMode.reading && !_isAtTail(metrics));
     if (!mounted ||
         (showStart == _showJumpToStart && showLatest == _showJumpToLatest)) {
       return;
@@ -318,14 +331,21 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Future<void> _jumpToLatest() async {
-    if (_scrollingToStart || _scrollingToLatest) return;
+    if (_scrollingToStart || _scrollingToLatest || _preservingReadingPosition) {
+      return;
+    }
     ActionFeedback.selection();
-    _setScrollMode(_ChatScrollMode.following);
     setState(() {
       _showJumpToLatest = false;
       _scrollingToLatest = true;
     });
     try {
+      if (_controller.viewingHistoryWindow) {
+        if (!await _controller.returnToLatest() || !mounted) return;
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+      }
+      _setScrollMode(_ChatScrollMode.following);
       if (_scroll.hasClients) {
         final target = _scroll.position.maxScrollExtent;
         if (MediaQuery.disableAnimationsOf(context)) {
@@ -341,6 +361,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     } finally {
       if (mounted) {
         setState(() => _scrollingToLatest = false);
+        if (_scroll.hasClients) {
+          _updateTimelineNavigationVisibility(_scroll.position);
+        }
         if (_scrollMode == _ChatScrollMode.following) {
           _scheduleScrollUpdate();
         }
@@ -349,7 +372,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Future<void> _jumpToStart() async {
-    if (_scrollingToStart || _scrollingToLatest) return;
+    if (_scrollingToStart || _scrollingToLatest || _preservingReadingPosition) {
+      return;
+    }
     ActionFeedback.selection();
     _setScrollMode(_ChatScrollMode.reading);
     setState(() {
@@ -357,6 +382,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       _scrollingToStart = true;
     });
     try {
+      if (!await _controller.jumpToStart() || !mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
       if (_scroll.hasClients) {
         final target = _scroll.position.minScrollExtent;
         if (MediaQuery.disableAnimationsOf(context)) {
@@ -381,41 +409,69 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Future<void> _loadEarlierMessages() async {
     if (!_controller.canLoadEarlierMessages) return;
-    _setScrollMode(_ChatScrollMode.reading);
-    final oldPixels = _scroll.hasClients ? _scroll.position.pixels : null;
-    final oldMaxExtent = _scroll.hasClients
-        ? _scroll.position.maxScrollExtent
-        : null;
-    final loaded = await _controller.loadEarlierMessages();
-    if (!loaded || !mounted) return;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted ||
-        !_scroll.hasClients ||
-        oldPixels == null ||
-        oldMaxExtent == null) {
-      return;
-    }
-    final addedExtent = _scroll.position.maxScrollExtent - oldMaxExtent;
-    _scroll.jumpTo(
-      (oldPixels + addedExtent).clamp(
-        _scroll.position.minScrollExtent,
-        _scroll.position.maxScrollExtent,
-      ),
-    );
-    _updateTimelineNavigationVisibility(_scroll.position);
+    await _preserveReadingPosition(_controller.loadEarlierMessages);
   }
 
   Future<void> _loadAllHistory() async {
     if (!_controller.canLoadEarlierMessages || _controller.loadingAllHistory) {
       return;
     }
+    await _preserveReadingPosition(_controller.loadAllHistory);
+  }
+
+  Iterable<({Key key, Rect rect})> _laidOutHistoryRows() sync* {
+    final root = _timelineKey.currentContext;
+    if (root is! Element) return;
+    final rows = <({Key key, Rect rect})>[];
+    void visit(Element element) {
+      final key = element.widget.key;
+      if (key != null &&
+          (element.widget is ChatMessageView ||
+              element.widget is TimelineActivityView)) {
+        final box = element.findRenderObject();
+        if (box is RenderBox && box.attached && box.hasSize) {
+          rows.add((key: key, rect: box.localToGlobal(Offset.zero) & box.size));
+        }
+        return;
+      }
+      element.visitChildElements(visit);
+    }
+
+    root.visitChildElements(visit);
+    yield* rows;
+  }
+
+  Future<void> _preserveReadingPosition(Future<void> Function() load) async {
+    if (_preservingReadingPosition) return;
+    setState(() => _preservingReadingPosition = true);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      await _prependAtReadingPosition(load);
+    } finally {
+      if (mounted) setState(() => _preservingReadingPosition = false);
+    }
+  }
+
+  Future<void> _prependAtReadingPosition(Future<void> Function() load) async {
     _setScrollMode(_ChatScrollMode.reading);
     final oldPixels = _scroll.hasClients ? _scroll.position.pixels : null;
     final oldMaxExtent = _scroll.hasClients
         ? _scroll.position.maxScrollExtent
         : null;
-    await _controller.loadAllHistory();
-    if (!mounted) return;
+    final viewport = _timelineKey.currentContext?.findRenderObject();
+    final bounds = viewport is RenderBox && viewport.hasSize
+        ? viewport.localToGlobal(Offset.zero) & viewport.size
+        : Rect.zero;
+    final anchor = _laidOutHistoryRows()
+        .where((row) => row.rect.overlaps(bounds))
+        .firstOrNull;
+    await load();
+    if (!mounted ||
+        !_scroll.hasClients ||
+        _scroll.position.pixels != oldPixels) {
+      return;
+    }
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted ||
         !_scroll.hasClients ||
@@ -430,6 +486,24 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         _scroll.position.maxScrollExtent,
       ),
     );
+    // Lazy lists estimate their total extent. Correct against the same visible
+    // message after the coarse jump has laid out its new position.
+    if (anchor != null) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_scroll.hasClients) return;
+      final current = _laidOutHistoryRows()
+          .where((row) => row.key == anchor.key)
+          .firstOrNull;
+      if (current != null) {
+        _scroll.jumpTo(
+          (_scroll.offset + current.rect.top - anchor.rect.top).clamp(
+            _scroll.position.minScrollExtent,
+            _scroll.position.maxScrollExtent,
+          ),
+        );
+      }
+    }
+    _updateTimelineNavigationVisibility(_scroll.position);
   }
 
   Future<void> _selectTimelineBranch(String branchId) async {
@@ -631,6 +705,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       isScrollControlled: true,
       builder: (context) => _SessionDetailsSheet(
         runtime: _controller.sessionRuntime,
+        configuredModel: widget.session.modelRef,
         workspaceName: widget.workspace.name,
         accessMode: _controller.accessMode,
         runtimeState: _controller.runtimeState,
@@ -782,7 +857,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                   PopupMenuItem(
                     value: 'start',
-                    enabled: _showJumpToStart,
+                    enabled:
+                        (_showJumpToStart ||
+                            _controller.canLoadEarlierMessages) &&
+                        !_controller.historyNavigationInProgress &&
+                        !_preservingReadingPosition,
                     child: Row(
                       children: [
                         const Icon(Icons.vertical_align_top, size: 20),
@@ -830,6 +909,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             _controller.hasStreamingText;
         return _buildMessagesForState(
           _MessageTimeline(
+            key: _timelineKey,
             controller: _controller,
             messagesListenable: _controller.messagesUpdates,
             streamingTextListenable: _controller.streamingTextUpdates,
@@ -1057,7 +1137,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Widget _buildTimelineNavigation() {
     final color = Theme.of(context).colorScheme.primary;
-    final navigationBusy = _scrollingToStart || _scrollingToLatest;
+    final navigationBusy =
+        _scrollingToStart || _scrollingToLatest || _preservingReadingPosition;
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(24),
@@ -1369,9 +1450,11 @@ class _SessionDetailsSheet extends StatelessWidget {
     required this.accessMode,
     required this.runtimeState,
     required this.sessionId,
+    this.configuredModel,
   });
 
   final SessionRuntimeSnapshot? runtime;
+  final String? configuredModel;
   final String workspaceName;
   final SessionAccessMode accessMode;
   final RuntimeState runtimeState;
@@ -1437,6 +1520,17 @@ class _SessionDetailsSheet extends StatelessWidget {
             ),
           ],
           const SizedBox(height: TsPhoneSpacing.medium),
+          if (runtime == null && configuredModel != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TsPhoneSpacing.medium,
+              ),
+              child: _RuntimeDetailRow(
+                icon: Icons.tune_rounded,
+                label: l10n.sessionConfiguredModel,
+                value: configuredModel!,
+              ),
+            ),
           Padding(
             key: const ValueKey<String>('session-identity-group'),
             padding: const EdgeInsets.symmetric(
@@ -1477,7 +1571,9 @@ class _SessionDetailsSheet extends StatelessWidget {
                 children: <Widget>[
                   _RuntimeDetailRow(
                     icon: Icons.smart_toy_outlined,
-                    label: l10n.sessionModel,
+                    label: lastKnown
+                        ? l10n.sessionLastModel
+                        : l10n.sessionModel,
                     value: runtime!.model.knownId ?? l10n.dataNotProvided,
                   ),
                   const _RuntimeDetailDivider(),
@@ -1711,6 +1807,7 @@ class _RuntimeDetailDivider extends StatelessWidget {
 
 class _MessageTimeline extends StatelessWidget {
   const _MessageTimeline({
+    super.key,
     required this.controller,
     required this.messagesListenable,
     required this.streamingTextListenable,
@@ -1847,6 +1944,9 @@ class _MessageTimeline extends StatelessWidget {
     required NullableIndexedWidgetBuilder itemBuilder,
   }) {
     final headerOffset = header == null ? 0 : 1;
+    final showLater =
+        controller.canLoadLaterMessages ||
+        controller.historyNavigationInProgress;
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: onScrollMetricsNotification,
       child: NotificationListener<ScrollNotification>(
@@ -1856,9 +1956,21 @@ class _MessageTimeline extends StatelessWidget {
           controller: scrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(0, 8, 0, bottomContentInset + 8),
-          itemCount: itemCount + headerOffset,
+          itemCount: itemCount + headerOffset + (showLater ? 1 : 0),
           itemBuilder: (context, index) {
             if (header != null && index == 0) return header!;
+            if (index == itemCount + headerOffset && showLater) {
+              return Center(
+                child: TextButton.icon(
+                  key: const ValueKey<String>('load-later-messages'),
+                  onPressed: controller.canLoadLaterMessages
+                      ? controller.loadLaterMessages
+                      : null,
+                  icon: const Icon(Icons.arrow_downward_rounded, size: 18),
+                  label: Text(context.l10n.loadLaterMessages),
+                ),
+              );
+            }
             return itemBuilder(context, index - headerOffset);
           },
         ),

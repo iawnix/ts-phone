@@ -1675,7 +1675,7 @@ void main() {
   });
 
   testWidgets(
-    'reaching the top loads earlier history without losing position',
+    'jump to start seeks the real first page and latest reloads the tail',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1;
@@ -1708,6 +1708,8 @@ void main() {
             24,
             (index) => index.toRadixString(16).padLeft(8, '0'),
           ),
+          hasLater: true,
+          nextAfter: '00000017',
           lastEventId: 'epoch:0',
         ),
       );
@@ -1724,7 +1726,14 @@ void main() {
               liveSessionCount: 1,
               sessionCount: 1,
             ),
-            session: controllerSession,
+            session: const SessionSummary(
+              sessionId: 'session-test',
+              sessionRevision: '11111111-1111-4111-8111-111111111111',
+              runtimeState: RuntimeState.idle,
+              isStreaming: false,
+              accessMode: SessionAccessMode.controller,
+              capabilities: {'history.seek'},
+            ),
             gateway: gateway,
           ),
         ),
@@ -1740,16 +1749,72 @@ void main() {
       await tester.tap(find.text('回到会话开始'));
       await tester.pumpAndSettle();
 
-      expect(gateway.lastBefore, '00000018');
+      expect(gateway.windowRequests, 1);
+      expect(gateway.lastBefore, isNull);
       expect(gateway.lastLimit, 200);
-      expect(position.extentBefore, greaterThan(0));
-
-      position.jumpTo(position.minScrollExtent);
-      await tester.pumpAndSettle();
+      expect(position.extentBefore, lessThan(1));
       expect(find.textContaining('更早消息 0'), findsOneWidget);
+      expect(find.byTooltip('回到最新消息'), findsOneWidget);
+      await tester.tap(find.byTooltip('回到最新消息'));
+      // Stream cancellation completes outside the widget clock before refresh.
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(position.extentAfter, lessThan(1));
+      expect(find.textContaining('当前消息 47'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('prepending history preserves the visible reading anchor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    TsPhoneMessageSnapshot page(int start) => TsPhoneMessageSnapshot(
+      sessionId: controllerSession.sessionId,
+      sessionRevision: controllerSession.sessionRevision,
+      messages: [
+        for (var i = start; i < start + 24; i++)
+          userMessage('消息 $i\n历史分页的阅读位置。'),
+      ],
+      messageIds: [
+        for (var i = start; i < start + 24; i++)
+          i.toRadixString(16).padLeft(8, '0'),
+      ],
+      hasMore: start > 0,
+      nextBefore: start > 0 ? '00000018' : null,
+      lastEventId: 'epoch:0',
+    );
+    final earlier = Completer<TsPhoneMessageSnapshot>();
+    final gateway = UiFakeGateway(snapshot: page(24))
+      ..earlierResponse = earlier.future;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatPage(
+          settings: _settings,
+          workspace: offlineWorkspace,
+          session: controllerSession,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final list = tester.widget<ListView>(
+      find.byKey(const ValueKey('chat-message-list')),
+    );
+    list.controller!.jumpTo(0);
+    await tester.pump();
+    expect(gateway.lastBefore, '00000018');
+    final anchor = find.byKey(const ValueKey('chat-message-00000018'));
+    final anchorY = tester.getTopLeft(anchor).dy;
+    earlier.complete(page(0));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(anchor).dy, closeTo(anchorY, 1));
+    expect(list.controller!.position.pixels, greaterThan(0));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'structured timeline exposes activity progress and branch history',
@@ -2397,7 +2462,31 @@ const offlineWorkspace = WorkspaceSummary(
   sessionCount: 1,
 );
 
-class UiFakeGateway implements TsPhoneGateway {
+class UiFakeGateway implements TsPhoneGateway, TsPhoneHistoryGateway {
+  int windowRequests = 0;
+
+  @override
+  Future<TsPhoneMessageSnapshot> getMessageWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    required int limit,
+  }) async {
+    windowRequests += 1;
+    lastLimit = limit;
+    return earlierSnapshot!;
+  }
+
+  @override
+  Future<TsPhoneTimelineSnapshot> getTimelineWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    String? branch,
+    required int limit,
+  }) => throw UnimplementedError();
   UiFakeGateway({
     this.workspaces = const <WorkspaceSummary>[],
     this.sessions = const <SessionSummary>[controllerSession],
@@ -2418,6 +2507,7 @@ class UiFakeGateway implements TsPhoneGateway {
   List<SessionSummary> sessions;
   TsPhoneMessageSnapshot snapshot;
   TsPhoneMessageSnapshot? earlierSnapshot;
+  Future<TsPhoneMessageSnapshot>? earlierResponse;
   String? lastBefore;
   int? lastLimit;
   final Object? listError;
@@ -2654,6 +2744,7 @@ class UiFakeGateway implements TsPhoneGateway {
   }) async {
     lastBefore = before;
     lastLimit = limit;
+    if (before != null && earlierResponse != null) return earlierResponse!;
     final earlier = earlierSnapshot;
     if (before != null && earlier != null) return earlier;
     return snapshot;

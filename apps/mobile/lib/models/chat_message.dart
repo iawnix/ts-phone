@@ -2,7 +2,7 @@ import 'dart:convert';
 
 enum ChatRole { user, assistant, tool, system }
 
-enum ChatDeliveryState { sending, synchronizing }
+enum ChatDeliveryState { sending, synchronizing, uncertain }
 
 enum AssistantOutputState { empty, notDisplayed, failed, aborted }
 
@@ -109,6 +109,9 @@ class ChatMessage {
   final String? origin;
   final ChatDeliveryState? deliveryState;
   final AssistantOutputState? outputState;
+
+  bool get hasVisibleContent =>
+      text.isNotEmpty || tools.isNotEmpty || outputState != null;
 
   bool get hasInterruptedOutput =>
       outputState == AssistantOutputState.failed ||

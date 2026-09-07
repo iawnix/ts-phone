@@ -5,6 +5,7 @@ import { isAbsolute } from "node:path";
 import { HttpError } from "../errors.js";
 import type { SessionAccessMode } from "../types.js";
 import { runLifecycle, type LifecycleGuard, type LifecyclePreflight } from "./lifecycle-client.js";
+import { WorkerRpc } from "./worker-rpc.js";
 
 const MAX_DIAGNOSTIC_BYTES = 16 * 1024;
 
@@ -30,6 +31,7 @@ interface WorkerRecord {
   child: ChildProcessWithoutNullStreams;
   exit: Promise<WorkerExit>;
   stderr: BoundedText;
+  rpc: WorkerRpc;
 }
 
 export class WorkerSupervisor {
@@ -38,6 +40,7 @@ export class WorkerSupervisor {
   readonly #bridgeSocketPath: string;
   readonly #bridgeSecretPath: string;
   readonly #workers = new Map<string, WorkerRecord>();
+  onRuntimeError: ((request: WorkerStartRequest, error: HttpError) => void) | undefined;
 
   constructor(
     tspiPath: string | undefined,
@@ -81,19 +84,21 @@ export class WorkerSupervisor {
       stdio: ["pipe", "pipe", "pipe"],
     });
     const stderr = new BoundedText(MAX_DIAGNOSTIC_BYTES);
-    child.stdout.resume();
+    const rpc = new WorkerRpc(child.stdin, child.stdout, (error) => this.onRuntimeError?.(request, error));
     child.stderr.on("data", (chunk: Buffer | string) => stderr.append(chunk));
     const exit = new Promise<WorkerExit>((resolve) => {
       child.once("error", (error) => {
+        rpc.close();
         this.#workers.delete(key);
         resolve({ code: null, signal: null, diagnostic: error.message });
       });
       child.once("exit", (code, signal) => {
+        rpc.close();
         this.#workers.delete(key);
         resolve({ code, signal, diagnostic: stderr.value });
       });
     });
-    this.#workers.set(key, { child, exit, stderr });
+    this.#workers.set(key, { child, exit, stderr, rpc });
     await new Promise<void>((resolve, reject) => {
       child.once("spawn", resolve);
       child.once("error", reject);
@@ -112,6 +117,12 @@ export class WorkerSupervisor {
     if (settled) return;
     record.child.kill("SIGKILL");
     await record.exit;
+  }
+
+  async prompt(workspaceId: string, sessionId: string, message: string, followUp: boolean): Promise<void> {
+    const worker = this.#workers.get(workerKey(workspaceId, sessionId));
+    if (!worker) throw new HttpError(409, "session_offline", "TSPi Worker is offline");
+    await worker.rpc.prompt(message, followUp);
   }
 
   async inspect(workspaceId: string, workspaceRoot: string): Promise<LifecyclePreflight> {

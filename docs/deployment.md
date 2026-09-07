@@ -21,9 +21,9 @@ the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.7.0 | API v4, Events v3, Bridge v3, persistent management and lifecycle guards |
-| TSPi package | 0.13.0 | Bridge v3, exact session Workers, preflight/2 and guard/1 |
-| Mobile app | 0.16.0+41 | API v4, work home, explicit conversation navigation and sidebar |
+| TS Phone server | 0.7.1 | API v4, Events v3, Bridge v3, bidirectional history and native Worker prompt receipts |
+| TSPi package | 0.13.1 | Bridge v3, exact session Workers, model readiness and guard/1 |
+| Mobile app | 0.16.1+42 | API v4, bounded history navigation, active session counts and connection details |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in

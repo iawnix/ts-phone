@@ -121,7 +121,47 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'Endpoint';
+  String get endpoint => 'TS Phone 服务地址';
+
+  @override
+  String get copyServerAddress => '复制服务地址';
+
+  @override
+  String get serverAddressCopied => '已复制服务地址';
+
+  @override
+  String get copyServerAddressFailed => '无法复制服务地址';
+
+  @override
+  String get loadLaterMessages => '加载后续消息';
+
+  @override
+  String get problemModelUnavailable => '当前 TSPi 会话没有可用模型，请检查主机上的模型选择。';
+
+  @override
+  String get problemModelAuthMissing =>
+      '模型需要在 TSPi 主机上配置认证。手机与 TS Phone 的连接仍然有效。';
+
+  @override
+  String get problemModelCheckFailed => 'TSPi 主机无法核验模型配置。';
+
+  @override
+  String get problemRuntimeExtensionError => 'TSPi 会话中的扩展运行出错，请核对最新消息和主机日志。';
+
+  @override
+  String get problemPromptRejected => 'Pi 在模型执行前拒绝了这条消息，草稿已保留。';
+
+  @override
+  String get problemDeliveryUncertain => '尚未确认消息是否送达。请先核对最新会话记录，再决定是否重发。';
+
+  @override
+  String get messageDeliveryUncertain => '送达状态待确认';
+
+  @override
+  String get sessionConfiguredModel => '启动模型';
+
+  @override
+  String get sessionLastModel => '上次使用的模型';
 
   @override
   String get auth => '认证';
@@ -471,7 +511,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionModel => '模型';
 
   @override
-  String get sessionProvider => 'Provider';
+  String get sessionProvider => '模型服务商';
 
   @override
   String get sessionContextWindow => '上下文';

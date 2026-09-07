@@ -44,6 +44,12 @@ enum TsPhoneProblemCode {
   preflightUnavailable,
   managementCapacity,
   managementUnsupported,
+  modelUnavailable,
+  modelAuthMissing,
+  modelCheckFailed,
+  promptRejected,
+  runtimeExtensionError,
+  deliveryUncertain,
 }
 
 class TsPhoneProblem {
@@ -67,6 +73,19 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
     );
   }
   if (error is TsPhoneApiException) {
+    final promptCode = switch (error.code) {
+      'model_unavailable' => TsPhoneProblemCode.modelUnavailable,
+      'model_auth_missing' => TsPhoneProblemCode.modelAuthMissing,
+      'model_check_failed' => TsPhoneProblemCode.modelCheckFailed,
+      'prompt_rejected' => TsPhoneProblemCode.promptRejected,
+      'runtime_extension_error' => TsPhoneProblemCode.runtimeExtensionError,
+      'command_ambiguous' ||
+      'bridge_disconnected' => TsPhoneProblemCode.deliveryUncertain,
+      _ => null,
+    };
+    if (promptCode != null) {
+      return TsPhoneProblem(TsPhoneProblemKind.request, promptCode);
+    }
     if (error.code == 'management_unsupported') {
       return const TsPhoneProblem(
         TsPhoneProblemKind.incompatible,
@@ -213,6 +232,8 @@ class TsPhoneMessageSnapshot {
     this.messageIds,
     this.hasMore = false,
     this.nextBefore,
+    this.hasLater = false,
+    this.nextAfter,
   });
 
   final String sessionId;
@@ -223,6 +244,8 @@ class TsPhoneMessageSnapshot {
   final List<String>? messageIds;
   final bool hasMore;
   final String? nextBefore;
+  final bool hasLater;
+  final String? nextAfter;
 }
 
 class TsPhoneTimelineSnapshot {
@@ -236,6 +259,8 @@ class TsPhoneTimelineSnapshot {
     required this.capabilities,
     this.activeAgentRunId,
     this.nextBefore,
+    this.hasLater = false,
+    this.nextAfter,
   });
 
   final String sessionId;
@@ -244,9 +269,29 @@ class TsPhoneTimelineSnapshot {
   final TimelineHistorySummary history;
   final bool hasMore;
   final String? nextBefore;
+  final bool hasLater;
+  final String? nextAfter;
   final String lastEventId;
   final Set<String> capabilities;
   final String? activeAgentRunId;
+}
+
+abstract interface class TsPhoneHistoryGateway {
+  Future<TsPhoneMessageSnapshot> getMessageWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    required int limit,
+  });
+  Future<TsPhoneTimelineSnapshot> getTimelineWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    String? branch,
+    required int limit,
+  });
 }
 
 abstract interface class TsPhoneGateway {
@@ -364,7 +409,8 @@ abstract interface class TsPhoneManagementGateway {
   );
 }
 
-class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
+class TsPhoneApi
+    implements TsPhoneGateway, TsPhoneManagementGateway, TsPhoneHistoryGateway {
   TsPhoneApi(
     this.settings, {
     http.Client? client,
@@ -621,6 +667,8 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
     String workspaceId,
     String sessionId, {
     String? before,
+    String? after,
+    bool fromStart = false,
     int? limit,
   }) async {
     if (limit != null && (limit < 1 || limit > 500)) {
@@ -632,6 +680,8 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
         _sessionPath(workspaceId, sessionId, 'messages'),
         queryParameters: <String, String>{
           'before': ?before,
+          'after': ?after,
+          if (fromStart) 'edge': 'start',
           if (limit != null) 'limit': '$limit',
         },
       ),
@@ -678,6 +728,7 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
         (!hasMore && rawNextBefore != null)) {
       throw const FormatException('Message pagination is invalid');
     }
+    final hasLater = _validateLaterCursor(data, messageIds ?? const []);
     return TsPhoneMessageSnapshot(
       sessionId: responseSessionId,
       sessionRevision: sessionRevision,
@@ -687,6 +738,8 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
       messageIds: messageIds,
       hasMore: hasMore,
       nextBefore: rawNextBefore as String?,
+      hasLater: hasLater,
+      nextAfter: data['nextAfter'] as String?,
     );
   }
 
@@ -695,6 +748,8 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
     String workspaceId,
     String sessionId, {
     String? before,
+    String? after,
+    bool fromStart = false,
     int? limit,
     String? branch,
   }) async {
@@ -707,6 +762,8 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
         _sessionPath(workspaceId, sessionId, 'timeline'),
         queryParameters: <String, String>{
           'before': ?before,
+          'after': ?after,
+          if (fromStart) 'edge': 'start',
           if (limit != null) 'limit': '$limit',
           'branch': ?branch,
         },
@@ -740,6 +797,10 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
       throw const FormatException('Timeline pagination is invalid');
     }
     final history = TimelineHistorySummary.fromJson(data['history']);
+    final hasLater = _validateLaterCursor(
+      data,
+      items.map((item) => item.id).toList(),
+    );
     if (history.totalItems < items.length) {
       throw const FormatException('Timeline history totals are invalid');
     }
@@ -750,12 +811,60 @@ class TsPhoneApi implements TsPhoneGateway, TsPhoneManagementGateway {
       history: history,
       hasMore: hasMore,
       nextBefore: nextBefore as String?,
+      hasLater: hasLater,
+      nextAfter: data['nextAfter'] as String?,
       lastEventId: data['lastEventId']! as String,
       capabilities: Set<String>.unmodifiable(
         (data['capabilities']! as List).cast<String>(),
       ),
       activeAgentRunId: data['activeAgentRunId'] as String?,
     );
+  }
+
+  @override
+  Future<TsPhoneMessageSnapshot> getMessageWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    required int limit,
+  }) => getMessages(
+    workspaceId,
+    sessionId,
+    after: after,
+    fromStart: fromStart,
+    limit: limit,
+  );
+
+  @override
+  Future<TsPhoneTimelineSnapshot> getTimelineWindow(
+    String workspaceId,
+    String sessionId, {
+    String? after,
+    bool fromStart = false,
+    String? branch,
+    required int limit,
+  }) => getTimeline(
+    workspaceId,
+    sessionId,
+    after: after,
+    fromStart: fromStart,
+    branch: branch,
+    limit: limit,
+  );
+
+  static bool _validateLaterCursor(
+    Map<String, Object?> data,
+    List<String> ids,
+  ) {
+    final hasLater = data['hasLater'] ?? false;
+    final after = data['nextAfter'];
+    if (hasLater is! bool ||
+        (hasLater && (ids.isEmpty || after != ids.last)) ||
+        (!hasLater && after != null)) {
+      throw const FormatException('Forward history pagination is invalid');
+    }
+    return hasLater;
   }
 
   @override

@@ -275,8 +275,8 @@ function assertNoQuery(url: URL, label: string): void {
 
 function validateMessagePageRequest(url: URL): MessagePageRequest {
   for (const key of url.searchParams.keys()) {
-    if (key !== "before" && key !== "limit") {
-      throw new HttpError(400, "invalid_message_query", "Messages only accepts before and limit query parameters");
+    if (key !== "before" && key !== "limit" && key !== "after" && key !== "edge") {
+      throw new HttpError(400, "invalid_message_query", "Messages accepts one of before, after, or edge, plus limit");
     }
   }
   if (url.searchParams.getAll("before").length > 1 || url.searchParams.getAll("limit").length > 1) {
@@ -294,16 +294,16 @@ function validateMessagePageRequest(url: URL): MessagePageRequest {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
     throw new HttpError(400, "invalid_message_limit", "Message page limit must be between 1 and 500");
   }
-  return { ...(rawBefore === null ? {} : { before: rawBefore }), limit };
+  return { ...(rawBefore === null ? {} : { before: rawBefore }), ...validateHistoryPosition(url), limit };
 }
 
 function validateTimelinePageRequest(url: URL): TimelinePageRequest {
   for (const key of url.searchParams.keys()) {
-    if (key !== "before" && key !== "limit" && key !== "branch") {
+    if (key !== "before" && key !== "limit" && key !== "branch" && key !== "after" && key !== "edge") {
       throw new HttpError(
         400,
         "invalid_timeline_query",
-        "Timeline only accepts before, limit, and branch query parameters",
+        "Timeline accepts one of before, after, or edge, plus limit and branch",
       );
     }
   }
@@ -331,8 +331,20 @@ function validateTimelinePageRequest(url: URL): TimelinePageRequest {
   return {
     ...(rawBefore === null ? {} : { before: rawBefore }),
     ...(rawBranch === null ? {} : { branch: rawBranch }),
+    ...validateHistoryPosition(url),
     limit,
   };
+}
+
+function validateHistoryPosition(url: URL): { after?: string; edge?: "start" } {
+  const after = url.searchParams.get("after");
+  const edge = url.searchParams.get("edge");
+  if (url.searchParams.getAll("after").length > 1 || url.searchParams.getAll("edge").length > 1
+    || [url.searchParams.get("before"), after, edge].filter((value) => value !== null).length > 1
+    || (after !== null && !/^[0-9a-f]{8}$/.test(after)) || (edge !== null && edge !== "start")) {
+    throw new HttpError(400, "invalid_history_query", "Choose one valid history position");
+  }
+  return { ...(after === null ? {} : { after }), ...(edge === null ? {} : { edge: "start" }) };
 }
 
 function decodeSegments(pathname: string): string[] {

@@ -317,8 +317,86 @@ abstract class AppLocalizations {
   /// No description provided for @endpoint.
   ///
   /// In en, this message translates to:
-  /// **'Endpoint'**
+  /// **'TS Phone server address'**
   String get endpoint;
+
+  /// No description provided for @copyServerAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy server address'**
+  String get copyServerAddress;
+
+  /// No description provided for @serverAddressCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Server address copied'**
+  String get serverAddressCopied;
+
+  /// No description provided for @copyServerAddressFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not copy server address'**
+  String get copyServerAddressFailed;
+
+  /// No description provided for @loadLaterMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Load later messages'**
+  String get loadLaterMessages;
+
+  /// No description provided for @problemModelUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No model is ready in this TSPi session. Check the model selection on the host.'**
+  String get problemModelUnavailable;
+
+  /// No description provided for @problemModelAuthMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The model needs authentication on the TSPi host. Your TS Phone connection is still valid.'**
+  String get problemModelAuthMissing;
+
+  /// No description provided for @problemModelCheckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The TSPi host could not verify the model configuration.'**
+  String get problemModelCheckFailed;
+
+  /// No description provided for @problemRuntimeExtensionError.
+  ///
+  /// In en, this message translates to:
+  /// **'An extension failed in this TSPi session. Check the latest messages and host logs.'**
+  String get problemRuntimeExtensionError;
+
+  /// No description provided for @problemPromptRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Pi rejected this message before model execution. Your draft has been kept.'**
+  String get problemPromptRejected;
+
+  /// No description provided for @problemDeliveryUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'Message delivery is unconfirmed. Check the latest history before sending again.'**
+  String get problemDeliveryUncertain;
+
+  /// No description provided for @messageDeliveryUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery unconfirmed'**
+  String get messageDeliveryUncertain;
+
+  /// No description provided for @sessionConfiguredModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup model'**
+  String get sessionConfiguredModel;
+
+  /// No description provided for @sessionLastModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Last used model'**
+  String get sessionLastModel;
 
   /// No description provided for @auth.
   ///

@@ -580,6 +580,21 @@ void main() {
           await tester.tap(find.byKey(const ValueKey('workspace-settings')));
           await tester.pumpAndSettle();
           await capture(tester, '$locale-$dark-${size.width}-settings');
+          final details = find.byKey(
+            const ValueKey('connection-details-toggle'),
+          );
+          await tester.ensureVisible(details);
+          await tester.pumpAndSettle();
+          await tester.tap(details);
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(find.byType(SelectableText));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('copy-server-address')),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+          await capture(tester, '$locale-$dark-${size.width}-settings-details');
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           await openRecent(tester);

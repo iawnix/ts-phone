@@ -62,9 +62,12 @@ Both reads and writes enforce a 1 MiB UTF-8 limit. An over-capacity change fails
 before creating a temporary file and preserves the previous disk and memory
 snapshot.
 
-The lifecycle is `active`, `archived`, or `trashed`. Recently Deleted has no
-background expiry: data remains until explicit restoration or permanent
-deletion. Session deletion quarantines only its validated Pi JSONL. Project
+The lifecycle is `active`, `archived`, or `trashed`. `sessionCount` and
+`liveSessionCount` include only active sessions, using the same lifecycle
+filter as the ordinary session list. Archive, trash, and restore update these
+counts at the Host. Recently Deleted has no background expiry: data remains
+until explicit restoration or permanent deletion. Session deletion quarantines
+only its validated Pi JSONL. Project
 deletion quarantines the complete workspace and first runs TSPi's read-only
 scientific preflight. Active Workers, remote calculations, pending approvals,
 unresolved remote effects, or unverifiable operational state block deletion.
@@ -148,6 +151,29 @@ and reconnect using the new checkpoint before enabling input again.
 
 ## Synchronization
 
+### Prompt Readiness And Receipts
+
+A connected socket is not model readiness. Session summaries and snapshot/state
+events expose `promptProblem` when the model is unavailable, its authentication
+is unconfigured, or the local model check fails. These states omit
+`command.prompt` and reject message submission with a model-specific 409, not a
+Phone-token authentication error. No provider key or raw error body is exposed.
+
+For Host-owned Workers, prompt dispatch uses the private Pi RPC stdin/stdout
+transport. Only the response with the matching request ID and `command=prompt`
+acknowledges preflight. Native `input` precedes preflight and is not a delivery
+receipt. After success the Host publishes one correlated phone input with
+`preflightAccepted=true` and the original `clientMessageId`. Retries with that
+same ID reuse the command result. Timeouts/disconnects remain ambiguous and
+never trigger automatic resend. Worker extension errors are consumed and
+published as safe `runtime.error` codes instead of discarded stdout.
+
+Manually started TUI sessions retain the extension bridge command path, whose
+acknowledgement means dispatch, not completed preflight. The Bridge checks model
+readiness before dispatch; clients do not treat its early input event as proof
+that a later failed request succeeded. Assistant failure/abort state survives
+message projection without exposing provider error bodies.
+
 Every session has an independent bounded event journal. SSE reconnects replay
 events after Last-Event-ID. Slow clients are disconnected before unbounded
 buffer growth and can recover from the session snapshot.
@@ -161,10 +187,27 @@ counts. Neither endpoint creates or updates a second conversation store.
 
 Each response page returns at most 500 projected items and six MiB. Stable Pi
 entry IDs form an opaque `before` cursor, so the phone can prepend older pages
-without receiving raw JSONL. The phone requests the latest 50 items before
+without receiving raw JSONL. With `history.seek`, `edge=start` selects the first
+page of the requested branch; `after` pages forward. These three position
+parameters are mutually exclusive. `hasMore`/`nextBefore` describe earlier
+content; `hasLater`/`nextAfter` describe later content. Limits apply in both
+directions, including the first page. An omitted position selects the tail.
+The phone requests the latest 50 items before
 connecting the event stream. Earlier pages load only on demand; explicit
 load-all remains available. Page size is client policy, while pagination and
 byte limits remain server-enforced mechanism.
+
+Jump to start replaces the visible window with one first-page request, not a
+download of the whole session. Later pages load explicitly. Live content never
+fills gaps in that history window or takes over its scroll position. Jump to
+latest reads a fresh tail checkpoint before resuming live following. Failed
+navigation retains the previous window; an in-flight result for an obsolete
+session revision cannot replace it.
+
+Prepending history preserves the visible message position. The page uses the
+list's extent for the initial offset and corrects it against the same rendered
+message, so lazy layout estimates do not shift the text being read. Assistant
+failure and abortion records remain visible even when their text is empty.
 
 The registry caches parsed session graphs for up to eight files and 32 MiB of
 source data. Every lookup opens the file with the existing safety checks and
