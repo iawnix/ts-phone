@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/app_theme_preference.dart';
@@ -14,7 +16,16 @@ abstract interface class SettingsStore {
   Future<void> clear();
 }
 
-class SecureSettingsStore implements SettingsStore {
+abstract interface class ConversationSelectionStore {
+  Future<(String, String)?> loadConversation(String endpoint);
+  Future<void> saveConversation(
+    String endpoint,
+    String workspace,
+    String session,
+  );
+}
+
+class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
   SecureSettingsStore({FlutterSecureStorage? storage})
     : _storage =
           storage ??
@@ -29,6 +40,7 @@ class SecureSettingsStore implements SettingsStore {
   static const _tokenKey = 'auth_token';
   static const _themeKey = 'theme_mode';
   static const _localeKey = 'locale_mode';
+  static const _conversationKey = 'last_conversation';
   final FlutterSecureStorage _storage;
 
   @override
@@ -48,9 +60,46 @@ class SecureSettingsStore implements SettingsStore {
 
   @override
   Future<void> save(ConnectionSettings settings) async {
+    final previous = await load();
+    if (previous?.serverUrl != settings.serverUrl ||
+        previous?.token != settings.token) {
+      await _storage.delete(key: _conversationKey);
+    }
     await _storage.write(key: _serverKey, value: settings.serverUrl);
     await _storage.write(key: _tokenKey, value: settings.token);
   }
+
+  @override
+  Future<(String, String)?> loadConversation(String endpoint) async {
+    final raw = await _storage.read(key: _conversationKey);
+    if (raw == null) return null;
+    try {
+      final value = jsonDecode(raw);
+      if (value is Map &&
+          value['endpoint'] == endpoint &&
+          value['workspace'] is String &&
+          value['session'] is String) {
+        return (value['workspace'] as String, value['session'] as String);
+      }
+    } on FormatException {
+      return null;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> saveConversation(
+    String endpoint,
+    String workspace,
+    String session,
+  ) => _storage.write(
+    key: _conversationKey,
+    value: jsonEncode({
+      'endpoint': endpoint,
+      'workspace': workspace,
+      'session': session,
+    }),
+  );
 
   @override
   Future<AppThemePreference> loadThemePreference() async {
@@ -79,6 +128,7 @@ class SecureSettingsStore implements SettingsStore {
     await Future.wait(<Future<void>>[
       _storage.delete(key: _serverKey),
       _storage.delete(key: _tokenKey),
+      _storage.delete(key: _conversationKey),
     ]);
   }
 }

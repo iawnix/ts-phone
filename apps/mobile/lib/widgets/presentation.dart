@@ -730,9 +730,7 @@ class TsSettingsSection extends StatelessWidget {
               ),
             ),
           ),
-          TsContentSurface(
-            child: Material(color: Colors.transparent, child: child),
-          ),
+          Material(color: Colors.transparent, child: child),
           if (footer case final value?)
             Padding(
               padding: const EdgeInsets.fromLTRB(

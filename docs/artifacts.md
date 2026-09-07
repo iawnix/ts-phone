@@ -1,5 +1,25 @@
 # Build Artifacts
 
+## Current Source
+
+Mobile `0.16.0+41` opens a work home with recent conversations and projects,
+with explicit navigation, a session sidebar and a single expanding text
+composer. Cold start requests summary lists only. History opens without starting a
+Worker, requests the latest 50 items first, and retains the explicit load-all
+action. Recent previews, scroll positions and drafts are bounded in-memory
+display state, not command authority. See `architecture.md` for cache limits.
+Menus, typography, settings rows and technical details use one visual hierarchy.
+Empty assistant records have explicit output notices; consecutive activity
+records fold without hiding failures or removing history.
+
+Build with `apps/mobile/tool/build_release_android.sh --allow-dirty` while
+reviewing an uncommitted change, or omit the flag after commit. Local artifacts
+are published under `dist/android-releases/` and selected by `dist/android-current`.
+Each attestation contains the exact source state, version, size, SHA-256 and
+signer. Building does not deploy the server, install on a phone or update TSPi.
+
+## Historical Release Record
+
 The records below describe Android release 0.13.0+37, built on 2026-09-06 from
 commit `cbeed20645327abc19ec4dfdab867ba940f61ea7`. Its source snapshot SHA-256 is
 `806a92797f308c726b0a7f5f47bba3ddecb39e515ee384d6bab71d7bf2550475`.
@@ -48,9 +68,8 @@ It is included in TSPi Package
 - Languages: English and Chinese; system, English, or Chinese preference
 - Input: text-only application composer with editable local drafts and explicit
   send; system-keyboard dictation remains available as ordinary text input
-- UI: semantic light and dark surfaces, bounded liquid-glass navigation and
-  transient controls over a continuous conversation canvas, opaque evidence
-  and settings surfaces, high-contrast transparency fallback, content-first
+- UI: neutral light and dark surfaces, opaque evidence and settings surfaces,
+  high-contrast transparency fallback, content-first
   conversation controls, navigation-owned historical-session lock state,
   promptable live observers with read-only tools, compact expandable tool
   disclosures, folder-based workspace identity,
@@ -59,8 +78,8 @@ It is included in TSPi Package
   ordering, inline code chips, terminal blocks, full-width stateful connection
   diagnostics, an adaptive Settings hierarchy with endpoint details, an
   authoritative session detail sheet, stable live composer and stop action,
-  structured Turn/activity rails, Pi branch selection, automatic complete
-  history up to 2000 items, explicit load-all for larger sessions, bounded
+  structured Turn/activity rails, Pi branch selection, automatic history loading
+  up to 2000 timeline items, explicit large-history load-all, bounded
   synchronization, direct navigation between the start and latest message,
   Reduce Motion, narrow-screen and large-text support, and the TSPi character
   brand mark

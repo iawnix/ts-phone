@@ -349,34 +349,68 @@ class LifecycleSwitcher extends StatelessWidget {
     super.key,
     required this.value,
     required this.onChanged,
+    this.vertical = false,
+    this.activeLabel,
+    this.activeIcon = Icons.chat_bubble_outline,
   });
 
   final LifecycleState value;
   final ValueChanged<LifecycleState> onChanged;
+  final bool vertical;
+  final String? activeLabel;
+  final IconData activeIcon;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: TsPhoneSpacing.large),
-      child: Wrap(
-        spacing: TsPhoneSpacing.small,
-        runSpacing: TsPhoneSpacing.xSmall,
-        children: <Widget>[
-          ChoiceChip(
-            selected: value == LifecycleState.active,
-            onSelected: (_) => onChanged(LifecycleState.active),
-            label: Text(context.l10n.activeItems),
-          ),
-          ChoiceChip(
-            selected: value == LifecycleState.archived,
-            onSelected: (_) => onChanged(LifecycleState.archived),
-            label: Text(context.l10n.archivedItems),
-          ),
-          ChoiceChip(
-            selected: value == LifecycleState.trashed,
-            onSelected: (_) => onChanged(LifecycleState.trashed),
-            label: Text(context.l10n.recentlyDeleted),
-          ),
+    final entries = <(LifecycleState, IconData, String)>[
+      (LifecycleState.active, activeIcon, activeLabel ?? context.l10n.sessions),
+      (
+        LifecycleState.archived,
+        Icons.archive_outlined,
+        context.l10n.archivedItems,
+      ),
+      (
+        LifecycleState.trashed,
+        Icons.delete_outline,
+        context.l10n.recentlyDeleted,
+      ),
+    ];
+    if (vertical) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final entry in entries)
+            ListTile(
+              dense: true,
+              leading: Icon(entry.$2, size: 22),
+              title: Text(entry.$3),
+              selected: value == entry.$1,
+              onTap: () => onChanged(entry.$1),
+            ),
+        ],
+      );
+    }
+    return Align(
+      alignment: Alignment.centerRight,
+      child: PopupMenuButton<LifecycleState>(
+        key: const ValueKey('lifecycle-filter'),
+        tooltip: context.l10n.filterConversations,
+        icon: const Icon(Icons.more_horiz, size: 22),
+        initialValue: value,
+        onSelected: onChanged,
+        itemBuilder: (_) => [
+          for (final entry in entries)
+            PopupMenuItem(
+              value: entry.$1,
+              child: Row(
+                children: [
+                  Icon(entry.$2, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(entry.$3)),
+                  if (value == entry.$1) const Icon(Icons.check, size: 20),
+                ],
+              ),
+            ),
         ],
       ),
     );

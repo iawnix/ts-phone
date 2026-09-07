@@ -281,7 +281,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps one TSPi attribution for narrative with tool details', (
+  testWidgets('narrative has no repeated logo and preserves tool disclosure', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -300,8 +300,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TSPi'), findsOneWidget);
+    expect(find.text('TSPi'), findsNothing);
     expect(find.text('Research result'), findsOneWidget);
+    expect(find.text('ts_change'), findsOneWidget);
+    await tester.tap(find.text('ts_change'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tool-raw-output')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -320,7 +324,7 @@ void main() {
 
     await tester.pumpWidget(TsPhoneApp(settingsStore: store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('设置'));
+    await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
     expect(find.text('外观'), findsOneWidget);
     expect(find.text('https://tsphone.iawnix.xyz'), findsOneWidget);
@@ -368,7 +372,7 @@ void main() {
 
     await tester.pumpWidget(TsPhoneApp(settingsStore: store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('设置'));
+    await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
     await tester.tap(find.text('TS Phone 服务'));
     await tester.pumpAndSettle();
@@ -503,7 +507,7 @@ void main() {
     final theme = Theme.of(tester.element(find.byType(ConnectionPage)));
     final style = theme.iconButtonTheme.style!;
 
-    expect(style.minimumSize!.resolve(<WidgetState>{}), const Size.square(44));
+    expect(style.minimumSize!.resolve(<WidgetState>{}), const Size.square(48));
     expect(
       style.overlayColor!.resolve(<WidgetState>{WidgetState.pressed}),
       isNotNull,
@@ -693,7 +697,7 @@ void main() {
 
     await tester.pumpWidget(TsPhoneApp(settingsStore: store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('设置'));
+    await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('language-setting')));
     await tester.pumpAndSettle();
@@ -713,7 +717,8 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(TsPhoneApp(settingsStore: store));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Settings'), findsOneWidget);
+    await _openSettings(tester, 'Settings');
+    expect(find.text('Language'), findsOneWidget);
   });
 
   testWidgets('English connection UI fits a narrow phone screen', (
@@ -791,7 +796,7 @@ void main() {
 
     await tester.pumpWidget(TsPhoneApp(settingsStore: store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Settings'));
+    await _openSettings(tester, 'Settings');
     await tester.pumpAndSettle();
 
     expect(find.text('Language'), findsOneWidget);
@@ -821,19 +826,19 @@ void main() {
       TsPhoneApp(settingsStore: store, accessibilityController: accessibility),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('设置'));
+    await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
 
-    expect(find.byType(TsSettingsSection), findsNWidgets(2));
-    expect(find.byType(TsGlassAppBar), findsOneWidget);
-    expect(find.byType(TsContentSurface), findsNWidgets(2));
+    expect(find.byType(TsSettingsSection), findsNWidgets(3));
+    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byType(TsContentSurface), findsNothing);
     expect(find.byType(TsGlassSurface), findsNothing);
     expect(
       find.descendant(
-        of: find.byType(TsGlassAppBar),
+        of: find.byType(AppBar),
         matching: find.byType(BackdropFilter),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(
@@ -1063,7 +1068,7 @@ void main() {
       final settingsTooltip = locale == AppLocalePreference.zh
           ? '设置'
           : 'Settings';
-      await tester.tap(find.byTooltip(settingsTooltip));
+      await _openSettings(tester, settingsTooltip);
       await tester.pumpAndSettle();
 
       expect(
@@ -1100,7 +1105,7 @@ void main() {
 
       await tester.pumpWidget(TsPhoneApp(settingsStore: store));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Settings'));
+      await _openSettings(tester, 'Settings');
       await tester.pumpAndSettle();
 
       expect(find.text('Appearance'), findsOneWidget);
@@ -1121,7 +1126,7 @@ void main() {
     expect(light.brightness, Brightness.light);
     expect(dark.brightness, Brightness.dark);
     expect(light.primary, const Color(0xFF0068D0));
-    expect(dark.surface, const Color(0xFF0B0F14));
+    expect(dark.surface, const Color(0xFF101010));
     expect(lightStatus.connected, const Color(0xFF007A5E));
     expect(darkStatus.connected, const Color(0xFF63E6BE));
     expect(darkStatus.warning, const Color(0xFFFFD166));
@@ -1167,6 +1172,11 @@ void main() {
       AppLocalePreference.system,
     );
   });
+}
+
+Future<void> _openSettings(WidgetTester tester, String label) async {
+  await tester.tap(find.byTooltip(label));
+  await tester.pumpAndSettle();
 }
 
 TsAccessibilityController _glassAccessibilityController() {

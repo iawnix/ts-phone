@@ -93,9 +93,10 @@ curl http://127.0.0.1:22113/healthz
 TS_PHONE_STATE_DIR=/absolute/path/to/ts-phone-dev/state npm run ctl -- token
 ```
 
-With `TS_PHONE_TSPI` configured, create or open a session in the app and the
-Host starts the matching TSPi Worker. A manually started phone session remains
-supported for diagnostics:
+The app opens to recent conversations and projects. Creating a conversation or
+reading history does not start a Worker. With `TS_PHONE_TSPI` configured, choose
+Continue conversation to start the matching TSPi Worker. A manually started
+phone session remains supported for diagnostics:
 
 ```bash
 TS_PHONE_BRIDGE_SOCKET=/absolute/path/to/ts-phone-dev/run/bridge.sock \
@@ -171,7 +172,7 @@ from another device.
 | Component | Current status |
 | --- | --- |
 | Broker | 0.7.0; API v4, Events v3, Bridge v3 |
-| Android | App 0.14.1+39; Android 7.0 or newer |
+| Android | App 0.16.0+41; Android 7.0 or newer |
 | TSPi compatibility | TSPi 0.13.0; exact-session Workers and lifecycle guards |
 | iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
 

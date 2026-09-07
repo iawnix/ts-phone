@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'data/settings_store.dart';
 import 'features/connection/connection_page.dart';
 import 'features/settings/settings_page.dart';
-import 'features/workspaces/workspace_list_page.dart';
+import 'features/sessions/conversation_shell.dart';
 import 'l10n/app_localizations.dart';
 import 'models/app_locale_preference.dart';
 import 'models/app_theme_preference.dart';
@@ -43,6 +43,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
   bool _retryLoadLatched = false;
   bool _settingsRouteOpen = false;
   bool _connectionEditorOpen = false;
+  int _connectionGeneration = 0;
 
   @override
   void initState() {
@@ -118,6 +119,10 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
     await widget.settingsStore.save(settings);
     if (!mounted) return;
     setState(() {
+      if (_settings?.serverUrl != settings.serverUrl ||
+          _settings?.token != settings.token) {
+        _connectionGeneration += 1;
+      }
       _settings = settings;
     });
   }
@@ -203,9 +208,13 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
         onOpenSettings: () => unawaited(_openSettings(context)),
       );
     }
-    return WorkspaceListPage(
+    return ConversationShell(
+      key: ValueKey(_connectionGeneration),
       settings: settings,
       onOpenSettings: () => unawaited(_openSettings(context)),
+      selectionStore: widget.settingsStore is ConversationSelectionStore
+          ? widget.settingsStore as ConversationSelectionStore
+          : null,
     );
   }
 

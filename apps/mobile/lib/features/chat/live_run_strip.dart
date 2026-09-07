@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations_extensions.dart';
 import '../../theme/ts_phone_theme.dart';
-import '../../widgets/presentation.dart';
 import 'chat_controller.dart';
 
 /// A compact, persistent indication that the current turn is still running.
@@ -43,56 +42,21 @@ class LiveRunStrip extends StatelessWidget {
         : context.l10n.toolRunning(_humanize(name));
     final startedAt = failed ? null : activity?.startedAt;
     final accent = failed ? colors.error : status.connected;
-    final glass = TsPhoneGlassTheme.resolve(context);
-    final tint = Color.alphaBlend(
-      accent.withValues(alpha: failed ? 0.12 : 0.07),
-      glass.elevatedSurface,
-    );
-
-    return TsGlassSurface(
+    return Material(
       key: const ValueKey<String>('live-run-strip'),
-      elevated: true,
-      blurSigma: glass.floatingBlurSigma,
-      tint: tint,
-      borderColor: failed
-          ? colors.error.withValues(alpha: 0.48)
-          : glass.strongBorder,
-      borderRadius: BorderRadius.circular(20),
+      color: colors.surface,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 52),
+        constraints: const BoxConstraints(minHeight: 44),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
           child: Row(
             children: <Widget>[
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: <Widget>[
-                    Icon(
-                      failed
-                          ? Icons.error_outline_rounded
-                          : Icons.hourglass_top_rounded,
-                      size: 18,
-                      color: accent,
-                    ),
-                    if (!failed)
-                      Positioned(
-                        right: 3,
-                        bottom: 3,
-                        child: TsStatusDot(
-                          color: accent,
-                          size: 6,
-                          pulsing: true,
-                        ),
-                      ),
-                  ],
-                ),
+              Icon(
+                failed
+                    ? Icons.error_outline_rounded
+                    : Icons.hourglass_top_rounded,
+                size: 18,
+                color: accent,
               ),
               const SizedBox(width: TsPhoneSpacing.medium),
               Expanded(

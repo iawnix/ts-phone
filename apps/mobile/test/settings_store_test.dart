@@ -7,6 +7,37 @@ import 'package:ts_phone/models/connection_settings.dart';
 
 void main() {
   test(
+    'last conversation is endpoint scoped and cleared on credential change',
+    () async {
+      FlutterSecureStorage.setMockInitialValues(<String, String>{});
+      final store = SecureSettingsStore(storage: const FlutterSecureStorage());
+      final connection = ConnectionSettings(
+        serverUrl: 'https://phone.test',
+        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      );
+      await store.save(connection);
+      await store.saveConversation(connection.serverUrl, 'ts_001', 'session_2');
+      expect(await store.loadConversation(connection.serverUrl), (
+        'ts_001',
+        'session_2',
+      ));
+      expect(await store.loadConversation('https://another.test'), isNull);
+      await store.save(connection);
+      expect(await store.loadConversation(connection.serverUrl), (
+        'ts_001',
+        'session_2',
+      ));
+      await store.save(
+        ConnectionSettings(
+          serverUrl: connection.serverUrl,
+          token: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq',
+        ),
+      );
+      expect(await store.loadConversation(connection.serverUrl), isNull);
+    },
+  );
+
+  test(
     'clearing connection credentials preserves the theme preference',
     () async {
       FlutterSecureStorage.setMockInitialValues(<String, String>{});

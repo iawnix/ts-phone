@@ -1223,7 +1223,7 @@ abstract class AppLocalizations {
   /// No description provided for @composerMessage.
   ///
   /// In en, this message translates to:
-  /// **'Ask or instruct session...'**
+  /// **'Message'**
   String get composerMessage;
 
   /// No description provided for @composerReadOnly.
@@ -1753,6 +1753,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server request failed'**
   String get problemRequestFailed;
+
+  /// No description provided for @filterConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter conversations'**
+  String get filterConversations;
+
+  /// No description provided for @searchConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Search conversations'**
+  String get searchConversations;
+
+  /// No description provided for @openSidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'Projects and conversations'**
+  String get openSidebar;
+
+  /// No description provided for @switchProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch project'**
+  String get switchProject;
+
+  /// No description provided for @continueSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue conversation'**
+  String get continueSession;
+
+  /// No description provided for @preparingSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing conversation'**
+  String get preparingSession;
+
+  /// No description provided for @localDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get localDraft;
+
+  /// No description provided for @chatWelcome.
+  ///
+  /// In en, this message translates to:
+  /// **'What are we investigating?'**
+  String get chatWelcome;
+
+  /// No description provided for @home.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get home;
+
+  /// No description provided for @recentConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent conversations'**
+  String get recentConversations;
+
+  /// No description provided for @noRecentConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent conversations'**
+  String get noRecentConversations;
+
+  /// No description provided for @recentConversationsIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Some conversations could not be refreshed'**
+  String get recentConversationsIncomplete;
+
+  /// No description provided for @unnamedConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled conversation'**
+  String get unnamedConversation;
+
+  /// No description provided for @dataNotProvided.
+  ///
+  /// In en, this message translates to:
+  /// **'Not provided'**
+  String get dataNotProvided;
+
+  /// No description provided for @accessPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Access'**
+  String get accessPermission;
+
+  /// No description provided for @technicalDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Technical details'**
+  String get technicalDetails;
+
+  /// No description provided for @messageNoText.
+  ///
+  /// In en, this message translates to:
+  /// **'No displayable response in this record'**
+  String get messageNoText;
+
+  /// No description provided for @messageNotDisplayed.
+  ///
+  /// In en, this message translates to:
+  /// **'This record has no displayable text'**
+  String get messageNotDisplayed;
+
+  /// No description provided for @messageGenerationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation failed'**
+  String get messageGenerationFailed;
+
+  /// No description provided for @messageGenerationAborted.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation stopped'**
+  String get messageGenerationAborted;
+
+  /// No description provided for @activityRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} activity records'**
+  String activityRecords(int count);
+
+  /// No description provided for @aboutApp.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get aboutApp;
 }
 
 class _AppLocalizationsDelegate

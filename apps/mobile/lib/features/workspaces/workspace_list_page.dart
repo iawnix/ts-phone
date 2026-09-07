@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../data/settings_store.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
@@ -11,9 +12,9 @@ import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
 import '../../widgets/ts_phone_brand_mark.dart';
-import '../chat/chat_page.dart';
 import '../management/management_dialogs.dart';
 import '../sessions/session_list_page.dart';
+import 'recent_conversations.dart';
 
 typedef TsPhoneGatewayBuilder =
     TsPhoneGateway Function(ConnectionSettings settings);
@@ -24,11 +25,17 @@ class WorkspaceListPage extends StatefulWidget {
     required this.settings,
     required this.onOpenSettings,
     this.gatewayBuilder,
+    this.onSelected,
+    this.onSessionSelected,
+    this.selectionStore,
   });
 
   final ConnectionSettings settings;
   final VoidCallback onOpenSettings;
   final TsPhoneGatewayBuilder? gatewayBuilder;
+  final ValueChanged<WorkspaceSummary>? onSelected;
+  final OpenConversation? onSessionSelected;
+  final ConversationSelectionStore? selectionStore;
 
   @override
   State<WorkspaceListPage> createState() => _WorkspaceListPageState();
@@ -156,6 +163,10 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
         workspace.lifecycleState != LifecycleState.active) {
       return;
     }
+    if (widget.onSelected case final select?) {
+      select(workspace);
+      return;
+    }
     final generation = ++_openGeneration;
     final gateway = _api;
     setState(() => _openingWorkspaceId = workspace.id);
@@ -167,39 +178,12 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
           !identical(gateway, _api)) {
         return;
       }
-      final management = _managementApi;
-      var session = sessions.length == 1 ? sessions.single : null;
-      if (session != null &&
-          !session.canPrompt &&
-          session.canActivate &&
-          management != null) {
-        session = await management.activateSession(
-          workspace.id,
-          session.sessionId,
-          session.managementRevision,
-        );
-      }
-      if (!mounted ||
-          generation != _openGeneration ||
-          !identical(gateway, _api)) {
-        return;
-      }
-      final sessionCanOpen =
-          session != null && (session.canPrompt || session.historyAvailable);
-      final page = sessionCanOpen
-          ? ChatPage(
-              settings: widget.settings,
-              workspace: workspace,
-              session: session,
-              recoveredSession:
-                  session.runtimeState == RuntimeState.recoveryRequired,
-            )
-          : SessionListPage(
-              settings: widget.settings,
-              workspace: workspace,
-              initialSessions: sessions,
-              gatewayBuilder: widget.gatewayBuilder,
-            );
+      final page = SessionListPage(
+        settings: widget.settings,
+        workspace: workspace,
+        initialSessions: sessions,
+        gatewayBuilder: widget.gatewayBuilder,
+      );
       await pushTsPhonePage<void>(context: context, builder: (context) => page);
     } on Object catch (error) {
       if (!mounted ||
@@ -405,49 +389,45 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return Scaffold(
-      appBar: TsGlassAppBar(
-        toolbarHeight: 64,
+      appBar: AppBar(
+        toolbarHeight: 56,
         centerTitle: false,
         titleSpacing: TsPhoneSpacing.large,
         title: Row(
           children: <Widget>[
-            const TsPhoneBrandBadge(size: 32),
-            const SizedBox(width: TsPhoneSpacing.medium),
-            Flexible(
+            const TsPhoneBrandMark(size: 24),
+            const SizedBox(width: 8),
+            const Flexible(
               child: Text(
-                l10n.workspaces,
+                'TS Phone',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
-        titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+        titleTextStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: Theme.of(context).colorScheme.onSurface,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
         ),
         actions: <Widget>[
-          if (_managementApi != null)
-            IconButton(
-              key: const ValueKey<String>('create-project'),
-              onPressed: _interactionLocked ? null : _createProject,
-              tooltip: l10n.newProject,
-              icon: _creatingWorkspace
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_rounded),
-            ),
           IconButton(
-            onPressed: _refreshing ? null : () => _refresh(announce: true),
-            tooltip: _refreshing ? l10n.refreshing : l10n.refresh,
+            key: const ValueKey('home-connection'),
+            onPressed: _showServiceStatus,
+            tooltip: l10n.tsPhoneService,
             icon: _refreshing
                 ? const SizedBox.square(
                     dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.refresh_rounded),
+                : Icon(
+                    _problem == null && _lastSync != null
+                        ? Icons.cloud_done_outlined
+                        : Icons.cloud_off_outlined,
+                    color: _problem == null
+                        ? null
+                        : Theme.of(context).colorScheme.error,
+                  ),
           ),
           IconButton(
             key: const ValueKey<String>('workspace-settings'),
@@ -499,7 +479,8 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
       child: _workspaces!.isEmpty
           ? ListView(
               children: <Widget>[
-                const SizedBox(height: 96),
+                _projectHeading(),
+                const SizedBox(height: 32),
                 TsEmptyState(
                   icon: switch (_lifecycleState) {
                     LifecycleState.active => Icons.folder_open_outlined,
@@ -548,9 +529,20 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
               itemCount: _workspaces!.length + 1,
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return _ServiceSyncHeader(
-                    latency: _latency,
-                    lastSync: _lastSync,
+                  return Column(
+                    children: [
+                      if (_lifecycleState == LifecycleState.active &&
+                          widget.onSessionSelected != null)
+                        RecentConversations(
+                          key: ValueKey((_lastSync, _api)),
+                          workspaces: _workspaces!,
+                          gateway: _api,
+                          endpoint: widget.settings.serverUrl,
+                          selectionStore: widget.selectionStore,
+                          onSelected: widget.onSessionSelected!,
+                        ),
+                      _projectHeading(),
+                    ],
                   );
                 }
                 final workspace = _workspaces![index - 1];
@@ -580,20 +572,71 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
     );
     final content = Column(
       children: <Widget>[
-        if (managementAvailable)
-          Padding(
-            padding: const EdgeInsets.only(top: TsPhoneSpacing.medium),
-            child: LifecycleSwitcher(
-              value: _lifecycleState,
-              onChanged: _selectLifecycle,
-            ),
-          ),
         if (_problem != null) _WorkspaceLoadProblemBand(problem: _problem!),
         Expanded(child: list),
       ],
     );
     return content;
   }
+
+  Widget _projectHeading() => Padding(
+    padding: const EdgeInsets.only(left: 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(switch (_lifecycleState) {
+            LifecycleState.active => context.l10n.workspaces,
+            LifecycleState.archived => context.l10n.archivedItems,
+            LifecycleState.trashed => context.l10n.recentlyDeleted,
+          }, style: Theme.of(context).textTheme.titleSmall),
+        ),
+        if (_managementApi != null && _lifecycleState == LifecycleState.active)
+          IconButton(
+            key: const ValueKey('create-project'),
+            onPressed: _interactionLocked ? null : _createProject,
+            tooltip: context.l10n.newProject,
+            icon: const Icon(Icons.create_new_folder_outlined, size: 22),
+          ),
+        if (_managementApi != null)
+          LifecycleSwitcher(
+            value: _lifecycleState,
+            onChanged: _selectLifecycle,
+            activeLabel: context.l10n.workspaces,
+            activeIcon: Icons.folder_outlined,
+          ),
+      ],
+    ),
+  );
+
+  Future<void> _showServiceStatus() => showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (context) => SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            context.l10n.tsPhoneService,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          if (_problem != null) Text(_problem!.localizedMessage(context.l10n)),
+          _ServiceSyncHeader(latency: _latency, lastSync: _lastSync),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              unawaited(_refresh(announce: true));
+            },
+            icon: const Icon(Icons.refresh),
+            label: Text(context.l10n.refresh),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 enum _WorkspaceAction { rename, archive, restore, trash, purge }
@@ -671,26 +714,18 @@ class _WorkspaceTile extends StatelessWidget {
       RuntimeState.recoveryRequired => l10n.statusRecovery,
       RuntimeState.offline => l10n.runtimeOffline,
     };
-    final title = workspace.name == workspace.id
-        ? TsMonoText(
-            workspace.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall,
-          )
-        : Text(
-            workspace.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall,
-          );
+    final title = Text(
+      workspace.name,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.titleSmall,
+    );
     return Material(
       key: ValueKey<String>('workspace-row-${workspace.id}'),
-      color: colors.surfaceContainerLow,
+      color: Colors.transparent,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
-        side: BorderSide(color: colors.outlineVariant, width: 0.5),
       ),
       child: InkWell(
         onTap: onTap,
@@ -727,9 +762,9 @@ class _WorkspaceTile extends StatelessWidget {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: <Widget>[
                           title,
-                          if (workspace.runtimeState == RuntimeState.idle)
-                            TsReadyStatusIcon(label: stateLabel)
-                          else
+                          if (workspace.runtimeState == RuntimeState.running ||
+                              workspace.runtimeState ==
+                                  RuntimeState.recoveryRequired)
                             TsInlineStatus(
                               label: stateLabel,
                               color: stateColor,
@@ -746,17 +781,11 @@ class _WorkspaceTile extends StatelessWidget {
                         spacing: TsPhoneSpacing.medium,
                         runSpacing: 5,
                         children: <Widget>[
-                          if (workspace.liveSessionCount > 0)
-                            TsMetadataItem(
-                              icon: Icons.sensors_rounded,
-                              text: l10n.statusLive(workspace.liveSessionCount),
-                            ),
-                          if (workspace.name != workspace.id)
-                            TsMonoText(
-                              workspace.id,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(color: colors.onSurfaceVariant),
-                            ),
+                          Text(
+                            l10n.sessionCount(workspace.sessionCount),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: colors.onSurfaceVariant),
+                          ),
                         ],
                       ),
                     ],

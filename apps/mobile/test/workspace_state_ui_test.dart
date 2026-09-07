@@ -103,7 +103,13 @@ void main() {
     expect(find.text('./TSPi --workspace ts_001 --phone'), findsOneWidget);
     expect(find.text('当前会话没有消息'), findsNothing);
     expect(find.text('重新检测'), findsOneWidget);
-    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('composer-send')))
+          .onPressed,
+      isNull,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -200,7 +206,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('unnamed chat sessions retain distinct short IDs', (
+  testWidgets('unnamed chats keep opaque identity in details only', (
     WidgetTester tester,
   ) async {
     Future<void> pumpSession(String sessionId, String sessionRevision) async {
@@ -238,19 +244,26 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('Untitled conversation'), findsOneWidget);
+      expect(find.textContaining(sessionId.substring(0, 8)), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('chat-session-details')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('session-technical-details')));
+      await tester.pumpAndSettle();
+      expect(find.text(sessionId), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
     }
 
     await pumpSession(
       '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       '11111111-1111-4111-8111-111111111111',
     );
-    expect(find.text('Session 11111111'), findsOneWidget);
 
     await pumpSession(
       '22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       '22222222-2222-4222-8222-222222222222',
     );
-    expect(find.text('Session 22222222'), findsOneWidget);
     expect(find.text('Session 11111111'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -360,7 +373,13 @@ void main() {
 
     final composer = tester.widget<TextField>(find.byType(TextField));
     expect(composer.controller!.text, '尚未发送的草稿');
-    expect(composer.enabled, isFalse);
+    expect(composer.enabled, isTrue);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('composer-send')))
+          .onPressed,
+      isNull,
+    );
     expect(find.text('已有消息'), findsOneWidget);
     expect(find.text('TSPi 已断开，重新启动后将自动恢复。'), findsOneWidget);
     expect(gateway.sentMessages, isEmpty);
@@ -397,7 +416,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('已有历史消息'), findsOneWidget);
-    expect(find.text('会话 session-'), findsOneWidget);
+    expect(find.text('未命名会话'), findsOneWidget);
     expect(find.text('历史 · 只读'), findsOneWidget);
     expect(find.textContaining('消息来自本机历史记录'), findsNothing);
     expect(find.text('只读观察模式'), findsNothing);
@@ -406,7 +425,7 @@ void main() {
       find.byKey(const ValueKey<String>('chat-read-only-bar')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey<String>('chat-sync')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('chat-menu')), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('chat-session-details')),
       findsOneWidget,
@@ -525,6 +544,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('此会话未保存运行时快照。'), findsOneWidget);
+    expect(find.text(longSessionId), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('session-technical-details')));
+    await tester.pumpAndSettle();
     expect(find.text(longSessionId), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('session-runtime-unavailable')),
@@ -596,61 +618,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('workspace list distinguishes an offline TSPi', (
-    WidgetTester tester,
-  ) async {
-    final gateway = UiFakeGateway(
-      workspaces: const <WorkspaceSummary>[offlineWorkspace],
-    );
+  testWidgets(
+    'workspace list keeps offline projects accessible without alarm labels',
+    (WidgetTester tester) async {
+      final gateway = UiFakeGateway(
+        workspaces: const <WorkspaceSummary>[offlineWorkspace],
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WorkspaceListPage(
-          settings: _settings,
-          onOpenSettings: () {},
-          gatewayBuilder: (_) => gateway,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WorkspaceListPage(
+            settings: _settings,
+            onOpenSettings: () {},
+            gatewayBuilder: (_) => gateway,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.textContaining('TSPi 未启动', findRichText: true), findsOneWidget);
-    expect(find.text('0 在线'), findsNothing);
-    expect(find.text('研究目录'), findsNothing);
-    expect(find.text('tsphone.example.test'), findsNothing);
-    expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
-    expect(find.textContaining('无法连接 TS Phone'), findsNothing);
-    expect(find.byType(TsGlassAppBar), findsOneWidget);
-    final row = find.byKey(const ValueKey<String>('workspace-row-ts_001'));
-    expect(row, findsOneWidget);
-    final rowRect = tester.getRect(row);
-    expect(rowRect.left, TsPhoneSpacing.large);
-    expect(
-      rowRect.right,
-      tester.view.physicalSize.width / tester.view.devicePixelRatio -
-          TsPhoneSpacing.large,
-    );
-    expect(
-      tester
-          .widget<InkWell>(
-            find.descendant(of: row, matching: find.byType(InkWell)),
-          )
-          .onTap,
-      isNotNull,
-    );
-    expect(
-      find.descendant(of: row, matching: find.byType(BackdropFilter)),
-      findsNothing,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(TsGlassAppBar),
-        matching: find.byType(BackdropFilter),
-      ),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.textContaining('TSPi 未启动', findRichText: true), findsNothing);
+      expect(find.text('0 在线'), findsNothing);
+      expect(find.text('研究目录'), findsNothing);
+      expect(find.text('tsphone.example.test'), findsNothing);
+      expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
+      expect(find.textContaining('无法连接 TS Phone'), findsNothing);
+      expect(find.byType(AppBar), findsOneWidget);
+      final row = find.byKey(const ValueKey<String>('workspace-row-ts_001'));
+      expect(row, findsOneWidget);
+      final rowRect = tester.getRect(row);
+      expect(rowRect.left, TsPhoneSpacing.large);
+      expect(
+        rowRect.right,
+        tester.view.physicalSize.width / tester.view.devicePixelRatio -
+            TsPhoneSpacing.large,
+      );
+      expect(
+        tester
+            .widget<InkWell>(
+              find.descendant(of: row, matching: find.byType(InkWell)),
+            )
+            .onTap,
+        isNotNull,
+      );
+      expect(
+        find.descendant(of: row, matching: find.byType(BackdropFilter)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byType(BackdropFilter),
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'workspace list uses consistent inset rows at 320px with large text',
@@ -700,11 +723,8 @@ void main() {
         find.textContaining('RUNNING', findRichText: true),
         findsOneWidget,
       );
-      expect(find.text('2 LIVE'), findsOneWidget);
-      final offlineStatus = find.textContaining(
-        'TSPi not running',
-        findRichText: true,
-      );
+      expect(find.text('2 LIVE'), findsNothing);
+      final offlineStatus = find.text('1 session');
       expect(offlineStatus, findsOneWidget);
       expect(find.text('0 LIVE'), findsNothing);
       final liveRow = find.byKey(
@@ -727,7 +747,7 @@ void main() {
       );
       expect(
         find.descendant(of: offlineRow, matching: find.byType(TsInlineStatus)),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.byType(TsStatusBadge), findsNothing);
       expect(
@@ -787,14 +807,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('CONNECTED'), findsNothing);
-    expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
-    expect(find.text('1 LIVE'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
+    expect(find.text('1 LIVE'), findsNothing);
+    expect(find.byIcon(Icons.cloud_done_outlined), findsOneWidget);
+    expect(find.textContaining('Last sync'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('home-connection')));
+    await tester.pumpAndSettle();
     final serviceMetadata = find.textContaining('TS Phone service');
     final syncMetadata = find.textContaining('Last sync');
-    expect(serviceMetadata, findsOneWidget);
+    expect(serviceMetadata, findsWidgets);
     expect(syncMetadata, findsOneWidget);
     expect(
-      tester.renderObject<RenderParagraph>(serviceMetadata).didExceedMaxLines,
+      tester
+          .renderObject<RenderParagraph>(serviceMetadata.first)
+          .didExceedMaxLines,
       isFalse,
     );
     expect(
@@ -1045,12 +1071,17 @@ void main() {
 
     expect(find.byKey(const ValueKey<String>('chat-composer')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('chat-back')), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('chat-sync')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('chat-menu')), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('chat-session-details')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey<String>('composer-send')), findsNothing);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('composer-send')))
+          .onPressed,
+      isNull,
+    );
     expect(
       find.byKey(const ValueKey<String>('composer-action-slot')),
       findsOneWidget,
@@ -1080,10 +1111,10 @@ void main() {
     expect(find.byTooltip('Stop generation'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('live-run-stop')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('composer-stop')), findsNothing);
-    expect(find.byIcon(Icons.arrow_upward_rounded), findsNothing);
+    expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
     expect(
       tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
-      'Ask or instruct session...',
+      'Message',
     );
     final liveStopBottom = tester
         .getBottomRight(find.byKey(const ValueKey<String>('live-run-stop')))
@@ -1622,10 +1653,12 @@ void main() {
     final listFinder = find.byKey(const ValueKey<String>('chat-message-list'));
     final position = tester.widget<ListView>(listFinder).controller!.position;
     expect(position.extentAfter, lessThan(1));
-    expect(find.byTooltip('回到会话开始'), findsOneWidget);
+    expect(find.byTooltip('回到会话开始'), findsNothing);
     expect(find.byTooltip('回到最新消息'), findsNothing);
 
-    await tester.tap(find.byTooltip('回到会话开始'));
+    await tester.tap(find.byKey(const ValueKey('chat-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('回到会话开始'));
     await tester.pumpAndSettle();
 
     expect(position.extentBefore, lessThan(1));
@@ -1636,7 +1669,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(position.extentAfter, lessThan(1));
-    expect(find.byTooltip('回到会话开始'), findsOneWidget);
+    expect(find.byTooltip('回到会话开始'), findsNothing);
     expect(find.byTooltip('回到最新消息'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -1702,7 +1735,9 @@ void main() {
         const ValueKey<String>('chat-message-list'),
       );
       final position = tester.widget<ListView>(listFinder).controller!.position;
-      await tester.tap(find.byTooltip('回到会话开始'));
+      await tester.tap(find.byKey(const ValueKey('chat-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('回到会话开始'));
       await tester.pumpAndSettle();
 
       expect(gateway.lastBefore, '00000018');
@@ -1776,7 +1811,7 @@ void main() {
         find.byKey(const ValueKey<String>('timeline-view-filter')),
         findsOneWidget,
       );
-      expect(find.text('Turn 80 · 1 条活动'), findsOneWidget);
+      expect(find.text('Turn 80 · 1 条活动'), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('timeline-history-menu')),
         findsOneWidget,
@@ -1786,13 +1821,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('当前研究请求'), findsNothing);
       expect(find.text('Compute · Inspect'), findsOneWidget);
-      expect(find.text('Turn 80 · 1 条活动'), findsOneWidget);
+      expect(find.text('Turn 80 · 1 条活动'), findsNothing);
 
-      await tester.tap(find.text('消息'));
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('timeline-view-filter')),
+          matching: find.text('消息'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('当前研究请求'), findsOneWidget);
       expect(find.text('Compute · Inspect'), findsNothing);
-      expect(find.text('Turn 80'), findsOneWidget);
+      expect(find.text('Turn 80'), findsNothing);
 
       await tester.tap(find.text('全部'));
       await tester.pumpAndSettle();
@@ -1954,7 +1994,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Only message'), findsOneWidget);
-    expect(find.text('Turn 1'), findsOneWidget);
+    expect(find.text('Turn 1'), findsNothing);
 
     await tester.tap(find.text('Activity'));
     await tester.pumpAndSettle();
@@ -1971,7 +2011,7 @@ void main() {
     await tester.tap(find.text('All'));
     await tester.pumpAndSettle();
     expect(find.text('Only message'), findsOneWidget);
-    expect(find.text('Turn 1'), findsOneWidget);
+    expect(find.text('Turn 1'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -641,7 +641,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get composerReconnecting => 'Reconnecting...';
 
   @override
-  String get composerMessage => 'Ask or instruct session...';
+  String get composerMessage => 'Message';
 
   @override
   String get composerReadOnly => 'History is read-only';
@@ -938,4 +938,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemRequestFailed => 'The server request failed';
+
+  @override
+  String get filterConversations => 'Filter conversations';
+
+  @override
+  String get searchConversations => 'Search conversations';
+
+  @override
+  String get openSidebar => 'Projects and conversations';
+
+  @override
+  String get switchProject => 'Switch project';
+
+  @override
+  String get continueSession => 'Continue conversation';
+
+  @override
+  String get preparingSession => 'Preparing conversation';
+
+  @override
+  String get localDraft => 'Draft';
+
+  @override
+  String get chatWelcome => 'What are we investigating?';
+
+  @override
+  String get home => 'Home';
+
+  @override
+  String get recentConversations => 'Recent conversations';
+
+  @override
+  String get noRecentConversations => 'No recent conversations';
+
+  @override
+  String get recentConversationsIncomplete =>
+      'Some conversations could not be refreshed';
+
+  @override
+  String get unnamedConversation => 'Untitled conversation';
+
+  @override
+  String get dataNotProvided => 'Not provided';
+
+  @override
+  String get accessPermission => 'Access';
+
+  @override
+  String get technicalDetails => 'Technical details';
+
+  @override
+  String get messageNoText => 'No displayable response in this record';
+
+  @override
+  String get messageNotDisplayed => 'This record has no displayable text';
+
+  @override
+  String get messageGenerationFailed => 'Generation failed';
+
+  @override
+  String get messageGenerationAborted => 'Generation stopped';
+
+  @override
+  String activityRecords(int count) {
+    return '$count activity records';
+  }
+
+  @override
+  String get aboutApp => 'About';
 }

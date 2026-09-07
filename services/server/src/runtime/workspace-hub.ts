@@ -1068,6 +1068,9 @@ export class WorkspaceHub {
     const live = isLive(session);
     const historyAvailable = Boolean(session.persisted);
     const lifecycleState = metadata?.lifecycleState ?? "active";
+    const updatedAt = [metadata?.updatedAt, session.persisted?.updatedAt, session.runtime?.updatedAt]
+      .filter((value): value is string => Boolean(value))
+      .sort().at(-1);
     const summary: SessionSummary = {
       sessionId: session.sessionId,
       sessionRevision: session.journal.epoch,
@@ -1087,11 +1090,12 @@ export class WorkspaceHub {
         && lifecycleState === "active"
         && (workspaceMetadata?.lifecycleState ?? "active") === "active"
         && this.#workers.available,
-      ...(metadata?.updatedAt ? { updatedAt: metadata.updatedAt } : {}),
+      ...(updatedAt ? { updatedAt } : {}),
       ...(metadata?.deletedAt ? { deletedAt: metadata.deletedAt } : {}),
     };
     if (metadata?.name) summary.sessionName = metadata.name;
     else if (session.snapshot?.sessionName) summary.sessionName = session.snapshot.sessionName;
+    else if (session.persisted?.title) summary.sessionName = session.persisted.title;
     if (session.snapshot?.model) summary.model = session.snapshot.model;
     else if (session.runtime) {
       summary.model = `${session.runtime.model.provider}/${session.runtime.model.id}`;

@@ -19,6 +19,8 @@ import '../../widgets/chat_message_view.dart';
 import '../../widgets/presentation.dart';
 import 'approval_panel.dart';
 import 'chat_controller.dart';
+import 'chat_composer.dart';
+import 'chat_view_memory.dart';
 import 'live_run_strip.dart';
 import 'session_notice.dart';
 import 'session_view_state.dart';
@@ -37,6 +39,12 @@ class ChatPage extends StatefulWidget {
     required this.session,
     this.recoveredSession = false,
     this.gateway,
+    this.gatewayFactory,
+    this.memory,
+    this.onOpenNavigation,
+    this.onNewSession,
+    this.creatingSession = false,
+    this.embedded = false,
   });
 
   final ConnectionSettings settings;
@@ -44,6 +52,12 @@ class ChatPage extends StatefulWidget {
   final SessionSummary session;
   final bool recoveredSession;
   final TsPhoneGateway? gateway;
+  final TsPhoneGateway Function()? gatewayFactory;
+  final ChatViewMemory? memory;
+  final VoidCallback? onOpenNavigation;
+  final VoidCallback? onNewSession;
+  final bool creatingSession;
+  final bool embedded;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -71,6 +85,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _aborting = false;
   bool _abortConfirmationOpen = false;
   bool _hasDraft = false;
+  bool _activating = false;
   TimelineViewFilter _timelineFilter = TimelineViewFilter.all;
   bool _initialTimelinePositioned = false;
   bool _bottomDockMeasureScheduled = false;
@@ -81,7 +96,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _controller = ChatController(
-      api: widget.gateway ?? TsPhoneApi(widget.settings),
+      api:
+          widget.gateway ??
+          widget.gatewayFactory?.call() ??
+          TsPhoneApi(widget.settings),
       workspaceId: widget.workspace.id,
       sessionId: widget.session.sessionId,
       initialSessionRevision: widget.session.sessionRevision,
@@ -94,15 +112,32 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       initialCanPrompt: widget.session.canPrompt,
       initialCapabilities: widget.session.capabilities,
       recoveredSession: widget.recoveredSession,
+      initialPreview: widget.memory?.preview,
     )..addListener(_onControllerUpdate);
     _controller.streamingTextUpdates.addListener(_onStreamingTextUpdate);
     _uiSubscription = _controller.uiRequests.listen(_queueUiRequest);
+    _composer.text = widget.memory?.draft ?? '';
+    _hasDraft = _composer.text.trim().isNotEmpty;
+    if (widget.memory?.preview?.revision == widget.session.sessionRevision &&
+        widget.memory?.following == false) {
+      _scrollMode = _ChatScrollMode.reading;
+      _streamUpdatesEnabled.value = false;
+    }
     _composer.addListener(_onComposerChanged);
     unawaited(_controller.initialize());
   }
 
   @override
   void dispose() {
+    final memory = widget.memory;
+    if (memory != null) {
+      memory.draft = _composer.text;
+      final preview = _controller.historyPreview;
+      memory.preview = preview.isBounded ? preview : null;
+      memory.following =
+          memory.preview == null || _scrollMode == _ChatScrollMode.following;
+      memory.scrollOffset = _scroll.hasClients ? _scroll.offset : 0;
+    }
     WidgetsBinding.instance.removeObserver(this);
     _controller.streamingTextUpdates.removeListener(_onStreamingTextUpdate);
     _controller
@@ -155,6 +190,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       _scrollUpdateScheduled = false;
       if (!mounted || !_scroll.hasClients) return;
       final position = _scroll.position;
+      if (!_initialTimelinePositioned &&
+          _scrollMode == _ChatScrollMode.reading &&
+          widget.memory?.preview != null) {
+        _scroll.jumpTo(
+          widget.memory!.scrollOffset.clamp(0, position.maxScrollExtent),
+        );
+      }
       if (_scrollMode == _ChatScrollMode.following &&
           !_scrollingToLatest &&
           !position.isScrollingNotifier.value) {
@@ -422,6 +464,35 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
   }
 
+  bool get _canActivate =>
+      widget.session.canActivate &&
+      _controller.api is TsPhoneManagementGateway &&
+      !_controller.viewingInactiveBranch &&
+      _controller.runtimeState == RuntimeState.offline;
+
+  Future<void> _activateSession() async {
+    if (_activating || !_canActivate) return;
+    setState(() => _activating = true);
+    try {
+      final selected = await (_controller.api as TsPhoneManagementGateway)
+          .activateSession(
+            widget.workspace.id,
+            widget.session.sessionId,
+            widget.session.managementRevision,
+          );
+      if (!mounted) return;
+      await _controller.acceptActivation(selected);
+    } on Object catch (error) {
+      if (mounted) {
+        _showActionMessage(
+          describeTsPhoneProblem(error).localizedMessage(context.l10n),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _activating = false);
+    }
+  }
+
   Future<void> _sync() async {
     if (_syncing) return;
     ActionFeedback.tap();
@@ -628,46 +699,99 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         final viewState = SessionViewState.fromController(_controller);
         return Scaffold(
           resizeToAvoidBottomInset: true,
-          appBar: TsGlassAppBar(
+          appBar: AppBar(
             toolbarHeight: _chatToolbarHeight,
             centerTitle: true,
             titleSpacing: 0,
-            leading: BackButton(
-              key: const ValueKey<String>('chat-back'),
-              onPressed: _goBack,
-            ),
-            title: _ChatNavigationTitle(
-              title: _navigationTitle,
-              runtimeState: _controller.runtimeState,
-              isHistorical: viewState.isHistorical,
-              compactStatus: MediaQuery.textScalerOf(context).scale(12) > 18,
-              connectionState: _controller.eventConnectionState,
+            automaticallyImplyLeading: false,
+            leading: widget.onOpenNavigation != null
+                ? IconButton(
+                    tooltip: l10n.openSidebar,
+                    onPressed: widget.onOpenNavigation,
+                    icon: const Icon(Icons.menu_rounded),
+                  )
+                : widget.embedded
+                ? null
+                : BackButton(
+                    key: const ValueKey<String>('chat-back'),
+                    onPressed: _goBack,
+                  ),
+            title: InkWell(
+              key: const ValueKey('chat-session-details'),
+              onTap: _showSessionDetails,
+              child: _ChatNavigationTitle(
+                title: _navigationTitle,
+                runtimeState: _controller.runtimeState,
+                isHistorical: viewState.isHistorical && !_canActivate,
+                compactStatus: MediaQuery.textScalerOf(context).scale(12) > 18,
+                connectionState: _controller.eventConnectionState,
+                workspace: widget.embedded ? widget.workspace.name : null,
+              ),
             ),
             actions: <Widget>[
-              IconButton(
-                key: const ValueKey<String>('chat-sync'),
-                onPressed:
-                    viewState.canRefresh &&
-                        !_controller.commandInFlight &&
-                        !_syncing
-                    ? _sync
-                    : null,
-                tooltip: _syncing ? l10n.syncing : l10n.syncMessages,
-                icon: _syncing
-                    ? const SizedBox.square(
-                        dimension: 17,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync_rounded, size: 21),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 2),
-                child: IconButton(
-                  key: const ValueKey<String>('chat-session-details'),
-                  onPressed: _showSessionDetails,
-                  tooltip: l10n.sessionRuntimeDetails,
-                  icon: const Icon(Icons.info_outline_rounded, size: 21),
+              if (widget.onNewSession case final create?)
+                IconButton(
+                  key: const ValueKey('chat-new-session'),
+                  tooltip: l10n.newSession,
+                  onPressed: widget.creatingSession ? null : create,
+                  icon: widget.creatingSession
+                      ? const SizedBox.square(
+                          dimension: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_comment_outlined, size: 22),
                 ),
+              PopupMenuButton<String>(
+                key: const ValueKey('chat-menu'),
+                tooltip: l10n.sessionRuntimeDetails,
+                icon: const Icon(Icons.more_horiz_rounded),
+                onSelected: (action) {
+                  if (action == 'start') {
+                    unawaited(_jumpToStart());
+                  } else if (action == 'sync') {
+                    unawaited(_sync());
+                  } else {
+                    _showSessionDetails();
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'details',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, size: 20),
+                        const SizedBox(width: 12),
+                        Flexible(child: Text(l10n.sessionRuntimeDetails)),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    key: const ValueKey('chat-sync'),
+                    value: 'sync',
+                    enabled:
+                        viewState.canRefresh &&
+                        !_syncing &&
+                        !_controller.commandInFlight,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sync, size: 20),
+                        const SizedBox(width: 12),
+                        Flexible(child: Text(l10n.syncMessages)),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'start',
+                    enabled: _showJumpToStart,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.vertical_align_top, size: 20),
+                        const SizedBox(width: 12),
+                        Flexible(child: Text(l10n.jumpToStart)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -754,7 +878,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 if (_initialTimelinePositioned &&
-                    (_showJumpToStart || _showJumpToLatest)) ...<Widget>[
+                    _showJumpToLatest) ...<Widget>[
                   Align(
                     alignment: Alignment.centerRight,
                     child: _buildTimelineNavigation(),
@@ -769,7 +893,32 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     onAbort: _confirmAbort,
                   ),
                 if (showLiveRun) const SizedBox(height: TsPhoneSpacing.small),
-                if (!viewState.isHistorical)
+                if (_canActivate || _activating)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('continue-session'),
+                      onPressed: _activating ? null : _activateSession,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant,
+                        textStyle: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      icon: _activating
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.play_arrow_outlined, size: 20),
+                      label: Text(
+                        _activating
+                            ? context.l10n.preparingSession
+                            : context.l10n.continueSession,
+                      ),
+                    ),
+                  ),
+                if (!viewState.isHistorical || _canActivate || _activating)
                   _buildComposer(
                     context,
                     maxLines: _composerMaxLines(
@@ -791,18 +940,28 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     required double availableHeight,
     required bool showLiveRun,
   }) {
-    if (!availableHeight.isFinite) return 7;
-    final scaledLineHeight = MediaQuery.textScalerOf(context).scale(16) * 1.32;
-    final extraLineHeight = (scaledLineHeight - 21).clamp(0, double.infinity);
+    if (!availableHeight.isFinite) return 5;
+    final scaler = MediaQuery.textScalerOf(context);
+    final scaledLineHeight = scaler.scale(16) * 1.45;
+    final extraLineHeight = (scaledLineHeight - 23.2).clamp(0, double.infinity);
     final liveRunReserve = showLiveRun ? 64 + extraLineHeight * 1.5 : 0;
-    final navigationReserve = _showJumpToStart || _showJumpToLatest ? 52.0 : 0;
+    final navigationReserve = _showJumpToLatest ? 52.0 : 0;
+    final activationReserve = _canActivate || _activating
+        ? (16 + scaler.scale(12) * 1.4 * 2).clamp(44, double.infinity)
+        : 0;
+    // A multiline composer reserves its own action row below the text.
     final dockChrome =
-        34.0 +
+        78.0 +
+        MediaQuery.paddingOf(context).bottom.clamp(8, double.infinity) +
         (showLiveRun ? TsPhoneSpacing.small : 0) +
         (navigationReserve > 0 ? TsPhoneSpacing.small : 0);
     final lineBudget =
-        availableHeight - liveRunReserve - navigationReserve - dockChrome;
-    return (lineBudget / scaledLineHeight).floor().clamp(1, 7);
+        availableHeight -
+        liveRunReserve -
+        navigationReserve -
+        activationReserve -
+        dockChrome;
+    return (lineBudget / scaledLineHeight).floor().clamp(1, 5);
   }
 
   void _scheduleBottomDockMeasurement() {
@@ -827,6 +986,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         _controller.timelineItems.isNotEmpty;
     final hasStreaming = _controller.hasStreamingText;
     if (messages.isEmpty && !hasTimelineItems && !hasStreaming) {
+      if (_canActivate && _controller.problem == null) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              context.l10n.chatWelcome,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        );
+      }
       if (_controller.problem case final problem?) {
         return _ConnectionProblemView(
           message: problem.localizedMessage(context.l10n),
@@ -887,30 +1058,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Widget _buildTimelineNavigation() {
     final color = Theme.of(context).colorScheme.primary;
     final navigationBusy = _scrollingToStart || _scrollingToLatest;
-    return TsGlassSurface(
-      elevated: true,
-      blurSigma: 14,
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(24),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (_showJumpToStart)
-            IconButton(
-              key: const ValueKey<String>('jump-to-start'),
-              onPressed: navigationBusy ? null : _jumpToStart,
-              tooltip: context.l10n.jumpToStart,
-              color: color,
-              icon: const Icon(Icons.vertical_align_top_rounded),
-            ),
-          if (_showJumpToStart && _showJumpToLatest)
-            SizedBox(
-              height: 24,
-              child: VerticalDivider(
-                width: 0.5,
-                thickness: 0.5,
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-            ),
           if (_showJumpToLatest)
             IconButton(
               key: const ValueKey<String>('jump-to-latest'),
@@ -925,104 +1078,21 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Widget _buildComposer(BuildContext context, {required int maxLines}) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final viewState = SessionViewState.fromController(_controller);
-    final canSend = viewState.canCompose && !_sending && _hasDraft;
-    final sendButton = IconButton.filled(
-      onPressed: canSend ? _send : null,
-      tooltip: _sending ? l10n.sending : l10n.send,
-      style: IconButton.styleFrom(
-        minimumSize: const Size.square(44),
-        maximumSize: const Size.square(44),
-        padding: EdgeInsets.zero,
-        shape: const CircleBorder(),
-      ),
-      icon: _sending
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.arrow_upward_rounded, size: 21),
-    );
-    return Material(
-      color: Colors.transparent,
-      child: AnimatedBuilder(
-        animation: _composerFocus,
-        builder: (context, _) {
-          final focused = _composerFocus.hasFocus && viewState.canCompose;
-          return TsContentSurface(
-            key: const ValueKey<String>('chat-composer'),
-            borderRadius: BorderRadius.circular(26),
-            backgroundColor: colors.surfaceContainerLowest,
-            borderColor: focused
-                ? colors.primary.withValues(alpha: 0.58)
-                : null,
-            padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                Expanded(
-                  child: TextField(
-                    controller: _composer,
-                    focusNode: _composerFocus,
-                    enabled: viewState.canCompose,
-                    minLines: 1,
-                    maxLines: maxLines,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    textCapitalization: TextCapitalization.sentences,
-                    autocorrect: true,
-                    enableSuggestions: true,
-                    cursorColor: colors.primary,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontSize: 16,
-                      height: 1.32,
-                    ),
-                    onTapOutside: (_) => _composerFocus.unfocus(),
-                    decoration: InputDecoration(
-                      hintText: _composerHint(),
-                      hintMaxLines: 2,
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        height: 1.3,
-                      ),
-                      isDense: true,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.fromLTRB(12, 9, 6, 9),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: TsPhoneSpacing.xSmall),
-                SizedBox.square(
-                  key: const ValueKey<String>('composer-action-slot'),
-                  dimension: 44,
-                  child: AnimatedSwitcher(
-                    duration: TsPhoneMotion.resolve(
-                      context,
-                      TsPhoneMotion.quick,
-                    ),
-                    child: _hasDraft || _sending
-                        ? SizedBox.square(
-                            key: const ValueKey<String>('composer-send'),
-                            dimension: 44,
-                            child: sendButton,
-                          )
-                        : const SizedBox.shrink(
-                            key: ValueKey<String>('composer-action-empty'),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+    final canDraft =
+        _canActivate ||
+        _activating ||
+        (!viewState.isHistorical &&
+            _controller.accessMode == SessionAccessMode.controller);
+    return ChatComposer(
+      controller: _composer,
+      focusNode: _composerFocus,
+      canEdit: viewState.canCompose || canDraft,
+      canSend: viewState.canCompose && !_sending && _hasDraft,
+      sending: _sending,
+      maxLines: maxLines,
+      onSend: _send,
+      hint: canDraft ? context.l10n.composerMessage : _composerHint(),
     );
   }
 
@@ -1063,6 +1133,7 @@ class _ChatNavigationTitle extends StatelessWidget {
     required this.isHistorical,
     required this.compactStatus,
     required this.connectionState,
+    this.workspace,
   });
 
   final String title;
@@ -1070,10 +1141,47 @@ class _ChatNavigationTitle extends StatelessWidget {
   final bool isHistorical;
   final bool compactStatus;
   final EventConnectionState connectionState;
+  final String? workspace;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (workspace != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              const SizedBox(width: 6),
+              _SessionStatusLine(
+                runtimeState: runtimeState,
+                isHistorical: isHistorical,
+                compact: true,
+                connectionState: connectionState,
+              ),
+            ],
+          ),
+          if (!compactStatus)
+            Text(
+              workspace!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+      );
+    }
     if (compactStatus) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -1202,7 +1310,13 @@ class _SessionStatusLine extends StatelessWidget {
           };
     if (compact) {
       final compactIcon = switch (connectionState) {
-        EventConnectionState.connected => Icons.check_circle_outline_rounded,
+        EventConnectionState.connected => switch (runtimeState) {
+          RuntimeState.offline => Icons.cloud_off_outlined,
+          RuntimeState.recoveryRequired => Icons.error_outline_rounded,
+          RuntimeState.running => Icons.hourglass_top_rounded,
+          RuntimeState.connecting => Icons.sync_rounded,
+          RuntimeState.idle => Icons.check_circle_outline_rounded,
+        },
         EventConnectionState.suspended => Icons.pause_circle_outline_rounded,
         EventConnectionState.closed => Icons.cloud_off_outlined,
         EventConnectionState.failed => Icons.error_outline_rounded,
@@ -1323,7 +1437,7 @@ class _SessionDetailsSheet extends StatelessWidget {
             ),
           ],
           const SizedBox(height: TsPhoneSpacing.medium),
-          TsContentSurface(
+          Padding(
             key: const ValueKey<String>('session-identity-group'),
             padding: const EdgeInsets.symmetric(
               horizontal: TsPhoneSpacing.medium,
@@ -1337,16 +1451,8 @@ class _SessionDetailsSheet extends StatelessWidget {
                 ),
                 const _RuntimeDetailDivider(),
                 _RuntimeDetailRow(
-                  icon: Icons.tag_rounded,
-                  label: l10n.approvalSession,
-                  value: sessionId,
-                  forceStacked: true,
-                  trailing: _CopySessionIdButton(sessionId: sessionId),
-                ),
-                const _RuntimeDetailDivider(),
-                _RuntimeDetailRow(
                   icon: Icons.shield_outlined,
-                  label: l10n.auth,
+                  label: l10n.accessPermission,
                   value: accessMode.localizedLabel(l10n),
                 ),
               ],
@@ -1354,7 +1460,7 @@ class _SessionDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: TsPhoneSpacing.medium),
           if (runtime == null)
-            TsContentSurface(
+            Padding(
               key: const ValueKey<String>('session-runtime-unavailable'),
               padding: const EdgeInsets.all(TsPhoneSpacing.medium),
               child: _RuntimeUnavailableNote(
@@ -1362,7 +1468,7 @@ class _SessionDetailsSheet extends StatelessWidget {
               ),
             )
           else
-            TsContentSurface(
+            Padding(
               key: const ValueKey<String>('session-runtime-group'),
               padding: const EdgeInsets.symmetric(
                 horizontal: TsPhoneSpacing.medium,
@@ -1372,13 +1478,13 @@ class _SessionDetailsSheet extends StatelessWidget {
                   _RuntimeDetailRow(
                     icon: Icons.smart_toy_outlined,
                     label: l10n.sessionModel,
-                    value: runtime!.model.id,
+                    value: runtime!.model.knownId ?? l10n.dataNotProvided,
                   ),
                   const _RuntimeDetailDivider(),
                   _RuntimeDetailRow(
                     icon: Icons.route_outlined,
                     label: l10n.sessionProvider,
-                    value: runtime!.model.provider,
+                    value: runtime!.model.knownProvider ?? l10n.dataNotProvided,
                   ),
                   if (usage != null) ...<Widget>[
                     const _RuntimeDetailDivider(),
@@ -1409,6 +1515,25 @@ class _SessionDetailsSheet extends StatelessWidget {
                 ],
               ),
             ),
+          ExpansionTile(
+            key: const ValueKey('session-technical-details'),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: const Border(),
+            collapsedShape: const Border(),
+            title: Text(
+              l10n.technicalDetails,
+              style: theme.textTheme.bodyMedium,
+            ),
+            children: [
+              _RuntimeDetailRow(
+                icon: Icons.tag,
+                label: l10n.approvalSession,
+                value: sessionId,
+                forceStacked: true,
+                trailing: _CopySessionIdButton(sessionId: sessionId),
+              ),
+            ],
+          ),
         ],
       ),
     );

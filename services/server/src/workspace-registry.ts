@@ -30,6 +30,10 @@ const MAX_SESSION_HEADER_BYTES = 1024 * 1024;
 const MAX_SESSION_FILE_BYTES = 64 * 1024 * 1024;
 const PI_MESSAGE_ID_PATTERN = /^[0-9a-f]{8}$/;
 const MAX_SESSION_BRANCHES = 128;
+const MAX_CACHED_SESSION_BYTES = 32 * 1024 * 1024;
+const MAX_CACHED_SESSIONS = 8;
+const MAX_SESSION_TITLE_BYTES = 64 * 1024;
+const MAX_CACHED_PREVIEWS = 256;
 
 export interface RegisteredWorkspace {
   id: string;
@@ -46,6 +50,8 @@ export interface PersistedSessionIndex {
 export interface PersistedSession {
   id: string;
   filePath: string;
+  title?: string;
+  updatedAt?: string;
 }
 
 export interface QuarantinedPath {
@@ -55,6 +61,8 @@ export interface QuarantinedPath {
 
 export class WorkspaceRegistry {
   readonly #configuredRoot: string;
+  readonly #graphs = new Map<string, { version: string; bytes: number; graph: PiSessionGraph }>();
+  readonly #previews = new Map<string, { version: string; preview: PiSessionPreview }>();
 
   constructor(root: string) {
     this.#configuredRoot = resolve(root);
@@ -180,7 +188,7 @@ export class WorkspaceRegistry {
     for (const entry of entries) {
       if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(".jsonl")) continue;
       try {
-        const header = await readPiSessionHeader(join(sessionsRoot, entry.name));
+        const header = await this.#readSessionPreview(join(sessionsRoot, entry.name));
         if (!header) {
           complete = false;
           continue;
@@ -195,12 +203,46 @@ export class WorkspaceRegistry {
         sessions.set(header.id, {
           id: header.id,
           filePath: join(sessionsRoot, entry.name),
+          ...(header.title ? { title: header.title } : {}),
+          updatedAt: header.updatedAt,
         });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") complete = false;
       }
     }
     return { ids: new Set(sessions.keys()), sessions, complete };
+  }
+
+  async #readSessionPreview(path: string): Promise<PiSessionPreview | undefined> {
+    const handle = await openSessionFile(path);
+    try {
+      const stat = await handle.stat({ bigint: true });
+      if (!stat.isFile()) return undefined;
+      const version = sessionFileVersion(stat);
+      const cached = this.#previews.get(path);
+      this.#previews.delete(path);
+      if (cached?.version === version) {
+        this.#previews.set(path, cached);
+        return cached.preview;
+      }
+      const header = await readPiSessionHeader(handle);
+      if (!header) return undefined;
+      const title = await readPiSessionTitle(handle, Number(stat.size));
+      const preview: PiSessionPreview = {
+        ...header,
+        ...(title ? { title } : {}),
+        updatedAt: new Date(Number(stat.mtimeMs)).toISOString(),
+      };
+      if (sessionFileVersion(await handle.stat({ bigint: true })) === version) {
+        this.#previews.set(path, { version, preview });
+        if (this.#previews.size > MAX_CACHED_PREVIEWS) {
+          this.#previews.delete(this.#previews.keys().next().value!);
+        }
+      }
+      return preview;
+    } finally {
+      await handle.close();
+    }
   }
 
   async readPersistedSessionMessages(
@@ -277,8 +319,17 @@ export class WorkspaceRegistry {
     }
 
     let handle: FileHandle | undefined;
+    const cacheKey = JSON.stringify([workspace.root, session.id, session.filePath]);
     try {
       handle = await openSessionFile(session.filePath);
+      const stat = await handle.stat({ bigint: true });
+      const version = sessionFileVersion(stat);
+      const cached = this.#graphs.get(cacheKey);
+      this.#graphs.delete(cacheKey);
+      if (cached?.version === version) {
+        this.#graphs.set(cacheKey, cached);
+        return cached.graph;
+      }
       const input = handle.createReadStream({ autoClose: false, encoding: "utf8" });
       const lines = createInterface({ input, crlfDelay: Infinity });
       const entries = new Map<string, PiSessionHistoryEntry>();
@@ -310,15 +361,30 @@ export class WorkspaceRegistry {
         activeLeafId = entry.id;
       }
       if (!headerSeen) throw historyUnavailable();
-      if ((await handle.stat()).size > MAX_SESSION_FILE_BYTES) throw historyUnavailable();
+      const finalStat = await handle.stat({ bigint: true });
+      if (finalStat.size > MAX_SESSION_FILE_BYTES) throw historyUnavailable();
+      const unchanged = sessionFileVersion(finalStat) === version;
       const parentIds = new Set(
         [...entries.values()].flatMap((entry) => entry.parentId ? [entry.parentId] : []),
       );
       const leafIds = [...entries.keys()].filter((id) => !parentIds.has(id));
       if (leafIds.length > MAX_SESSION_BRANCHES) throw historyUnavailable();
       if (activeLeafId !== undefined && !leafIds.includes(activeLeafId)) throw historyUnavailable();
-      return { entries, activeLeafId, leafIds };
+      const graph = { entries, activeLeafId, leafIds };
+      const bytes = Number(finalStat.size);
+      // A valid history remains readable during append, but must not be cached.
+      if (unchanged && bytes <= MAX_CACHED_SESSION_BYTES) {
+        this.#graphs.set(cacheKey, { version, bytes, graph });
+        let totalBytes = [...this.#graphs.values()].reduce((sum, entry) => sum + entry.bytes, 0);
+        while (this.#graphs.size > MAX_CACHED_SESSIONS || totalBytes > MAX_CACHED_SESSION_BYTES) {
+          const oldest = this.#graphs.keys().next().value!;
+          totalBytes -= this.#graphs.get(oldest)!.bytes;
+          this.#graphs.delete(oldest);
+        }
+      }
+      return graph;
     } catch (error) {
+      this.#graphs.delete(cacheKey);
       if (error instanceof HttpError) throw error;
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ENOENT" || code === "ELOOP") {
@@ -346,6 +412,12 @@ export class WorkspaceRegistry {
   }
 }
 
+function sessionFileVersion(stat: {
+  dev: bigint; ino: bigint; size: bigint; mtimeNs: bigint; ctimeNs: bigint;
+}): string {
+  return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(":");
+}
+
 type DirectoryState = "missing" | "directory" | "unsafe";
 
 async function directoryState(path: string): Promise<DirectoryState> {
@@ -363,6 +435,11 @@ interface PiSessionHeader {
   cwd: string;
 }
 
+interface PiSessionPreview extends PiSessionHeader {
+  title?: string;
+  updatedAt: string;
+}
+
 interface PiSessionHistoryEntry extends SessionTimelineEntry {}
 
 interface PiSessionGraph {
@@ -371,33 +448,55 @@ interface PiSessionGraph {
   leafIds: string[];
 }
 
-async function readPiSessionHeader(path: string): Promise<PiSessionHeader | undefined> {
-  const handle = await openSessionFile(path);
-  try {
-    const stat = await handle.stat();
-    if (!stat.isFile()) return undefined;
-    const buffer = Buffer.allocUnsafe(4096);
-    let pending = Buffer.alloc(0);
-    let offset = 0;
-    while (offset < MAX_SESSION_HEADER_BYTES) {
-      const length = Math.min(buffer.length, MAX_SESSION_HEADER_BYTES - offset);
-      const { bytesRead } = await handle.read(buffer, 0, length, offset);
-      if (bytesRead === 0) break;
-      offset += bytesRead;
-      pending = Buffer.concat([pending, buffer.subarray(0, bytesRead)]);
-      while (true) {
-        const newline = pending.indexOf(0x0a);
-        if (newline < 0) break;
-        const line = pending.subarray(0, newline).toString("utf8");
-        pending = pending.subarray(newline + 1);
-        if (line.trim()) return parsePiSessionHeader(line);
-      }
+async function readPiSessionHeader(handle: FileHandle): Promise<PiSessionHeader | undefined> {
+  const buffer = Buffer.allocUnsafe(4096);
+  let pending = Buffer.alloc(0);
+  let offset = 0;
+  while (offset < MAX_SESSION_HEADER_BYTES) {
+    const length = Math.min(buffer.length, MAX_SESSION_HEADER_BYTES - offset);
+    const { bytesRead } = await handle.read(buffer, 0, length, offset);
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+    pending = Buffer.concat([pending, buffer.subarray(0, bytesRead)]);
+    while (true) {
+      const newline = pending.indexOf(0x0a);
+      if (newline < 0) break;
+      const line = pending.subarray(0, newline).toString("utf8");
+      pending = pending.subarray(newline + 1);
+      if (line.trim()) return parsePiSessionHeader(line);
     }
-    const finalLine = pending.toString("utf8");
-    return finalLine.trim() ? parsePiSessionHeader(finalLine) : undefined;
-  } finally {
-    await handle.close();
   }
+  const finalLine = pending.toString("utf8");
+  return finalLine.trim() ? parsePiSessionHeader(finalLine) : undefined;
+}
+
+async function readPiSessionTitle(handle: FileHandle, fileSize: number): Promise<string | undefined> {
+  // A list preview never parses the full graph or includes assistant/tool content.
+  const buffer = Buffer.allocUnsafe(Math.min(fileSize, MAX_SESSION_TITLE_BYTES));
+  const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+  const lines = buffer.subarray(0, bytesRead).toString("utf8").split("\n");
+  if (bytesRead < fileSize) lines.pop();
+  for (const line of lines) {
+    try {
+      const record = parseJsonObject(line);
+      if (record.type !== "message") continue;
+      const message = record.message;
+      if (!message || typeof message !== "object" || Array.isArray(message)) continue;
+      const { role, content } = message as Record<string, unknown>;
+      if (role !== "user") continue;
+      const text = typeof content === "string" ? content : Array.isArray(content)
+        ? content.flatMap((block: unknown) => {
+          if (!block || typeof block !== "object") return [];
+          const value = block as Record<string, unknown>;
+          return value.type === "text" && typeof value.text === "string" ? [value.text] : [];
+        }).join(" ") : "";
+      const title = text.replace(/[\x00-\x1f\x7f\s]+/g, " ").trim();
+      if (title) return Array.from(title).slice(0, 80).join("");
+    } catch {
+      // A partial or unsupported record must not make history disappear from lists.
+    }
+  }
+  return undefined;
 }
 
 function parsePiSessionHeader(line: string): PiSessionHeader | undefined {

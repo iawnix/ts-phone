@@ -7,6 +7,7 @@ import '../../data/ts_phone_api.dart';
 import '../../models/chat_message.dart';
 import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
+import 'chat_view_memory.dart';
 
 enum EventConnectionState {
   connecting,
@@ -73,8 +74,7 @@ class ExtensionUiRequest {
 enum ChatActivityKind { runningTool, toolFailed }
 
 const int _historyPageSize = 200;
-const int _timelinePageSize = 500;
-const int _automaticTimelineItemLimit = 2000;
+const int _timelinePageSize = 50;
 
 class ChatActivity {
   const ChatActivity(this.kind, {this.toolName, this.startedAt});
@@ -111,6 +111,7 @@ class ChatController extends ChangeNotifier {
     this.streamRenderInterval = const Duration(milliseconds: 100),
     this.streamPreviewCharacterLimit = 6000,
     this.clientMessageIdFactory = createTsPhoneClientMessageId,
+    ChatHistoryPreview? initialPreview,
   }) : assert(streamPreviewCharacterLimit > 0),
        assert(!snapshotTimeout.isNegative && snapshotTimeout != Duration.zero),
        _runtimeState = initialRuntimeState,
@@ -120,7 +121,30 @@ class ChatController extends ChangeNotifier {
        _sessionRevision = initialSessionRevision,
        _sessionTitle = initialSessionTitle,
        _sessionRuntime = initialSessionRuntime,
-       _activeAgentRunId = initialActiveAgentRunId;
+       _activeAgentRunId = initialActiveAgentRunId {
+    if (initialPreview != null && initialPreview.revision == _sessionRevision) {
+      _timelineHistory = initialPreview.history;
+      _selectedBranchId =
+          initialPreview.history?.selectedBranchIsActive == false
+          ? initialPreview.history?.selectedBranchId
+          : null;
+      _hasMoreHistory = initialPreview.hasMore;
+      _nextBefore = initialPreview.before;
+      _loadedEarlierHistory = true;
+      if (initialPreview.history != null) {
+        _setTimelineItems(initialPreview.items);
+        _latestTimelineItemIds = initialPreview.items
+            .map((item) => item.id)
+            .where((id) => RegExp(r'^[0-9a-f]{8}$').hasMatch(id))
+            .toList();
+      } else {
+        _setMessages(initialPreview.messages, initialPreview.messageIds);
+        _latestSnapshotMessageIds = initialPreview.messageIds
+            .whereType<String>()
+            .toList();
+      }
+    }
+  }
 
   final TsPhoneGateway api;
   final String workspaceId;
@@ -250,6 +274,45 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  ChatHistoryPreview get historyPreview => ChatHistoryPreview(
+    revision: _sessionRevision,
+    messages: _messages,
+    messageIds: _messageIds,
+    items: _timelineItems,
+    history: _timelineHistory,
+    hasMore: _hasMoreHistory,
+    before: _nextBefore,
+  );
+
+  Future<void> acceptActivation(SessionSummary session) async {
+    if (_disposed) return;
+    if (session.sessionId != sessionId) {
+      throw const FormatException('Activation belongs to another session');
+    }
+    await _snapshotSynchronization;
+    if (_disposed) return;
+    _eventGeneration += 1;
+    await _cancelEventSubscriptionAndWait();
+    if (_disposed) return;
+    accessMode = session.accessMode;
+    _runtimeState = session.runtimeState;
+    _historyAvailable = session.historyAvailable;
+    _canPrompt = session.canPrompt;
+    _capabilities = session.capabilities;
+    _sessionRevision = session.sessionRevision;
+    _activeAgentRunId = session.activeAgentRunId;
+    _sessionRuntime = session.runtime;
+    _snapshotReady = false;
+    _lastEventId = null;
+    _loadedEarlierHistory = false;
+    _selectedBranchId = null;
+    _operationProblem = null;
+    _eventProblem = null;
+    _notify();
+    await refreshMessages();
+    if (!_disposed && !canRefresh) _connectEventStream();
+  }
+
   Future<void> refreshMessages() => _refreshMessages();
 
   Future<void> _refreshMessages({bool allowUnavailable = false}) {
@@ -286,7 +349,12 @@ class ChatController extends ChangeNotifier {
       await _cancelEventSubscriptionAndWait();
       if (_capabilities.contains(timelineCapability)) {
         final snapshot = await _awaitSnapshot(
-          api.getTimeline(workspaceId, sessionId, branch: _selectedBranchId),
+          api.getTimeline(
+            workspaceId,
+            sessionId,
+            branch: _selectedBranchId,
+            limit: _timelinePageSize,
+          ),
         );
         if (_disposed) return;
         if (snapshot.sessionId != sessionId) {
@@ -297,11 +365,9 @@ class ChatController extends ChangeNotifier {
         _applyTimelineSnapshot(snapshot, reset: revisionChanged);
         _sessionRevision = snapshot.sessionRevision;
         _lastEventId = snapshot.lastEventId;
-        await _loadAutomaticTimelineHistory();
-        if (_disposed) return;
       } else {
         final snapshot = await _awaitSnapshot(
-          api.getMessages(workspaceId, sessionId),
+          api.getMessages(workspaceId, sessionId, limit: _timelinePageSize),
         );
         if (_disposed) return;
         if (snapshot.sessionId != sessionId) {
@@ -389,16 +455,6 @@ class ChatController extends ChangeNotifier {
     _nextBefore = null;
     _latestTimelineItemIds = const <String>[];
     await refreshMessages();
-  }
-
-  Future<void> _loadAutomaticTimelineHistory() async {
-    final history = _timelineHistory;
-    if (history == null || history.totalItems > _automaticTimelineItemLimit) {
-      return;
-    }
-    while (!_disposed && _hasMoreHistory && _nextBefore != null) {
-      if (!await _loadEarlierTimelinePage(_nextBefore!)) break;
-    }
   }
 
   Future<bool> _loadEarlierTimelinePage(String before) async {

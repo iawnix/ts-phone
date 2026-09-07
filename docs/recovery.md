@@ -31,9 +31,10 @@ the app returns to the foreground; while they remain open, pull to refresh or
 use the refresh action.
 
 Offline history can be read and manually refreshed, but it cannot accept a
-prompt, abort request, or approval response. Timeline histories up to 2000
-items are restored automatically. For larger sessions, use the visible page or
-load-all controls; the loaded/total counter distinguishes a partial client view
+prompt, abort request, or approval response. Opening history does not start a
+Worker. Use Continue conversation to activate a managed session; any local draft
+still requires an explicit send after activation. The latest 50 items load first.
+Use the visible page or load-all controls for older history; the loaded/total counter distinguishes a partial client view
 from missing server history. A matching Bridge reconnect resets the session
 revision and replaces the disk-only capability state with its live controller
 or observer state.

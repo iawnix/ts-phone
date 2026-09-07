@@ -4,6 +4,8 @@ enum ChatRole { user, assistant, tool, system }
 
 enum ChatDeliveryState { sending, synchronizing }
 
+enum AssistantOutputState { empty, notDisplayed, failed, aborted }
+
 class ToolDetail {
   const ToolDetail({
     required this.title,
@@ -25,6 +27,7 @@ class ChatMessage {
     this.clientMessageId,
     this.origin,
     this.deliveryState,
+    this.outputState,
   });
 
   factory ChatMessage.fromJson(Object? value) {
@@ -88,6 +91,13 @@ class ChatMessage {
           : null,
       clientMessageId: clientMessageId as String?,
       origin: origin as String?,
+      outputState: switch (json['outputState']) {
+        'empty' => AssistantOutputState.empty,
+        'not_displayed' => AssistantOutputState.notDisplayed,
+        'failed' => AssistantOutputState.failed,
+        'aborted' => AssistantOutputState.aborted,
+        _ => null,
+      },
     );
   }
 
@@ -98,6 +108,12 @@ class ChatMessage {
   final String? clientMessageId;
   final String? origin;
   final ChatDeliveryState? deliveryState;
+  final AssistantOutputState? outputState;
+
+  bool get hasInterruptedOutput =>
+      outputState == AssistantOutputState.failed ||
+      outputState == AssistantOutputState.aborted;
+  bool get isActivityOnly => role != ChatRole.user && text.trim().isEmpty;
 
   ChatMessage copyWith({ChatDeliveryState? deliveryState}) {
     return ChatMessage(
@@ -108,6 +124,7 @@ class ChatMessage {
       clientMessageId: clientMessageId,
       origin: origin,
       deliveryState: deliveryState ?? this.deliveryState,
+      outputState: outputState,
     );
   }
 

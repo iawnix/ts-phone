@@ -19,6 +19,11 @@ class ChatMessageView extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.role == ChatRole.user;
     final hasNarrative = message.text.trim().isNotEmpty;
+    if (!isUser && !hasNarrative && message.tools.isEmpty) {
+      return _OutputNotice(
+        state: message.outputState ?? AssistantOutputState.empty,
+      );
+    }
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: isUser
@@ -27,6 +32,8 @@ class ChatMessageView extends StatelessWidget {
       children: <Widget>[
         if (hasNarrative) MarkdownMessage(data: message.text),
         for (final tool in message.tools) _ToolDetailView(detail: tool),
+        if (message.hasInterruptedOutput)
+          _OutputNotice(state: message.outputState!),
       ],
     );
     return TweenAnimationBuilder<double>(
@@ -38,8 +45,7 @@ class ChatMessageView extends StatelessWidget {
         origin: message.origin,
         timestamp: message.timestamp,
         deliveryState: message.deliveryState,
-        showAssistantAttribution:
-            !isUser && (hasNarrative || message.tools.isEmpty),
+        showAssistantAttribution: false,
         child: content,
       ),
       builder: (context, value, child) => Opacity(
@@ -48,6 +54,47 @@ class ChatMessageView extends StatelessWidget {
           offset: Offset(0, 2 * (1 - value)),
           child: child,
         ),
+      ),
+    );
+  }
+}
+
+class _OutputNotice extends StatelessWidget {
+  const _OutputNotice({required this.state});
+  final AssistantOutputState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
+    final failed = state == AssistantOutputState.failed;
+    final label = switch (state) {
+      AssistantOutputState.empty => l10n.messageNoText,
+      AssistantOutputState.notDisplayed => l10n.messageNotDisplayed,
+      AssistantOutputState.failed => l10n.messageGenerationFailed,
+      AssistantOutputState.aborted => l10n.messageGenerationAborted,
+    };
+    return Padding(
+      key: const ValueKey('message-output-notice'),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            failed ? Icons.error_outline : Icons.info_outline,
+            size: 18,
+            color: failed ? colors.error : colors.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: failed ? colors.error : colors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

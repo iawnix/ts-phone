@@ -23,14 +23,18 @@ the protocol versions in this table:
 | --- | ---: | --- |
 | TS Phone server | 0.7.0 | API v4, Events v3, Bridge v3, persistent management and lifecycle guards |
 | TSPi package | 0.13.0 | Bridge v3, exact session Workers, preflight/2 and guard/1 |
-| Mobile app | 0.14.1+39 | API v4, project/session management and accessible status icons |
+| Mobile app | 0.16.0+41 | API v4, work home, explicit conversation navigation and sidebar |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in
 `artifacts.md`. Each release is bound to its manifest's protocol set.
 
-App 0.14.1 replaces the cramped inline Settings segments with full-label choice
-sheets. Connection details also show the actual Host version. An older Host can
+App 0.16.0 opens a work home, not the previous conversation. Recent entries use
+summary requests only; project/session management remains in lists and menus.
+Explicitly opened history does not activate a Worker and loads
+the latest 50 items first. Continue conversation is an explicit action that
+preserves drafts and never sends them automatically. Settings retain full-label
+choice sheets and show the actual Host version. An older Host can
 still serve API v4 history while lacking the new creation endpoints; a successful
 health check alone is not proof that project/session management is installed.
 
@@ -262,8 +266,9 @@ In the app, verify:
 8. A stale revision causes resynchronization instead of command delivery.
 9. Stop a session and verify its history remains readable but cannot send.
 10. Restart TS Phone and verify persisted sessions return before TSPi starts.
-11. Open a research session with TS activities and verify its loaded count
-    reaches the total count when the total is at most 2000.
+11. Open a research session with TS activities and verify the first request
+    loads at most 50 items without starting a Worker. Verify older pages remain
+    accessible and load-all reaches the total count.
 12. Select a historical Pi branch and verify the composer becomes read-only,
     then return to the current branch and verify sending is restored.
 13. Create and rename a project and conversation, then archive and restore both.

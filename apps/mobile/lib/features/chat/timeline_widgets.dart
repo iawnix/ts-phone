@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations_extensions.dart';
+import '../../models/chat_message.dart';
 import '../../models/session_timeline.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/chat_message_view.dart';
@@ -459,37 +460,92 @@ class TimelineTurnGroupView extends StatelessWidget {
       key: ValueKey<String>('timeline-group-content-${group.identity}'),
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        if (group.turnId != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                <String>[
-                  context.l10n.timelineTurnLabel(group.number),
-                  if (group.activityCount > 0)
-                    context.l10n.timelineActivities(group.activityCount),
-                ].join(' · '),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        for (final item in group.items)
-          switch (item) {
-            TimelineMessageItem(:final message) => ChatMessageView(
-              key: ValueKey<String>('timeline-message-${item.id}'),
-              message: message,
-            ),
-            TimelineActivityItem(:final activity) => TimelineActivityView(
-              key: ValueKey<String>('timeline-activity-${item.id}'),
-              identity: item.id,
-              activity: activity,
-            ),
-          },
+        for (final run in _presentationRuns(group.items))
+          if (run.length > 1 && _isActivity(run.first))
+            _ActivityRun(items: run)
+          else
+            _timelineItemView(run.first),
       ],
+    );
+  }
+}
+
+bool _isActivity(SessionTimelineItem item) => switch (item) {
+  TimelineActivityItem() => true,
+  TimelineMessageItem(:final message) => message.isActivityOnly,
+};
+
+List<List<SessionTimelineItem>> _presentationRuns(
+  List<SessionTimelineItem> items,
+) {
+  final runs = <List<SessionTimelineItem>>[];
+  for (final item in items) {
+    if (_isActivity(item) && runs.isNotEmpty && _isActivity(runs.last.first)) {
+      runs.last.add(item);
+    } else {
+      runs.add([item]);
+    }
+  }
+  return runs;
+}
+
+Widget _timelineItemView(SessionTimelineItem item) => switch (item) {
+  TimelineMessageItem(:final message) => ChatMessageView(
+    key: ValueKey('timeline-message-${item.id}'),
+    message: message,
+  ),
+  TimelineActivityItem(:final activity) => TimelineActivityView(
+    key: ValueKey('timeline-activity-${item.id}'),
+    identity: item.id,
+    activity: activity,
+  ),
+};
+
+class _ActivityRun extends StatelessWidget {
+  const _ActivityRun({required this.items});
+  final List<SessionTimelineItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = items.any(
+      (item) => switch (item) {
+        TimelineActivityItem(:final activity) =>
+          activity.status == TimelineActivityStatus.failed,
+        TimelineMessageItem(:final message) =>
+          message.outputState == AssistantOutputState.failed ||
+              message.tools.any((tool) => tool.isError),
+      },
+    );
+    final stopped = items.any(
+      (item) =>
+          item is TimelineMessageItem &&
+          item.message.outputState == AssistantOutputState.aborted,
+    );
+    final colors = Theme.of(context).colorScheme;
+    return ExpansionTile(
+      key: PageStorageKey('activity-run-${items.first.id}'),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 20),
+      dense: true,
+      shape: const Border(),
+      collapsedShape: const Border(),
+      leading: Icon(
+        failed ? Icons.error_outline : Icons.list_alt_outlined,
+        size: 18,
+        color: failed ? colors.error : colors.onSurfaceVariant,
+      ),
+      title: Text(
+        context.l10n.activityRecords(items.length),
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      subtitle: failed
+          ? Text(
+              context.l10n.timelineFailed,
+              style: TextStyle(color: colors.error),
+            )
+          : stopped
+          ? Text(context.l10n.messageGenerationAborted)
+          : null,
+      children: [for (final item in items) _timelineItemView(item)],
     );
   }
 }

@@ -161,12 +161,13 @@ class _SettingsPageState extends State<SettingsPage> {
         : Theme.of(context).colorScheme.onSurfaceVariant;
     final protocolValue = diagnostics?.apiVersion ?? l10n.diagnosticNotChecked;
     return Scaffold(
-      appBar: TsGlassAppBar(
+      appBar: AppBar(
         leading: BackButton(onPressed: widget.onClose),
         title: Text(l10n.settings),
       ),
       body: TsPageBackdrop(
         child: SafeArea(
+          top: false,
           child: ListView(
             padding: const EdgeInsets.only(bottom: TsPhoneSpacing.xxLarge),
             children: <Widget>[
@@ -290,7 +291,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           ],
                         ),
                       ),
-                      const _AppIdentityFooter(),
+                      TsSettingsSection(
+                        title: l10n.aboutApp,
+                        child: const _AppIdentityFooter(),
+                      ),
                     ],
                   ),
                 ),
@@ -511,11 +515,11 @@ class _ConnectionServiceRow extends StatelessWidget {
                       Text(
                         title,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: TsPhoneSpacing.xSmall),
-                      TsMonoText(
+                      Text(
                         endpoint,
                         key: const ValueKey<String>(
                           'connection-service-endpoint',

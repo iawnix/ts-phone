@@ -127,6 +127,9 @@ class SessionRuntimeModel {
 
   final String provider;
   final String id;
+
+  String? get knownId => _knownModelValue(id);
+  String? get knownProvider => _knownModelValue(provider);
 }
 
 class SessionContextUsage {
@@ -330,7 +333,15 @@ class SessionSummary {
 
   bool hasCapability(String capability) => capabilities.contains(capability);
 
-  String? get displayModel => runtime?.model.id ?? model;
+  String? get displayModel => runtime?.model.knownId ?? _knownModelValue(model);
+
+  String? get modelRef {
+    final configured = _knownModelValue(model);
+    if (configured != null) return configured;
+    final provider = runtime?.model.knownProvider;
+    final id = runtime?.model.knownId;
+    return provider != null && id != null ? '$provider/$id' : null;
+  }
 
   String get shortId =>
       sessionId.substring(0, sessionId.length < 8 ? sessionId.length : 8);
@@ -417,3 +428,12 @@ DateTime? _optionalDateTime(Object? value, String label) {
 }
 
 bool _isCount(Object? value) => value is int && value >= 0;
+
+String? _knownModelValue(String? value) {
+  final text = value?.trim();
+  return text == null ||
+          text.isEmpty ||
+          text.toLowerCase().split('/').contains('unknown')
+      ? null
+      : text;
+}

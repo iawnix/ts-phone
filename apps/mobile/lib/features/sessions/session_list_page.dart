@@ -24,12 +24,32 @@ class SessionListPage extends StatefulWidget {
     required this.workspace,
     this.initialSessions,
     this.gatewayBuilder,
+    this.onSelected,
+    this.sidebarHeader,
+    this.sidebarFooter,
+    this.onCreateSession,
+    this.creatingSession = false,
+    this.selectedSessionId,
+    this.refreshToken = 0,
+    this.onSessionsChanged,
+    this.sidebar = false,
+    this.onBack,
   });
 
   final ConnectionSettings settings;
   final WorkspaceSummary workspace;
   final List<SessionSummary>? initialSessions;
   final SessionGatewayBuilder? gatewayBuilder;
+  final ValueChanged<SessionSummary>? onSelected;
+  final Widget? sidebarHeader;
+  final Widget? sidebarFooter;
+  final VoidCallback? onCreateSession;
+  final bool creatingSession;
+  final String? selectedSessionId;
+  final int refreshToken;
+  final ValueChanged<List<SessionSummary>>? onSessionsChanged;
+  final bool sidebar;
+  final VoidCallback? onBack;
 
   @override
   State<SessionListPage> createState() => _SessionListPageState();
@@ -46,6 +66,8 @@ class _SessionListPageState extends State<SessionListPage>
   String? _mutatingSessionId;
   bool _creatingSession = false;
   LifecycleState _lifecycleState = LifecycleState.active;
+  String _query = '';
+  bool get _sidebar => widget.sidebar;
 
   TsPhoneManagementGateway? get _managementApi {
     final api = _api;
@@ -57,7 +79,16 @@ class _SessionListPageState extends State<SessionListPage>
   bool get _interactionLocked =>
       _openingSessionId != null ||
       _mutatingSessionId != null ||
-      _creatingSession;
+      _creationInProgress;
+
+  bool get _creationInProgress => _creatingSession || widget.creatingSession;
+
+  Widget get _createSessionIcon => _creationInProgress
+      ? const SizedBox.square(
+          dimension: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        )
+      : const Icon(Icons.add_comment_outlined, size: 22);
 
   @override
   void initState() {
@@ -69,7 +100,15 @@ class _SessionListPageState extends State<SessionListPage>
     _sessions = widget.initialSessions == null
         ? null
         : _prioritizeSessions(widget.initialSessions!);
-    unawaited(_refresh());
+    if (_sessions == null) unawaited(_refresh());
+  }
+
+  @override
+  void didUpdateWidget(covariant SessionListPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      unawaited(_refresh(force: true));
+    }
   }
 
   @override
@@ -87,6 +126,7 @@ class _SessionListPageState extends State<SessionListPage>
   Future<void> _refresh({bool announce = false, bool force = false}) async {
     if (_refreshing && !force) return;
     final generation = ++_refreshGeneration;
+    final onSessionsChanged = widget.onSessionsChanged;
     setState(() => _refreshing = true);
     if (announce) ActionFeedback.tap();
     try {
@@ -102,6 +142,9 @@ class _SessionListPageState extends State<SessionListPage>
         _sessions = _prioritizeSessions(sessions);
         _problem = null;
       });
+      if (_lifecycleState == LifecycleState.active) {
+        onSessionsChanged?.call(sessions);
+      }
     } on Object catch (error) {
       if (!mounted || generation != _refreshGeneration) return;
       if (announce) ActionFeedback.error();
@@ -125,14 +168,9 @@ class _SessionListPageState extends State<SessionListPage>
     setState(() => _openingSessionId = session.sessionId);
     ActionFeedback.selection();
     try {
-      var selected = session;
-      final management = _managementApi;
-      if (!selected.canPrompt && selected.canActivate && management != null) {
-        selected = await management.activateSession(
-          widget.workspace.id,
-          selected.sessionId,
-          selected.managementRevision,
-        );
+      if (widget.onSelected case final select?) {
+        select(session);
+        return;
       }
       if (!mounted) return;
       await pushTsPhonePage<void>(
@@ -140,9 +178,10 @@ class _SessionListPageState extends State<SessionListPage>
         builder: (context) => ChatPage(
           settings: widget.settings,
           workspace: widget.workspace,
-          session: selected,
+          session: session,
+          gateway: widget.gatewayBuilder?.call(widget.settings),
           recoveredSession:
-              selected.runtimeState == RuntimeState.recoveryRequired,
+              session.runtimeState == RuntimeState.recoveryRequired,
         ),
       );
       if (mounted) await _refresh();
@@ -331,34 +370,29 @@ class _SessionListPageState extends State<SessionListPage>
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    if (_sidebar) return _buildSidebar();
     return Scaffold(
-      appBar: TsGlassAppBar(
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+      appBar: AppBar(
+        leading: BackButton(
+          onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+        ),
         title: Text(widget.workspace.name),
         actions: <Widget>[
           if (_managementApi != null &&
               _lifecycleState == LifecycleState.active)
             IconButton(
               key: const ValueKey<String>('create-session'),
-              onPressed: _interactionLocked ? null : _createManagedSession,
+              onPressed: _interactionLocked
+                  ? null
+                  : widget.onCreateSession ?? _createManagedSession,
               tooltip: l10n.newSession,
-              icon: _creatingSession
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_comment_outlined),
+              icon: _createSessionIcon,
             ),
-          IconButton(
-            onPressed: _refreshing ? null : () => _refresh(announce: true),
-            tooltip: _refreshing ? l10n.refreshing : l10n.refreshSessions,
-            icon: _refreshing
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_rounded),
-          ),
+          if (_managementApi != null)
+            LifecycleSwitcher(
+              value: _lifecycleState,
+              onChanged: _selectLifecycle,
+            ),
         ],
       ),
       body: TsPageBackdrop(
@@ -377,6 +411,157 @@ class _SessionListPageState extends State<SessionListPage>
     );
   }
 
+  Widget _buildSidebar() {
+    final l10n = context.l10n;
+    final sessions = (_sessions ?? <SessionSummary>[]).where(
+      (session) => session
+          .localizedDisplayName(l10n)
+          .toLowerCase()
+          .contains(_query.toLowerCase()),
+    );
+    final colors = Theme.of(context).colorScheme;
+    return ListTileTheme(
+      data: ListTileThemeData(
+        iconColor: colors.onSurfaceVariant,
+        selectedColor: colors.onSurface,
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            ?widget.sidebarHeader,
+            Padding(
+              padding: const EdgeInsets.only(left: 20, right: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _lifecycleState == LifecycleState.active
+                          ? widget.workspace.name
+                          : _lifecycleState == LifecycleState.archived
+                          ? l10n.archivedItems
+                          : l10n.recentlyDeleted,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  if (_managementApi != null)
+                    LifecycleSwitcher(
+                      value: _lifecycleState,
+                      onChanged: _selectLifecycle,
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: TextField(
+                key: const ValueKey('conversation-search'),
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: l10n.searchConversations,
+                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                  filled: true,
+                  fillColor: colors.surfaceContainer,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            if (_lifecycleState == LifecycleState.active &&
+                widget.onCreateSession != null)
+              ListTile(
+                key: const ValueKey('sidebar-new-session'),
+                leading: _createSessionIcon,
+                title: Text(l10n.newSession),
+                onTap: _interactionLocked ? null : widget.onCreateSession,
+              ),
+            if (_problem != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  _problem!.localizedMessage(l10n),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                child: _sessions == null && _problem == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                        key: const ValueKey('sidebar-conversations'),
+                        children: [
+                          if (sessions.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                _lifecycleState == LifecycleState.active
+                                    ? l10n.noMessages
+                                    : _lifecycleState == LifecycleState.archived
+                                    ? l10n.archiveEmptyTitle
+                                    : l10n.trashEmptyTitle,
+                              ),
+                            ),
+                          for (final session in sessions)
+                            ListTile(
+                              key: ValueKey(
+                                'sidebar-session-${session.sessionId}',
+                              ),
+                              selected:
+                                  session.sessionId == widget.selectedSessionId,
+                              selectedTileColor: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainer,
+                              contentPadding: const EdgeInsets.only(
+                                left: 20,
+                                right: 4,
+                              ),
+                              title: Text(
+                                session.localizedDisplayName(l10n),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap:
+                                  !_interactionLocked &&
+                                      _lifecycleState == LifecycleState.active
+                                  ? () => _open(session)
+                                  : null,
+                              trailing: _mutatingSessionId == session.sessionId
+                                  ? const SizedBox.square(
+                                      dimension: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : _managementApi == null
+                                  ? null
+                                  : _SessionMenu(
+                                      lifecycleState: session.lifecycleState,
+                                      onSelected: (action) =>
+                                          _handleSessionAction(session, action),
+                                    ),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
+            ?widget.sidebarFooter,
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     final l10n = context.l10n;
     if (_sessions == null && _problem == null) {
@@ -388,14 +573,6 @@ class _SessionListPageState extends State<SessionListPage>
     if (_sessions!.isEmpty) {
       return Column(
         children: <Widget>[
-          if (_managementApi != null)
-            Padding(
-              padding: const EdgeInsets.only(top: TsPhoneSpacing.medium),
-              child: LifecycleSwitcher(
-                value: _lifecycleState,
-                onChanged: _selectLifecycle,
-              ),
-            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refresh,
@@ -423,8 +600,9 @@ class _SessionListPageState extends State<SessionListPage>
                               ? FilledButton.icon(
                                   onPressed: _interactionLocked
                                       ? null
-                                      : _createManagedSession,
-                                  icon: const Icon(Icons.add_comment_outlined),
+                                      : widget.onCreateSession ??
+                                            _createManagedSession,
+                                  icon: _createSessionIcon,
                                   label: Text(l10n.createSession),
                                 )
                               : FilledButton.icon(
@@ -443,14 +621,6 @@ class _SessionListPageState extends State<SessionListPage>
     }
     return Column(
       children: <Widget>[
-        if (_managementApi != null)
-          Padding(
-            padding: const EdgeInsets.only(top: TsPhoneSpacing.medium),
-            child: LifecycleSwitcher(
-              value: _lifecycleState,
-              onChanged: _selectLifecycle,
-            ),
-          ),
         if (_problem != null)
           TsInfoBand(
             icon: Icons.cloud_off_outlined,
@@ -469,7 +639,11 @@ class _SessionListPageState extends State<SessionListPage>
                       .where((session) => session.canPrompt)
                       .length;
                   return TsSectionHeader(
-                    title: l10n.sessions,
+                    title: switch (_lifecycleState) {
+                      LifecycleState.active => l10n.sessions,
+                      LifecycleState.archived => l10n.archivedItems,
+                      LifecycleState.trashed => l10n.recentlyDeleted,
+                    },
                     caption:
                         '${l10n.sessionCount(_sessions!.length)} · ${l10n.liveSessionCount(liveCount)}',
                   );

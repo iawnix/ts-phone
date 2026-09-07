@@ -36,7 +36,7 @@ void main() {
     expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
     expect(
       tester
-          .widget<TsMonoText>(
+          .widget<Text>(
             find.byKey(const ValueKey('connection-service-endpoint')),
           )
           .data,
@@ -73,9 +73,10 @@ void main() {
       tester.getSize(find.byType(TsSettingsSection).first).height,
       lessThan(220),
     );
+    expect(find.byType(TsContentSurface), findsNothing);
     expect(
-      tester.getSize(find.byType(TsContentSurface).first).height,
-      lessThan(168),
+      tester.getSize(find.byKey(const ValueKey('appearance-setting'))).height,
+      inInclusiveRange(48, 84),
     );
     expect(find.text('Dark'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('appearance-setting')));

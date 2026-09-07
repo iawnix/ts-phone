@@ -82,9 +82,13 @@ export function projectMessage(message: unknown): unknown | undefined {
       timestamp: candidate.timestamp,
     };
   }
-  if (candidate.role === "assistant" && Array.isArray(candidate.content)) {
+  if (candidate.role === "assistant") {
     const content: Array<Record<string, unknown>> = [];
-    for (const value of candidate.content) {
+    if (typeof candidate.content === "string") {
+      content.push({ type: "text", text: boundText(candidate.content, 256 * 1024) });
+    }
+    let omittedContent = false;
+    for (const value of Array.isArray(candidate.content) ? candidate.content : []) {
       if (!value || typeof value !== "object" || Array.isArray(value)) continue;
       const block = value as Record<string, unknown>;
       if (block.type === "text" && typeof block.text === "string") {
@@ -93,9 +97,23 @@ export function projectMessage(message: unknown): unknown | undefined {
       }
       if (block.type === "toolCall" && typeof block.name === "string") {
         content.push({ type: "toolCall", name: block.name, arguments: block.arguments });
+        continue;
       }
+      omittedContent = true;
     }
-    return { role: candidate.role, content, timestamp: candidate.timestamp };
+    const hasContent = content.some((block) => block.type === "toolCall"
+      || (typeof block.text === "string" && block.text.trim().length > 0));
+    // Keep outcome semantics, never raw provider errors or private reasoning.
+    const outputState = candidate.stopReason === "error" || candidate.outputState === "failed"
+      ? "failed"
+      : candidate.stopReason === "aborted" || candidate.outputState === "aborted"
+        ? "aborted"
+        : hasContent ? undefined
+          : omittedContent || candidate.outputState === "not_displayed" ? "not_displayed" : "empty";
+    return {
+      role: candidate.role, content, timestamp: candidate.timestamp,
+      ...(outputState ? { outputState } : {}),
+    };
   }
   if (candidate.role === "toolResult") {
     return {

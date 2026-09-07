@@ -4,6 +4,35 @@ Flutter client for Android and iOS. The app stores its Bearer token in Android
 Keystore-backed secure storage or the iOS Keychain, rejects remote plain HTTP,
 and refuses redirects on authenticated HTTP and SSE requests.
 
+## Conversations
+
+Cold start opens a work home with recent conversations and projects. It reads
+summary lists only; selecting a project opens its conversation list, even when
+there is just one conversation. The sidebar switches conversations in the
+current project and returns home. Archive and recently deleted are list menus;
+Settings is on the home toolbar. The sidebar stays visible on wide screens.
+New conversations inherit the selected model configuration and belong to the
+current workspace. Advanced creation options remain in project management.
+
+Opening history is read-only and does not start a Pi Worker. **Continue
+conversation** explicitly activates an offline managed session. Draft text stays
+editable while activation is pending; it is never sent automatically. Sending
+and stopping still require a current server-confirmed session and event stream.
+
+History starts with the latest 50 items. Earlier pages load on demand, with the
+existing explicit load-all action available for an audit. A bounded in-memory
+display cache preserves recently viewed history, drafts and scroll positions
+within the app; it is discarded when the connection identity changes. Only the
+last selected project/session identifiers are saved in secure storage.
+The last selection ranks first on home but is never opened automatically.
+Briefly backgrounding the app retains the current screen and draft.
+
+Unnamed histories use their first user question when a bounded server preview
+is available, otherwise a date or an untitled label. Technical IDs remain in
+details. Consecutive activity-only records fold into an expandable summary;
+failed and stopped generation remain visible and distinct. Empty assistant
+records no longer render a logo-only reply. No history records are deleted.
+
 ## Validate
 
 ```bash
@@ -11,6 +40,15 @@ and refuses redirects on authenticated HTTP and SSE requests.
 /home/iaw/soft/flutter/bin/flutter analyze
 /home/iaw/soft/flutter/bin/flutter test
 ```
+
+The conversation UI tests cover English/Chinese, light/dark, phone/tablet,
+2x text, keyboard insets, home navigation, creation and retained drafts. To
+capture their rendered fixtures, set `TS_PHONE_CAPTURE_UI=1`,
+`TS_PHONE_PREVIEW_FONT` to a CJK font file and `TS_PHONE_PREVIEW_ICONS` to the
+Flutter SDK's `MaterialIcons-Regular.otf`, then run
+`flutter test test/conversation_shell_test.dart`. PNGs are written under
+`build/conversation-previews/`. These are fixture screenshots, not a claim of
+verification on a physical phone.
 
 ## Build Android
 

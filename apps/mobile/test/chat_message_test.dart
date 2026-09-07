@@ -2,6 +2,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/models/chat_message.dart';
 
 void main() {
+  test(
+    'output outcomes survive local display copies without exposing reasoning',
+    () {
+      final message = ChatMessage.fromJson({
+        'role': 'assistant',
+        'content': [],
+        'outputState': 'failed',
+      });
+      expect(message.hasInterruptedOutput, isTrue);
+      expect(message.copyWith().outputState, AssistantOutputState.failed);
+      expect(message.isActivityOnly, isTrue);
+    },
+  );
+
   test('extracts Markdown and tool calls from assistant messages', () {
     final message = ChatMessage.fromJson(<String, Object?>{
       'role': 'assistant',

@@ -598,7 +598,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get composerReconnecting => '正在重连...';
 
   @override
-  String get composerMessage => '输入指令或问题...';
+  String get composerMessage => '消息';
 
   @override
   String get composerReadOnly => '历史视图为只读';
@@ -883,4 +883,72 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemRequestFailed => '服务器请求失败';
+
+  @override
+  String get filterConversations => '筛选会话';
+
+  @override
+  String get searchConversations => '搜索会话';
+
+  @override
+  String get openSidebar => '项目与会话';
+
+  @override
+  String get switchProject => '切换项目';
+
+  @override
+  String get continueSession => '继续对话';
+
+  @override
+  String get preparingSession => '正在准备会话';
+
+  @override
+  String get localDraft => '草稿';
+
+  @override
+  String get chatWelcome => '这次研究什么问题？';
+
+  @override
+  String get home => '首页';
+
+  @override
+  String get recentConversations => '最近会话';
+
+  @override
+  String get noRecentConversations => '暂无最近会话';
+
+  @override
+  String get recentConversationsIncomplete => '部分会话未能刷新';
+
+  @override
+  String get unnamedConversation => '未命名会话';
+
+  @override
+  String get dataNotProvided => '未提供';
+
+  @override
+  String get accessPermission => '访问权限';
+
+  @override
+  String get technicalDetails => '技术详情';
+
+  @override
+  String get messageNoText => '此记录没有可显示的回复';
+
+  @override
+  String get messageNotDisplayed => '此记录不含可显示的正文';
+
+  @override
+  String get messageGenerationFailed => '生成失败';
+
+  @override
+  String get messageGenerationAborted => '生成已停止';
+
+  @override
+  String activityRecords(int count) {
+    return '$count 条活动记录';
+  }
+
+  @override
+  String get aboutApp => '关于';
 }

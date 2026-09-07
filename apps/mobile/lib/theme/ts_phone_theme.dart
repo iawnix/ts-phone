@@ -285,17 +285,17 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
       );
     }
     return TsPhoneGlassTheme(
-      surface: isLight ? const Color(0xBDF7F9FC) : const Color(0xBA10161D),
+      surface: isLight ? const Color(0xBDF7F7F7) : const Color(0xBA181818),
       elevatedSurface: isLight
           ? const Color(0xD9FFFFFF)
-          : const Color(0xD9161D25),
+          : const Color(0xD91C1C1C),
       controlSurface: isLight
           ? const Color(0xA8FFFFFF)
-          : const Color(0xA326303A),
+          : const Color(0xA3282828),
       border: isLight ? const Color(0xB8FFFFFF) : const Color(0x3DFFFFFF),
       strongBorder: isLight ? const Color(0xF2FFFFFF) : const Color(0x66FFFFFF),
       highlight: isLight ? const Color(0xA6FFFFFF) : const Color(0x26FFFFFF),
-      shadow: isLight ? const Color(0x24142633) : const Color(0x78000000),
+      shadow: isLight ? const Color(0x24000000) : const Color(0x78000000),
       blurSigma: 22,
       floatingBlurSigma: 28,
     );
@@ -427,8 +427,8 @@ abstract final class TsPhoneTheme {
                     ? Colors.white
                     : Colors.black
               : isLight
-              ? const Color(0xFFF2F2F7)
-              : const Color(0xFF0B0F14),
+              ? const Color(0xFFFAFAFA)
+              : const Color(0xFF101010),
           onSurface: isLight
               ? const Color(0xFF1C1C1E)
               : const Color(0xFFF2F2F7),
@@ -437,19 +437,19 @@ abstract final class TsPhoneTheme {
               : const Color(0xFFAEAEB2),
           surfaceContainerLowest: isLight
               ? const Color(0xFFFFFFFF)
-              : const Color(0xFF0B0F14),
+              : const Color(0xFF101010),
           surfaceContainerLow: isLight
-              ? const Color(0xFFF7F7FA)
-              : const Color(0xFF10161C),
+              ? const Color(0xFFF7F7F7)
+              : const Color(0xFF171717),
           surfaceContainer: isLight
-              ? const Color(0xFFEFEFF4)
-              : const Color(0xFF141A20),
+              ? const Color(0xFFF2F2F2)
+              : const Color(0xFF202020),
           surfaceContainerHigh: isLight
-              ? const Color(0xFFE5E5EA)
-              : const Color(0xFF1B232B),
+              ? const Color(0xFFEEEEEE)
+              : const Color(0xFF282828),
           surfaceContainerHighest: isLight
-              ? const Color(0xFFD8D8DE)
-              : const Color(0xFF252E37),
+              ? const Color(0xFFE4E4E4)
+              : const Color(0xFF333333),
           outline: highContrast
               ? isLight
                     ? const Color(0xFF3A3A3C)
@@ -461,45 +461,73 @@ abstract final class TsPhoneTheme {
                     : const Color(0xFF636366)
               : isLight
               ? const Color(0xFFC7C7CC)
-              : const Color(0xFF343D46),
+              : const Color(0xFF3D3D3D),
         );
 
     final baseTextTheme = ThemeData(brightness: brightness).textTheme;
     final textTheme = baseTextTheme.copyWith(
+      displayLarge: baseTextTheme.displayLarge?.copyWith(letterSpacing: 0),
+      displayMedium: baseTextTheme.displayMedium?.copyWith(letterSpacing: 0),
+      headlineLarge: baseTextTheme.headlineLarge?.copyWith(letterSpacing: 0),
+      headlineMedium: baseTextTheme.headlineMedium?.copyWith(letterSpacing: 0),
       displaySmall: baseTextTheme.displaySmall?.copyWith(
+        letterSpacing: 0,
         fontSize: 34,
         fontWeight: FontWeight.w700,
         height: 1.16,
       ),
       headlineSmall: baseTextTheme.headlineSmall?.copyWith(
+        letterSpacing: 0,
         fontSize: 28,
         fontWeight: FontWeight.w700,
         height: 1.18,
       ),
       titleLarge: baseTextTheme.titleLarge?.copyWith(
-        fontSize: 22,
+        letterSpacing: 0,
+        fontSize: 20,
         fontWeight: FontWeight.w600,
         height: 1.2,
       ),
       titleMedium: baseTextTheme.titleMedium?.copyWith(
+        letterSpacing: 0,
         fontSize: 17,
         fontWeight: FontWeight.w600,
         height: 1.25,
       ),
       titleSmall: baseTextTheme.titleSmall?.copyWith(
+        letterSpacing: 0,
         fontSize: 15,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
         height: 1.25,
       ),
-      bodyLarge: baseTextTheme.bodyLarge?.copyWith(fontSize: 17, height: 1.4),
-      bodyMedium: baseTextTheme.bodyMedium?.copyWith(fontSize: 15, height: 1.4),
-      bodySmall: baseTextTheme.bodySmall?.copyWith(fontSize: 13, height: 1.35),
-      labelLarge: baseTextTheme.labelLarge?.copyWith(
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
+      bodyLarge: baseTextTheme.bodyLarge?.copyWith(
+        fontSize: 16,
+        height: 1.45,
+        letterSpacing: 0,
       ),
-      labelMedium: baseTextTheme.labelMedium?.copyWith(fontSize: 13),
-      labelSmall: baseTextTheme.labelSmall?.copyWith(fontSize: 11),
+      bodyMedium: baseTextTheme.bodyMedium?.copyWith(
+        fontSize: 15,
+        height: 1.4,
+        letterSpacing: 0,
+      ),
+      bodySmall: baseTextTheme.bodySmall?.copyWith(
+        fontSize: 13,
+        height: 1.35,
+        letterSpacing: 0,
+      ),
+      labelLarge: baseTextTheme.labelLarge?.copyWith(
+        letterSpacing: 0,
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+      ),
+      labelMedium: baseTextTheme.labelMedium?.copyWith(
+        fontSize: 13,
+        letterSpacing: 0,
+      ),
+      labelSmall: baseTextTheme.labelSmall?.copyWith(
+        fontSize: 12,
+        letterSpacing: 0,
+      ),
     );
 
     final inputBorder = OutlineInputBorder(
@@ -525,6 +553,7 @@ abstract final class TsPhoneTheme {
       colorScheme: scheme,
       extensions: <ThemeExtension<dynamic>>[glassTheme, statusTheme],
       textTheme: textTheme,
+      iconTheme: IconThemeData(size: 22, color: scheme.onSurfaceVariant),
       scaffoldBackgroundColor: scheme.surface,
       splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
@@ -539,8 +568,8 @@ abstract final class TsPhoneTheme {
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         foregroundColor: scheme.onSurface,
-        iconTheme: IconThemeData(color: scheme.onSurface),
-        actionsIconTheme: IconThemeData(color: scheme.onSurface),
+        iconTheme: IconThemeData(size: 22, color: scheme.onSurface),
+        actionsIconTheme: IconThemeData(size: 22, color: scheme.onSurface),
         titleTextStyle: textTheme.titleMedium?.copyWith(
           color: scheme.onSurface,
           fontWeight: FontWeight.w600,
@@ -570,7 +599,7 @@ abstract final class TsPhoneTheme {
           horizontal: TsPhoneSpacing.large,
           vertical: TsPhoneSpacing.xSmall,
         ),
-        iconColor: scheme.primary,
+        iconColor: scheme.onSurfaceVariant,
         titleTextStyle: textTheme.bodyLarge?.copyWith(color: scheme.onSurface),
         subtitleTextStyle: textTheme.bodySmall?.copyWith(
           color: scheme.onSurfaceVariant,
@@ -625,7 +654,7 @@ abstract final class TsPhoneTheme {
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
-          minimumSize: const WidgetStatePropertyAll<Size>(Size.square(44)),
+          minimumSize: const WidgetStatePropertyAll<Size>(Size.square(48)),
           animationDuration: TsPhoneMotion.quick,
           overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
             if (states.contains(WidgetState.pressed)) {
@@ -693,6 +722,14 @@ abstract final class TsPhoneTheme {
         shadowColor: glassTheme.shadow,
         shape: overlayShape,
         textStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurface),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => textTheme.bodyLarge?.copyWith(
+            fontWeight: FontWeight.w400,
+            color: states.contains(WidgetState.disabled)
+                ? scheme.onSurfaceVariant
+                : scheme.onSurface,
+          ),
+        ),
         position: PopupMenuPosition.under,
         iconColor: scheme.onSurfaceVariant,
       ),

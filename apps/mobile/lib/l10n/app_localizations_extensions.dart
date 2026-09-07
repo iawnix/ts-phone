@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:intl/intl.dart';
 
 import '../data/ts_phone_api.dart';
 import '../features/chat/chat_controller.dart';
@@ -41,7 +42,13 @@ extension SessionAccessModeLocalizations on SessionAccessMode {
 extension SessionSummaryLocalizations on SessionSummary {
   String localizedDisplayName(AppLocalizations l10n) {
     final name = sessionName?.trim();
-    return name?.isNotEmpty == true ? name! : l10n.sessionFallback(shortId);
+    if (name?.isNotEmpty == true) return name!;
+    final updated = updatedAt?.toLocal();
+    return updated == null
+        ? l10n.unnamedConversation
+        : l10n.sessionFallback(
+            DateFormat.MMMd(l10n.localeName).add_Hm().format(updated),
+          );
   }
 }
 

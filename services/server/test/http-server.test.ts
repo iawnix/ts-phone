@@ -96,6 +96,8 @@ test("service restart restores disk history as a read-only session", async () =>
         historyAvailable: boolean;
         historyOnly: boolean;
         canPrompt: boolean;
+        sessionName?: string;
+        updatedAt?: string;
       }>;
     };
     assert.deepEqual(sessionsPayload.data.map((session) => session.sessionId), [sessionId]);
@@ -104,6 +106,8 @@ test("service restart restores disk history as a read-only session", async () =>
     assert.equal(restored.historyAvailable, true);
     assert.equal(restored.historyOnly, true);
     assert.equal(restored.canPrompt, false);
+    assert.equal(restored.sessionName, "historical prompt");
+    assert.ok(restored.updatedAt && Number.isFinite(Date.parse(restored.updatedAt)));
     assert.deepEqual(restored.capabilities, [
       "history.messages",
       "activity.tools",

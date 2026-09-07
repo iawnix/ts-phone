@@ -3,13 +3,101 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/features/chat/chat_controller.dart';
+import 'package:ts_phone/features/chat/chat_view_memory.dart';
 import 'package:ts_phone/models/chat_message.dart';
 import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 
 void main() {
   test(
-    'loads the complete bounded timeline and preserves research activity',
+    'cached history renders immediately but never grants command authority',
+    () async {
+      final preview = ChatHistoryPreview(
+        revision: 'revision-1',
+        messages: [ChatMessage.fromJson(userMessage('Cached history'))],
+        messageIds: const ['00000001'],
+        items: const [],
+        history: null,
+        hasMore: false,
+        before: null,
+      );
+      final controller = ChatController(
+        api: FakeGateway(),
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: 'revision-1',
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+        initialPreview: preview,
+      );
+      addTearDown(controller.dispose);
+      expect(controller.messages.single.text, 'Cached history');
+      expect(controller.canSend, isFalse);
+      expect(await controller.send('Must not send'), isFalse);
+      final changed = ChatController(
+        api: FakeGateway(),
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: 'revision-2',
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+        initialPreview: preview,
+      );
+      addTearDown(changed.dispose);
+      expect(changed.messages, isEmpty);
+      expect(changed.canSend, isFalse);
+    },
+  );
+
+  test('display memory is bounded and isolated by workspace and session', () {
+    final memory = ConversationMemory();
+    final first = memory.view('ts_001', 'session_1')..draft = 'first project';
+    expect(memory.view('ts_002', 'session_1').draft, isEmpty);
+    expect(memory.view('ts_001', 'session_1'), same(first));
+    for (var index = 2; index <= 10; index++) {
+      memory.view('ts_001', 'session_$index');
+    }
+    expect(memory.view('ts_001', 'session_1').draft, isEmpty);
+  });
+
+  test(
+    'fresh history replaces a cached branch with different entry IDs',
+    () async {
+      final api = FakeGateway()
+        ..snapshot = TsPhoneMessageSnapshot(
+          sessionId: 'session-test',
+          sessionRevision: 'revision-1',
+          messages: [userMessage('New branch')],
+          messageIds: const ['00000002'],
+          lastEventId: 'event-2',
+        );
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSessionRevision: 'revision-1',
+        initialRuntimeState: RuntimeState.idle,
+        accessMode: SessionAccessMode.controller,
+        initialPreview: ChatHistoryPreview(
+          revision: 'revision-1',
+          messages: [ChatMessage.fromJson(userMessage('Old branch'))],
+          messageIds: const ['00000001'],
+          items: const [],
+          history: null,
+          hasMore: false,
+          before: null,
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.messages.map((message) => message.text), [
+        'New branch',
+      ]);
+    },
+  );
+
+  test(
+    'reveals the latest page before loading earlier research activity on demand',
     () async {
       final api = FakeGateway();
       api.timelineResponder = ({before, branch}) async {
@@ -67,6 +155,11 @@ void main() {
 
       await controller.initialize();
 
+      expect(api.timelineCalls, 1);
+      expect(controller.loadedTimelineItemCount, 2);
+      expect(controller.canLoadEarlierMessages, isTrue);
+      await controller.loadEarlierMessages();
+
       expect(api.timelineCalls, 2);
       expect(controller.loadedTimelineItemCount, 4);
       expect(
@@ -83,7 +176,7 @@ void main() {
   );
 
   test(
-    'stops an automatic timeline refresh from mutating state after dispose',
+    'stops an earlier timeline page from mutating state after dispose',
     () async {
       final earlierRequested = Completer<void>();
       final earlierResponse = Completer<TsPhoneTimelineSnapshot>();
@@ -142,7 +235,8 @@ void main() {
         return earlierResponse.future;
       };
 
-      final refresh = controller.refreshMessages();
+      await controller.refreshMessages();
+      final refresh = controller.loadEarlierMessages();
       await earlierRequested.future;
       controller.dispose();
       earlierResponse.complete(
@@ -159,7 +253,7 @@ void main() {
       );
 
       await expectLater(refresh, completes);
-      expect(controller.streamingText, 'still streaming');
+      expect(controller.messages.map((message) => message.text), ['latest']);
     },
   );
 

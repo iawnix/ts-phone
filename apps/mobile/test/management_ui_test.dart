@@ -160,7 +160,7 @@ void main() {
     expect(gateway.archiveWorkspaceCalls, 1);
     expect(find.text('Revised pathway'), findsNothing);
 
-    await tester.tap(find.text('Archived'));
+    await _selectLifecycle(tester, 'Archived');
     await tester.pumpAndSettle();
     expect(find.text('Revised pathway'), findsOneWidget);
     await tester.tap(find.byTooltip('Manage'));
@@ -197,7 +197,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.text('Archived'));
+    await _selectLifecycle(tester, 'Archived');
     await tester.pumpAndSettle();
     expect(find.text('Archived review'), findsOneWidget);
     delayed.complete([_session(sessionName: 'Stale active session')]);
@@ -285,7 +285,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.archiveSessionCalls, 1);
 
-    await tester.tap(find.text('Archived'));
+    await _selectLifecycle(tester, 'Archived');
     await tester.pumpAndSettle();
     expect(find.text('Follow-up review'), findsOneWidget);
     await tester.tap(find.byTooltip('Manage'));
@@ -349,7 +349,7 @@ void main() {
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Archived'));
+    await _selectLifecycle(tester, 'Archived');
     await tester.pumpAndSettle();
     expect(find.text('Archived path'), findsOneWidget);
     expect(
@@ -401,7 +401,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('opening an offline managed session waits for activation', (
+  testWidgets('opening offline history does not wait for explicit activation', (
     tester,
   ) async {
     final activation = Completer<SessionSummary>();
@@ -426,14 +426,13 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Primary session'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
+    expect(gateway.activateSessionCalls, 0);
+    expect(find.byKey(const ValueKey('continue-session')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('continue-session')));
+    await tester.pump();
     expect(gateway.activateSessionCalls, 1);
-    expect(
-      find.byKey(const ValueKey<String>('session-opening-session_1')),
-      findsOneWidget,
-    );
-    expect(find.text('Chat'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -460,7 +459,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Recently Deleted'));
+    await _selectLifecycle(tester, 'Recently Deleted');
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Manage'));
     await tester.pumpAndSettle();
@@ -485,6 +484,14 @@ void main() {
     expect(find.text('Recently Deleted is empty'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _selectLifecycle(WidgetTester tester, String label) async {
+  await tester.tap(find.byKey(const ValueKey('lifecycle-filter')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump();
+  await tester.tap(find.text(label));
 }
 
 Future<void> _capture(WidgetTester tester, String name) async {

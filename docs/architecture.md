@@ -161,10 +161,45 @@ counts. Neither endpoint creates or updates a second conversation store.
 
 Each response page returns at most 500 projected items and six MiB. Stable Pi
 entry IDs form an opaque `before` cursor, so the phone can prepend older pages
-without receiving raw JSONL. Histories with at most 2000 timeline items load
-automatically; larger histories expose progress and explicit one-page or
-load-all actions. The threshold is client policy, while pagination and byte
-limits remain server-enforced mechanism.
+without receiving raw JSONL. The phone requests the latest 50 items before
+connecting the event stream. Earlier pages load only on demand; explicit
+load-all remains available. Page size is client policy, while pagination and
+byte limits remain server-enforced mechanism.
+
+The registry caches parsed session graphs for up to eight files and 32 MiB of
+source data. Every lookup opens the file with the existing safety checks and
+matches device, inode, size, modification time and change time. Rewrites,
+appends, replacements and removal invalidate the cached graph; pages still use
+the requested branch and stable entry cursor. The cache is not durable storage.
+
+Cold start reads project and session summaries without selecting a conversation
+or requesting its messages. Home retains at most five recent rows and limits
+summary request concurrency to three. Selecting a project always opens its
+list; selecting a conversation is the only entry into its history.
+
+The registry derives unnamed session titles from user text in the first 64 KiB
+of a session file, capped at 80 Unicode code points. Explicit management and
+live session names take priority. Assistant, tool, image and reasoning content
+are excluded. This is a list label, not an active-branch summary. Titles fall
+back to dates on the client when no bounded preview is available. Up to 256
+previews are cached with the same stat-version checks as the graph cache; a
+file's modification time supplies the history list's update time.
+
+The conversation shell owns project/session selection, not Pi activation.
+Reading a conversation never boots a Worker. Activation is an explicit action
+inside the conversation, independent of history rendering. The app saves only
+the last selection identifiers in secure storage. Recent display previews and
+drafts remain in an eight-entry in-memory cache scoped to connection, workspace
+and session. Previews are revision-bound and limited to 1000 combined display
+items and 512 Ki characters per view. A preview cannot enable send or abort;
+fresh snapshots and event-stream identity remain the authority.
+
+Message projection preserves an optional display-only `outputState` for empty,
+not-displayed, failed and aborted assistant output. It does not expose raw
+provider errors or private reasoning. The UI groups consecutive activity-only
+records within a turn, preserving order, failure visibility and expansion back
+to each record. Stopped output is not relabeled as failed. These presentation
+choices do not change Pi JSONL, evidence or scientific state.
 
 The last appended Pi leaf is the active branch. Other leaves remain selectable
 for audit, but a timeline response for an inactive branch omits prompt and abort

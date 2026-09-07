@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rename, rm, symlink, truncate, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, mkdir, rename, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -57,6 +57,48 @@ test("registry makes session reconciliation fail open on malformed history", asy
   const index = await registry.listPersistedSessionIds(await registry.get("ts_001"));
   assert.equal(index.complete, false);
   assert.deepEqual([...index.ids], []);
+});
+
+test("list previews use bounded user text and invalidate on file changes", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "ts-phone-preview-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const workspaceRoot = join(root, "ts_001");
+  const sessionsRoot = join(workspaceRoot, ".pi", "sessions");
+  await mkdir(sessionsRoot, { recursive: true });
+  const path = join(sessionsRoot, "preview.jsonl");
+  const header = { type: "session", id: "preview", cwd: workspaceRoot };
+  const write = (records: unknown[]) => writeFile(path,
+    `${[header, ...records].map((record) => JSON.stringify(record)).join("\n")}\n`);
+  await write([
+    { type: "message", message: { role: "assistant", content: "private assistant text" } },
+    { type: "message", message: { role: "toolResult", content: "private tool result" } },
+    { type: "message", message: { role: "user", content: [
+      { type: "image", data: "private image" },
+      { type: "text", text: "  Inspect\n  reaction paths " },
+    ] } },
+  ]);
+  const registry = new WorkspaceRegistry(root);
+  const workspace = await registry.get("ts_001");
+  const read = async () => (await registry.listPersistedSessionIds(workspace)).sessions.get("preview")!;
+  const preview = await read();
+  assert.equal(preview.title, "Inspect reaction paths");
+  assert.ok(preview.updatedAt && Number.isFinite(Date.parse(preview.updatedAt)));
+  assert.doesNotMatch(JSON.stringify(preview), /private/);
+  assert.deepEqual(await read(), preview);
+
+  await write([{ type: "message", message: { role: "user", content: "New title" } }]);
+  assert.equal((await read()).title, "New title");
+  await write([{ type: "message", message: { role: "user", content: "x".repeat(100) } }]);
+  assert.equal((await read()).title, "x".repeat(80));
+
+  await write([
+    { type: "custom", data: "x".repeat(64 * 1024) },
+    { type: "message", message: { role: "user", content: "outside preview budget" } },
+  ]);
+  assert.equal((await read()).title, undefined);
+  const index = await registry.listPersistedSessionIds(workspace);
+  assert.equal(index.complete, true);
+  assert.equal(index.ids.has("preview"), true);
 });
 
 test("registry reads bounded projected messages without exposing Pi internals", async () => {
@@ -366,6 +408,40 @@ test("registry rejects malformed, symbolic-link, and oversized session histories
   index = await registry.listPersistedSessionIds(workspace);
   assert.equal(index.complete, false);
   assert.equal(index.sessions.has("session-unsafe"), false);
+});
+
+test("history cache invalidates on append, rewrite, replacement and removal", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ts-phone-history-cache-"));
+  try {
+    const workspaceRoot = join(root, "ts_001");
+    const sessionsRoot = join(workspaceRoot, ".pi", "sessions");
+    await mkdir(sessionsRoot, { recursive: true });
+    const path = join(sessionsRoot, "history.jsonl");
+    const header = JSON.stringify({ type: "session", id: "session-cache", cwd: workspaceRoot });
+    const message = (id: string, parentId: string | null, content: string) =>
+      JSON.stringify({ type: "message", id, parentId, message: { role: "user", content } });
+    const initial = `${header}\n${message("00000001", null, "first")}\n`;
+    await writeFile(path, initial);
+    const registry = new WorkspaceRegistry(root);
+    const workspace = await registry.get("ts_001");
+    const session = (await registry.listPersistedSessionIds(workspace)).sessions.get("session-cache")!;
+    const read = () => registry.readPersistedSessionMessages(workspace, session, { limit: 1 });
+    assert.deepEqual(await read(), await read());
+    await appendFile(path, `${message("00000002", "00000001", "second")}\n`);
+    assert.deepEqual((await read()).messageIds, ["00000002"]);
+    await writeFile(path, initial.replace("first", "other"));
+    assert.ok(JSON.stringify(await read()).includes("other"));
+    const replacement = join(sessionsRoot, "replacement.jsonl");
+    await writeFile(replacement, initial);
+    await rename(replacement, path);
+    assert.ok(JSON.stringify(await read()).includes("first"));
+    await rm(path);
+    await assert.rejects(read);
+    await symlink(replacement, path);
+    await assert.rejects(read);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("registry refuses session quarantine through a replaced sessions directory", async () => {
