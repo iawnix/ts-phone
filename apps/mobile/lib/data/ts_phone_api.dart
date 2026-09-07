@@ -50,6 +50,12 @@ enum TsPhoneProblemCode {
   promptRejected,
   runtimeExtensionError,
   deliveryUncertain,
+  activationExternalOwner,
+  activationUpgradeRequired,
+  activationFailed,
+  activationOutcomeUnknown,
+  activationCapacity,
+  runtimeRecoveryRequired,
 }
 
 class TsPhoneProblem {
@@ -95,9 +101,26 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
     final managementCode = switch (error.code) {
       'workspace_management_changed' ||
       'session_management_changed' => TsPhoneProblemCode.managementChanged,
+      'session_switch_required' ||
+      'session_switch_stale' => TsPhoneProblemCode.managementChanged,
+      'external_controller' => TsPhoneProblemCode.activationExternalOwner,
+      'session_guard_upgrade_required' || 'session_writer_unverified' =>
+        TsPhoneProblemCode.activationUpgradeRequired,
+      'worker_start_failed' ||
+      'worker_start_timeout' ||
+      'worker_start_interrupted' => TsPhoneProblemCode.activationFailed,
+      'activation_outcome_unknown' =>
+        TsPhoneProblemCode.activationOutcomeUnknown,
+      'worker_cleanup_uncertain' ||
+      'session_recovery_required' => TsPhoneProblemCode.runtimeRecoveryRequired,
+      'activation_capacity_exceeded' => TsPhoneProblemCode.activationCapacity,
+      'activation_id_conflict' => TsPhoneProblemCode.managementChanged,
       'workspace_delete_blocked' ||
       'workspace_has_active_workers' ||
       'controller_session_active' ||
+      'workspace_activating' ||
+      'session_not_ready' ||
+      'worker_identity_conflict' ||
       'session_active' ||
       'session_has_pending_approvals' => TsPhoneProblemCode.resourcesBusy,
       'workspace_preflight_unavailable' ||
@@ -405,8 +428,11 @@ abstract interface class TsPhoneManagementGateway {
   Future<SessionSummary> activateSession(
     String workspaceId,
     String sessionId,
-    String managementRevision,
-  );
+    String managementRevision, {
+    SessionAccessMode? accessMode,
+    String? requestId,
+    SessionActivationConflict? switchFrom,
+  });
 }
 
 class TsPhoneApi
@@ -415,12 +441,17 @@ class TsPhoneApi
     this.settings, {
     http.Client? client,
     this.requestTimeout = const Duration(seconds: 15),
+    this.activationTimeout = const Duration(seconds: 90),
   }) : assert(!requestTimeout.isNegative && requestTimeout != Duration.zero),
+       assert(
+         !activationTimeout.isNegative && activationTimeout != Duration.zero,
+       ),
        _client = client ?? http.Client();
 
   final ConnectionSettings settings;
   final http.Client _client;
   final Duration requestTimeout;
+  final Duration activationTimeout;
 
   Map<String, String> get _authorization => <String, String>{
     'Authorization': 'Bearer ${settings.token}',
@@ -609,9 +640,35 @@ class TsPhoneApi
   Future<SessionSummary> activateSession(
     String workspaceId,
     String sessionId,
-    String managementRevision,
-  ) =>
-      _sessionLifecycle(workspaceId, sessionId, 'activate', managementRevision);
+    String managementRevision, {
+    SessionAccessMode? accessMode,
+    String? requestId,
+    SessionActivationConflict? switchFrom,
+  }) async {
+    try {
+      return await _sessionMutation(
+        workspaceId,
+        sessionId,
+        'activate',
+        timeout: activationTimeout,
+        body: {
+          'managementRevision': managementRevision,
+          if (accessMode != null) 'accessMode': accessMode.name,
+          'requestId': ?requestId,
+          if (switchFrom != null) 'switchFrom': switchFrom.confirmation,
+        },
+      );
+    } on Object catch (error) {
+      if (error is http.ClientException ||
+          (error is TsPhoneApiException && error.code == 'request_timeout')) {
+        throw const TsPhoneApiException(
+          'Activation outcome is unknown; refresh before continuing',
+          code: 'activation_outcome_unknown',
+        );
+      }
+      rethrow;
+    }
+  }
 
   Future<WorkspaceSummary> _workspaceLifecycle(
     String workspaceId,
@@ -653,12 +710,13 @@ class TsPhoneApi
     String sessionId,
     String resource, {
     String method = 'POST',
+    Duration? timeout,
     required Map<String, Object?> body,
   }) async {
     final path = resource.isEmpty
         ? '${_workspacePath(workspaceId, 'sessions')}/${Uri.encodeComponent(sessionId)}'
         : _sessionPath(workspaceId, sessionId, resource);
-    final value = await _request(method, path, body: body);
+    final value = await _request(method, path, body: body, timeout: timeout);
     return SessionSummary.fromJson(_asMap(value, 'Session mutation'));
   }
 
@@ -977,6 +1035,7 @@ class TsPhoneApi
     String path, {
     Map<String, Object?>? body,
     Map<String, String>? queryParameters,
+    Duration? timeout,
   }) async {
     final abort = Completer<void>();
     final request =
@@ -1002,7 +1061,7 @@ class TsPhoneApi
       response = await _client
           .send(request)
           .then((streamed) => http.Response.fromStream(streamed))
-          .timeout(requestTimeout);
+          .timeout(timeout ?? requestTimeout);
     } on TimeoutException {
       if (!abort.isCompleted) abort.complete();
       throw const TsPhoneApiException(

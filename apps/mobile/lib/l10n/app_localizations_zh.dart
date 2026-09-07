@@ -937,7 +937,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String get switchProject => '切换项目';
 
   @override
-  String get continueSession => '继续对话';
+  String get continueSession => '继续研究';
+
+  @override
+  String get readOnlyAssistant => '只读助手';
+
+  @override
+  String get activationUpgradeRequired => '请更新 TSPi Host 以选择会话模式。仍可浏览历史记录。';
+
+  @override
+  String get activationExternalOwner => '此工作区正在终端中打开。请继续该会话，或关闭终端会话后再切换。';
+
+  @override
+  String get activationSwitchTitle => '切换运行中的会话？';
+
+  @override
+  String activationSwitchBody(String name) {
+    return '将停止「$name」的空闲运行进程，保留历史和远程计算。如果新会话启动失败，不会自动重启原进程。';
+  }
+
+  @override
+  String get activationSwitchConfirm => '切换';
+
+  @override
+  String get activationOpenOwner => '打开该会话';
+
+  @override
+  String get activationFailed =>
+      '会话未能就绪，请刷新状态并检查 Host 配置。切换时已停止的原进程不会自动重启，历史和草稿仍保留。';
+
+  @override
+  String get activationOutcomeUnknown =>
+      '未收到会话启动结果，Host 可能仍在准备会话。请先刷新状态，再决定是否重试。';
+
+  @override
+  String get activationCapacity =>
+      'Host 的会话启动记录已达上限。请等待运行中的任务结束，安排重启 Host 后再刷新。';
+
+  @override
+  String get activationRecoveryRequired =>
+      '尚未确认会话进程的状态，请先在 Host 上检查再继续。不会自动重发消息。';
 
   @override
   String get preparingSession => '正在准备会话';

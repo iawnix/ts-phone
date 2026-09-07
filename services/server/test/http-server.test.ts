@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -20,7 +20,9 @@ test("owned Worker prompts use RPC preflight and publish one accepted input", as
     const session = await fixture.application.hub.createSession("ts_001", { accessMode: "controller" });
     const activation = fixture.application.hub.activateSession("ts_001", session.sessionId, { managementRevision: session.managementRevision });
     await waitFor(async () => (await fixture.application.hub.listSessions("ts_001"))[0]?.runtimeState, "connecting");
-    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, { sessionId: session.sessionId });
+    await waitFor(async () => readFile(`${fixture.config.tspiPath}.launch`, "utf8").then(() => true, () => false), true);
+    const { launchId } = JSON.parse(await readFile(`${fixture.config.tspiPath}.launch`, "utf8"));
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, { sessionId: session.sessionId, launchId });
     await activation;
     await waitForState(fixture, "idle");
     const journal = await fixture.application.hub.journal("ts_001", session.sessionId);
@@ -87,7 +89,7 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     };
     assert.deepEqual(version.data, {
       apiVersion: "ts-phone-api/4",
-      serviceVersion: "0.7.1",
+      serviceVersion: "0.8.0",
     });
     assert.equal((await api(fixture, "/api/v3/version")).status, 404);
 
@@ -181,6 +183,7 @@ test("service restart restores disk history as a read-only session", async () =>
       "history.branches",
       "activity.subagents",
       "activity.research",
+      "session.activate_mode",
     ]);
 
     const snapshotResponse = await api(

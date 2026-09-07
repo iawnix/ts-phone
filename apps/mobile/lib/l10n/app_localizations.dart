@@ -1859,8 +1859,74 @@ abstract class AppLocalizations {
   /// No description provided for @continueSession.
   ///
   /// In en, this message translates to:
-  /// **'Continue conversation'**
+  /// **'Continue research'**
   String get continueSession;
+
+  /// No description provided for @readOnlyAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only assistant'**
+  String get readOnlyAssistant;
+
+  /// No description provided for @activationUpgradeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Update the TSPi Host to choose a session mode. History remains available.'**
+  String get activationUpgradeRequired;
+
+  /// No description provided for @activationExternalOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'This workspace is open in a terminal. Continue that conversation or close it before switching.'**
+  String get activationExternalOwner;
+
+  /// No description provided for @activationSwitchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch the running conversation?'**
+  String get activationSwitchTitle;
+
+  /// No description provided for @activationSwitchBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The idle runtime for {name} will stop. Its history and remote calculations are kept. A failed start will not restart it automatically.'**
+  String activationSwitchBody(String name);
+
+  /// No description provided for @activationSwitchConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch'**
+  String get activationSwitchConfirm;
+
+  /// No description provided for @activationOpenOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Open conversation'**
+  String get activationOpenOwner;
+
+  /// No description provided for @activationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation did not become ready. Refresh and check the Host configuration. A runtime stopped during switching will stay offline; history and drafts are kept.'**
+  String get activationFailed;
+
+  /// No description provided for @activationOutcomeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The activation result was not received. The Host may still be preparing this conversation. Refresh its state before trying again.'**
+  String get activationOutcomeUnknown;
+
+  /// No description provided for @activationCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'The Host\'s activation records are full. Wait for active runs to settle, arrange a Host restart, then refresh.'**
+  String get activationCapacity;
+
+  /// No description provided for @activationRecoveryRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation process could not be confirmed. Inspect it on the Host before continuing. No message will be resent automatically.'**
+  String get activationRecoveryRequired;
 
   /// No description provided for @preparingSession.
   ///

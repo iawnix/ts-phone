@@ -95,7 +95,10 @@ TS_PHONE_STATE_DIR=/absolute/path/to/ts-phone-dev/state npm run ctl -- token
 
 The app opens to recent conversations and projects. Creating a conversation or
 reading history does not start a Worker. With `TS_PHONE_TSPI` configured, choose
-Continue conversation to start the matching TSPi Worker. A manually started
+Continue research to start or rejoin the same session without a visible CLI.
+Read-only assistant is a separate menu choice. Idle Host-owned runtime switches
+require confirmation; busy or external runtimes are never silently stopped.
+The configured launcher must advertise `tspi-session-guard/1`. A manually started
 phone session remains supported for diagnostics:
 
 ```bash

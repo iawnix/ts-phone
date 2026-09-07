@@ -157,6 +157,26 @@ export class ManagementStore {
     });
   }
 
+  async rememberSessionActivation(
+    workspaceId: string,
+    workspaceName: string,
+    sessionId: string,
+    expectedRevision: string,
+    defaults: NewSessionMetadata,
+  ): Promise<ManagedSession> {
+    return this.#mutate((document) => {
+      const workspace = ensureWorkspace(document, workspaceId, workspaceName);
+      const session = sessionForMutation(workspace, sessionId, expectedRevision, defaults);
+      if (workspace.lifecycleState !== "active" || session.lifecycleState !== "active") {
+        throw new HttpError(409, "session_not_active", "Restore the workspace and conversation before continuing");
+      }
+      session.accessMode = defaults.accessMode;
+      revise(session);
+      touch(workspace, session.updatedAt);
+      return clone(session)!;
+    });
+  }
+
   async renameSession(
     workspaceId: string,
     workspaceName: string,

@@ -49,6 +49,26 @@
   "allOf": [
     {
       "if": {
+        "properties": { "type": { "enum": ["session_state", "session.snapshot"] } },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "currentAccessMode": { "enum": ["controller", "observer", null] },
+              "runtimeOwner": { "enum": ["host", "external", null] },
+              "canActivate": { "type": "boolean" },
+              "managementRevision": { "type": "string" },
+              "activation": { "$ref": "#/$defs/sessionActivation" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
         "properties": { "type": { "const": "agent_start" } },
         "required": ["type"]
       },
@@ -81,6 +101,27 @@
     }
   ],
   "$defs": {
+    "sessionActivation": {
+      "type": "object",
+      "required": ["modes"],
+      "properties": {
+        "modes": { "type": "array", "uniqueItems": true, "items": { "enum": ["controller", "observer"] } },
+        "problem": { "type": "string", "maxLength": 160 },
+        "conflict": {
+          "type": "object",
+          "required": ["sessionId", "sessionRevision", "owner", "switchable"],
+          "properties": {
+            "sessionId": { "type": "string", "maxLength": 160 },
+            "sessionRevision": { "type": "string", "maxLength": 160 },
+            "sessionName": { "type": "string" },
+            "owner": { "enum": ["host", "external"] },
+            "switchable": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "agentRunEvent": {
       "type": "object",
       "required": ["type", "origin", "turnId", "agentRunId"],

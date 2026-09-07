@@ -21,9 +21,9 @@ the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.7.1 | API v4, Events v3, Bridge v3, bidirectional history and native Worker prompt receipts |
-| TSPi package | 0.13.1 | Bridge v3, exact session Workers, model readiness and guard/1 |
-| Mobile app | 0.16.1+42 | API v4, bounded history navigation, active session counts and connection details |
+| TS Phone server | 0.8.0 | API v4, Events v3, Bridge v3, explicit-mode activation, readiness and confirmed idle switching |
+| TSPi package | 0.14.0 | Bridge v3, exact session Workers, model readiness and guard/1 |
+| Mobile app | 0.17.0+43 | API v4, Continue research, separate read-only assistant, activation recovery and conflict confirmation |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in
@@ -163,12 +163,16 @@ ExecStart=/home/iaw/TS-pi-agent/TSPhoneServer
 ReadWritePaths=/home/iaw/.local/state/ts-phone
 ReadWritePaths=/home/iaw/TS-pi-agent/workspaces
 ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/runtime-cache
+ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/session-host
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
 ~~~
 
 `ProtectHome=read-only` applies to TSPi child processes too. The explicit paths
 above are required for workspace/Pi sessions and the managed Python/cache state.
+The TSPi installer creates the owner-only `.pi/session-host` directory before
+service activation; its guards must remain writable for Worker children.
+Source testing outside the installer must prepare this directory explicitly.
 Keep all other Home paths read-only. If a notification provider must refresh a
 credential, add only that provider's private state directory through a local
 systemd drop-in; do not make the whole skill, config tree, or Home writable.
@@ -191,7 +195,8 @@ cd /home/iaw/TS-pi-agent
 ./TSPi --workspace ts_006 --phone
 ~~~
 
-6. Run the same command in another terminal only when an observer is desired.
+6. A second Controller launch must fail. For a separate read-only assistant use
+   `./TSPi --workspace ts_006 --phone --phone-access observer` explicitly.
 7. On a typical 64-bit Android phone, install the APK at the suite manifest's
    `components.phone.mobile_artifact.path` under
    `.pi/packages/tspi/current/phone/`, then reconnect.
@@ -257,7 +262,9 @@ responses, or tool output.
 In the app, verify:
 
 1. The workspace shows one controller after the first TSPi launch.
-2. A second launch appears as an observer rather than replacing the controller.
+2. A second Controller launch fails without replacing or downgrading it. An
+   explicitly requested Observer uses another session; the same JSONL cannot
+   be opened by two processes.
 3. Prompts sent to each session appear only in that session.
 4. CLI input appears in the matching phone session.
 5. Observer read tools work and write-capable tools are blocked.
@@ -277,6 +284,12 @@ In the app, verify:
 15. Verify a project with an active Worker or unresolved remote effect cannot be
     moved to Recently Deleted. Permanently delete only a disposable test project
     after entering its exact ID.
+16. Without a visible CLI, open existing history, choose Continue research,
+    verify the current model and send one harmless prompt. Background/reconnect
+    and confirm the same session and history. Activation itself must not send.
+17. Confirm idle mode/session switches, refuse busy or external CLI switches,
+    and check model/auth failures preserve the draft and release only the new
+    Worker. Check Observer occupancy blocks destructive lifecycle operations.
 
 Use harmless read-only prompts for the first transport checks.
 
@@ -284,7 +297,10 @@ Use harmless read-only prompts for the first transport checks.
 
 Rollback to the previous complete TSPi Package:
 
-1. Exit TSPi phone sessions after any active turn finishes.
+1. Exit all affected TSPi writers after active turns finish, including Observers
+   without a Bridge. A suite without `tspi-session-guard/1` cannot safely coexist
+   with new guarded writers. It restores its previous limited behavior, not
+   Session Host ownership or durable delivery guarantees.
 2. Run `install_package.py` with the retained previous suite manifest and
    archive.
 3. Refresh that selected Agent runtime, restart the suite-owned Phone service,

@@ -79,6 +79,15 @@ extension TsPhoneProblemLocalizations on TsPhoneProblem {
     TsPhoneProblemCode.sessionChanged => l10n.problemSessionChanged,
     TsPhoneProblemCode.agentRunChanged => l10n.problemAgentRunChanged,
     TsPhoneProblemCode.managementChanged => l10n.problemManagementChanged,
+    TsPhoneProblemCode.activationExternalOwner => l10n.activationExternalOwner,
+    TsPhoneProblemCode.activationUpgradeRequired =>
+      l10n.activationUpgradeRequired,
+    TsPhoneProblemCode.activationFailed => l10n.activationFailed,
+    TsPhoneProblemCode.activationOutcomeUnknown =>
+      l10n.activationOutcomeUnknown,
+    TsPhoneProblemCode.activationCapacity => l10n.activationCapacity,
+    TsPhoneProblemCode.runtimeRecoveryRequired =>
+      l10n.activationRecoveryRequired,
     TsPhoneProblemCode.resourcesBusy => l10n.problemResourcesBusy,
     TsPhoneProblemCode.preflightUnavailable => l10n.problemPreflightUnavailable,
     TsPhoneProblemCode.managementCapacity => l10n.problemManagementCapacity,

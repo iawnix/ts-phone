@@ -567,6 +567,10 @@ SessionSummary _session({
   managementRevision: _revision,
   managed: true,
   canActivate: canActivate,
+  activation: const SessionActivation(
+    modes: {SessionAccessMode.controller, SessionAccessMode.observer},
+  ),
+  capabilities: const {'session.activate_mode'},
   canPrompt: false,
 );
 
@@ -805,8 +809,11 @@ class _ManagementGateway extends Fake
   Future<SessionSummary> activateSession(
     String workspaceId,
     String sessionId,
-    String managementRevision,
-  ) {
+    String managementRevision, {
+    SessionAccessMode? accessMode,
+    String? requestId,
+    SessionActivationConflict? switchFrom,
+  }) {
     activateSessionCalls += 1;
     return activation?.future ?? Future<SessionSummary>.value(_session());
   }

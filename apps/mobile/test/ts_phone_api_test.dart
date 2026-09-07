@@ -477,6 +477,51 @@ void main() {
     expect(requestIndex, 2);
   });
 
+  test(
+    'explicit activation binds mode, request, and the source revision',
+    () async {
+      final api = TsPhoneApi(
+        settings,
+        client: MockClient((request) async {
+          expect(jsonDecode(request.body), {
+            'managementRevision': _managementRevision,
+            'accessMode': 'controller',
+            'requestId': 'activation-1',
+            'switchFrom': {
+              'sessionId': 'source-session',
+              'sessionRevision': 'source-revision',
+            },
+          });
+          return _apiResponse({
+            ..._sessionJson(runtimeState: 'idle'),
+            'currentAccessMode': 'controller',
+            'runtimeOwner': 'host',
+            'activation': {
+              'modes': ['controller', 'observer'],
+            },
+          });
+        }),
+      );
+      addTearDown(api.close);
+      final active = await api.activateSession(
+        'ts_001',
+        'session_1',
+        _managementRevision,
+        accessMode: SessionAccessMode.controller,
+        requestId: 'activation-1',
+        switchFrom: const SessionActivationConflict(
+          sessionId: 'source-session',
+          sessionRevision: 'source-revision',
+          owner: 'host',
+          switchable: true,
+        ),
+      );
+      expect(active.currentAccessMode, SessionAccessMode.controller);
+      expect(active.runtimeOwner, 'host');
+      expect(active.activation?.modes, contains(SessionAccessMode.controller));
+    },
+  );
+
   test('requests and parses a structured timeline page', () async {
     final api = TsPhoneApi(
       settings,
@@ -624,6 +669,32 @@ void main() {
     expect(problem.code, TsPhoneProblemCode.agentRunChanged);
   });
 
+  test(
+    'distinguishes startup failure, uncertain ownership and activation limits',
+    () {
+      const cases = {
+        'worker_start_failed': TsPhoneProblemCode.activationFailed,
+        'worker_start_timeout': TsPhoneProblemCode.activationFailed,
+        'worker_start_interrupted': TsPhoneProblemCode.activationFailed,
+        'worker_cleanup_uncertain': TsPhoneProblemCode.runtimeRecoveryRequired,
+        'session_recovery_required': TsPhoneProblemCode.runtimeRecoveryRequired,
+        'activation_capacity_exceeded': TsPhoneProblemCode.activationCapacity,
+        'session_guard_upgrade_required':
+            TsPhoneProblemCode.activationUpgradeRequired,
+      };
+      for (final entry in cases.entries) {
+        final problem = describeTsPhoneProblem(
+          TsPhoneApiException(
+            'private diagnostic',
+            statusCode: 502,
+            code: entry.key,
+          ),
+        );
+        expect(problem.code, entry.value, reason: entry.key);
+      }
+    },
+  );
+
   test('aborts a stalled API request after the configured timeout', () async {
     final api = TsPhoneApi(
       settings,
@@ -643,6 +714,82 @@ void main() {
       ),
     );
   });
+
+  test(
+    'activation has a separate wait budget without slowing ordinary requests',
+    () async {
+      final api = TsPhoneApi(
+        settings,
+        requestTimeout: const Duration(milliseconds: 1),
+        activationTimeout: const Duration(seconds: 1),
+        client: MockClient((request) async {
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+          return http.Response(
+            jsonEncode({
+              'error': {
+                'code': 'session_switch_required',
+                'message': 'Confirm the switch',
+              },
+            }),
+            409,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      await expectLater(
+        api.activateSession('ts_001', 'session-test', 'revision'),
+        throwsA(
+          isA<TsPhoneApiException>().having(
+            (error) => error.code,
+            'code',
+            'session_switch_required',
+          ),
+        ),
+      );
+      await expectLater(
+        api.listSessions('ts_001'),
+        throwsA(
+          isA<TsPhoneApiException>().having(
+            (error) => error.code,
+            'code',
+            'request_timeout',
+          ),
+        ),
+      );
+    },
+  );
+
+  for (final interrupted in [false, true]) {
+    test(
+      'unconfirmed activation is not retried after ${interrupted ? 'disconnect' : 'timeout'}',
+      () async {
+        var requests = 0;
+        final api = TsPhoneApi(
+          settings,
+          activationTimeout: const Duration(milliseconds: 20),
+          client: MockClient((request) {
+            requests++;
+            if (interrupted) {
+              throw http.ClientException('connection interrupted');
+            }
+            return Completer<http.Response>().future;
+          }),
+        );
+        addTearDown(api.close);
+        await expectLater(
+          api.activateSession('ts_001', 'session-test', 'revision'),
+          throwsA(
+            isA<TsPhoneApiException>().having(
+              (error) => error.code,
+              'code',
+              'activation_outcome_unknown',
+            ),
+          ),
+        );
+        expect(requests, 1);
+      },
+    );
+  }
 }
 
 const _managementRevision = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

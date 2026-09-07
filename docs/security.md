@@ -36,8 +36,9 @@ The Bearer token must therefore be treated as remote controller access, not as
 a low-privilege chat credential.
 
 Observer sessions apply a stricter policy to every turn, including local TUI
-input. Only read, grep, find, ls, ts_workspace_context, and
-ts_remote_inspect are allowed. All other tools fail closed. The broker also
+input. Only `read`, `grep`, `find`, `ls`, `ts_state`, and
+`ts_remote` are allowed. The installed TSPi tool catalog and Bridge policy own
+this allowlist. All other tools fail closed. The broker also
 rejects any approval request from an observer.
 
 Permanent project deletion additionally requires an exact-ID confirmation and
@@ -56,7 +57,9 @@ automatic cleanup timer.
 The TSPi launcher and broker enforce complementary controls:
 
 - the Root Agent file lock permits one controller process per workspace;
-- lock contention in phone mode creates an independent observer Pi session;
+- lock contention fails explicitly; Observer is a separate requested mode;
+- every writable Pi session, including Observer, holds a pre-open session guard;
+- destructive lifecycle operations hold the session-directory guard exclusively;
 - the broker permits one live controller and multiple observers;
 - the broker can start only its configured absolute TSPi executable and passes
   structured workspace/session/model/access arguments rather than a command;
@@ -68,7 +71,15 @@ The TSPi launcher and broker enforce complementary controls:
 - commands are bound to the exact connection, generation, session, and
   revision.
 
-Access mode is asserted by the local TSPi bridge. The local service account is
+With `TS_PHONE_TSPI` configured, the Host verifies a Bridge's PID and mode against
+the launcher's held OS guards. Host-owned launches additionally bind a private
+launch ID; unknown IDs cannot masquerade as external CLIs. Saved preferences do
+not grant live authority. Busy, queued or external runtimes cannot be silently
+stopped, and idle switches require the source session revision. Without a fixed
+launcher, manual Bridge-only transport retains its local-account trust boundary
+but cannot provide guarded Host activation or deletion.
+
+The local service account is
 inside the trust boundary: a malicious process running as that same Unix user
 can access workspace files and local capabilities independently of TS Phone.
 

@@ -207,6 +207,7 @@ class _ConversationShellState extends State<ConversationShell> {
             settings: widget.settings,
             workspace: _workspace!,
             session: session,
+            onOpenSession: _selectSession,
             gatewayFactory: widget.gatewayBuilder == null
                 ? null
                 : () => widget.gatewayBuilder!(widget.settings),

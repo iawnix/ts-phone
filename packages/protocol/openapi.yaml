@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.7.1
+  version: 0.8.0
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -215,10 +215,11 @@ paths:
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/activate:
     post:
       operationId: activateSession
+      description: Explicitly start or rejoin the same conversation. With session.activate_mode, choose controller or observer; no prompt is sent. Conflicts require a revision-bound switchFrom. Unknown launches and busy or external owners cannot be stopped. Omitted mode retains the saved preference for older clients.
       parameters:
         - $ref: "#/components/parameters/workspaceId"
         - $ref: "#/components/parameters/sessionId"
-      requestBody: { $ref: "#/components/requestBodies/Lifecycle" }
+      requestBody: { $ref: "#/components/requestBodies/Activation" }
       responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" }, "502": { $ref: "#/components/responses/ServiceUnavailable" }, "504": { $ref: "#/components/responses/ServiceUnavailable" } }
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/messages:
     get:
@@ -493,6 +494,7 @@ components:
         - command.prompt
         - command.abort
         - interaction.approval
+        - session.activate_mode
     Workspace:
       type: object
       required: [id, name, runtimeState, isStreaming, liveSessionCount, sessionCount, lifecycleState, managementRevision, managed]
@@ -525,6 +527,11 @@ components:
         runtimeState: { $ref: "#/components/schemas/RuntimeState" }
         isStreaming: { type: boolean }
         accessMode: { enum: [controller, observer] }
+        currentAccessMode:
+          enum: [controller, observer, null]
+          description: Verified live authority, null without a ready runtime; accessMode alone may be a saved preference
+        runtimeOwner: { enum: [host, external, null] }
+        activation: { $ref: "#/components/schemas/SessionActivation" }
         historyAvailable:
           type: boolean
           description: A validated workspace-local Pi JSONL history exists
@@ -544,6 +551,43 @@ components:
         canActivate: { type: boolean }
         updatedAt: { type: string, format: date-time }
         deletedAt: { type: string, format: date-time }
+      additionalProperties: false
+    SessionActivation:
+      type: object
+      required: [modes]
+      properties:
+        modes:
+          type: array
+          uniqueItems: true
+          items: { enum: [controller, observer] }
+        problem: { $ref: "#/components/schemas/BoundedId" }
+        conflict:
+          type: object
+          required: [sessionId, sessionRevision, owner, switchable]
+          properties:
+            sessionId: { $ref: "#/components/schemas/BoundedId" }
+            sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+            sessionName: { type: string }
+            owner: { enum: [host, external] }
+            switchable: { type: boolean }
+          additionalProperties: false
+      additionalProperties: false
+    ActivationInput:
+      type: object
+      required: [managementRevision]
+      properties:
+        managementRevision: { $ref: "#/components/schemas/ManagementRevision" }
+        accessMode: { enum: [controller, observer] }
+        requestId:
+          allOf: [{ $ref: "#/components/schemas/BoundedId" }]
+          description: Scoped to workspace and session within this Host generation; equal requests share an outcome, changed parameters are rejected. At 1000 remembered starts new IDs require Host maintenance. Not a durable prompt receipt.
+        switchFrom:
+          type: object
+          required: [sessionId, sessionRevision]
+          properties:
+            sessionId: { $ref: "#/components/schemas/BoundedId" }
+            sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+          additionalProperties: false
       additionalProperties: false
     WorkspaceDeletionPreflight:
       type: object
@@ -753,6 +797,11 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
   requestBodies:
+    Activation:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ActivationInput" }
     Rename:
       required: true
       content:

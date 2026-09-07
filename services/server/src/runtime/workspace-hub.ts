@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { Socket } from "node:net";
 import type { ServerConfig } from "../config.js";
 import { EventJournal } from "../event-journal.js";
@@ -12,6 +13,7 @@ import { appendProjectedMessage, projectSnapshotMessagePage } from "../message-p
 import { secretsEqual } from "../security.js";
 import type {
   AbortInput,
+  ActivateInput,
   ApprovalInput,
   CreateSessionInput,
   CreateWorkspaceInput,
@@ -25,6 +27,8 @@ import type {
   RenameInput,
   RuntimeState,
   SessionCapability,
+  SessionActivation,
+  SessionAccessMode,
   SessionRuntimeSnapshot,
   SessionSnapshot,
   SessionSummary,
@@ -66,7 +70,18 @@ interface SessionRecord {
   runtime?: SessionRuntimeSnapshot;
   snapshotEventId?: string;
   activeAgentRunId?: string;
-  messageCommands: Map<string, Promise<void>>;
+  messageCommands: Map<string, { digest: string; result: Promise<void> }>;
+  pendingPrompts: number;
+  unstartedPrompts: Set<string>;
+  observedPrompts: Set<string>;
+  activating?: boolean;
+  switching?: boolean;
+}
+
+interface PendingActivation {
+  sessionId: string;
+  input: ActivateInput;
+  result: Promise<SessionSummary>;
 }
 
 interface PendingApproval {
@@ -85,8 +100,11 @@ export class WorkspaceHub {
   readonly #records = new Map<string, WorkspaceRecord>();
   readonly #approvals = new Map<string, PendingApproval>();
   readonly #bridgeWaiters = new Map<string, Set<() => void>>();
+  readonly #activations = new Map<string, PendingActivation>();
+  readonly #activationRequests = new Map<string, PendingActivation>();
   readonly #staleTimer: NodeJS.Timeout;
   #mutationTail: Promise<void> = Promise.resolve();
+  #closing = false;
 
   constructor(
     config: ServerConfig,
@@ -302,7 +320,8 @@ export class WorkspaceHub {
       && (isLive(session) || this.#workers.owns(workspaceId, session.sessionId))
     ));
     const activeWorkers = this.#blockingWorkerCount(workspace)
-      + (scientific.rootAgentActive && !knownController ? 1 : 0);
+      + (scientific.rootAgentActive && !knownController ? 1 : 0)
+      + (scientific.sessionWritersActive && ![...workspace.sessions.values()].some(isLive) ? 1 : 0);
     const pendingApprovals = this.#workspaceApprovalCount(workspaceId);
     return {
       workspaceId,
@@ -493,9 +512,26 @@ export class WorkspaceHub {
   async activateSession(
     workspaceId: string,
     sessionId: string,
-    input: LifecycleInput,
+    input: ActivateInput,
   ): Promise<SessionSummary> {
-    return this.#serializeMutation(async () => {
+    const admitted = await this.#serializeMutation(async () => {
+      if (this.#closing) throw new HttpError(503, "host_stopping", "TSPi Host is stopping");
+      const requestKey = input.requestId ? `${workspaceId}\u0000${sessionId}\u0000${input.requestId}` : undefined;
+      const previous = requestKey ? this.#activationRequests.get(requestKey) : undefined;
+      if (previous) {
+        if (!sameActivation(previous.input, input)) {
+          throw new HttpError(409, "activation_id_conflict", "Activation identity was reused with different parameters");
+        }
+        return { result: previous.result.then(async () => {
+          const { session } = await this.#managedSession(workspaceId, sessionId);
+          return this.#sessionSummary(session);
+        }) };
+      }
+      const pending = this.#activations.get(workspaceId);
+      if (pending) {
+        if (pending.sessionId === sessionId && sameActivation(pending.input, input)) return pending;
+        throw new HttpError(409, "workspace_activating", "Another conversation is starting in this workspace");
+      }
       const { workspace, session } = await this.#managedSession(workspaceId, sessionId);
       const workspaceMetadata = this.#management.workspace(workspaceId);
       const sessionMetadata = this.#management.session(workspaceId, sessionId);
@@ -511,47 +547,124 @@ export class WorkspaceHub {
       if (!sessionMetadata && input.managementRevision !== "unmanaged") {
         throw new HttpError(409, "session_management_changed", "Session changed; refresh and try again");
       }
-      if (isLive(session)) return this.#sessionSummary(session);
-      const defaults = this.#sessionDefaults(session);
-      const metadata = await this.#management.ensureSession(
-        workspaceId,
-        this.#workspaceName(workspace),
-        sessionId,
-        input.managementRevision,
-        defaults,
-      );
-      if (metadata.accessMode === "controller") await this.#releaseIdleController(workspace, sessionId);
-      session.state = "connecting";
-      const key = bridgeWaiterKey(workspaceId, sessionId);
-      const connected = this.#bridgeWaiter(key);
-      let launch;
-      try {
-        launch = await this.#workers.start({
-          workspaceId,
-          sessionId,
-          accessMode: metadata.accessMode,
-          ...(metadata.name ? { name: metadata.name } : {}),
-          ...(metadata.model ? { model: metadata.model } : {}),
-        });
-      } catch (error) {
-        this.#cancelBridgeWaiter(key, connected.resolve);
-        session.state = "offline";
-        throw error;
+      const accessMode = input.accessMode ?? sessionMetadata?.accessMode ?? session.accessMode;
+      if (requestKey && this.#activationRequests.size >= 1_000) {
+        throw new HttpError(409, "activation_capacity_exceeded", "Activation receipt capacity reached; schedule Host maintenance before more starts");
       }
-      const outcome = await Promise.race([
-        connected.promise.then(() => ({ connected: true as const })),
-        launch.exit.then((exit) => ({ exit })),
-        delay(15_000).then(() => ({ timeout: true as const })),
-      ]);
-      this.#cancelBridgeWaiter(key, connected.resolve);
-      if ("connected" in outcome) return this.#sessionSummary(session);
-      session.state = "offline";
-      if ("timeout" in outcome) {
-        await this.#workers.stop(workspaceId, sessionId);
-        throw new HttpError(504, "worker_start_timeout", "TSPi Worker did not connect in time");
+      if (isLive(session) && accessMode === session.accessMode) {
+        if (!canPrompt(session)) {
+          throw new HttpError(409, promptProblem(session) ?? "session_not_ready", "This conversation is not ready; refresh its runtime state");
+        }
+        const reused: PendingActivation = { sessionId, input: cloneActivation(input), result: Promise.resolve(this.#sessionSummary(session)) };
+        if (requestKey) this.#activationRequests.set(requestKey, reused);
+        return reused;
       }
-      throw workerStartError(outcome.exit);
+      if (session.state === "recovery_required" || (!isLive(session) && this.#workers.owns(workspaceId, sessionId))) {
+        throw new HttpError(409, "session_recovery_required", "Inspect the existing runtime before starting another one");
+      }
+      const controller = this.#controller(workspace);
+      if (isLive(session) && accessMode === "controller" && controller && controller !== session) {
+        throw new HttpError(409, "controller_session_active", "Open the existing Controller before changing this assistant's mode");
+      }
+      const source = isLive(session) ? session : (accessMode === "controller" ? controller : undefined);
+      if (source) {
+        const conflict = this.#runtimeConflict(source);
+        if (!conflict.switchable) {
+          throw new HttpError(409, conflict.owner === "external" ? "external_controller" : "controller_session_active",
+            "The current runtime cannot be switched; open its conversation instead");
+        }
+        if (input.switchFrom?.sessionId !== source.sessionId || input.switchFrom.sessionRevision !== source.journal.epoch) {
+          throw new HttpError(409, "session_switch_required", "Confirm switching the current idle conversation with its latest revision");
+        }
+        source.switching = true;
+        this.#publishState(source);
+      } else if (input.switchFrom) {
+        throw new HttpError(409, "session_switch_stale", "The runtime to switch changed; refresh before continuing");
+      }
+      session.activating = true;
+      const result = this.#activateRuntime(workspace, session, input, accessMode, source)
+        .finally(() => {
+          delete session.activating;
+          if (source) delete source.switching;
+          this.#activations.delete(workspaceId);
+          this.#publishState(session);
+          if (source && source !== session) this.#publishState(source);
+        }).then(() => this.#sessionSummary(session));
+      const operation: PendingActivation = { sessionId, input: cloneActivation(input), result };
+      this.#activations.set(workspaceId, operation);
+      if (requestKey) this.#activationRequests.set(requestKey, operation);
+      return operation;
     });
+    return admitted.result;
+  }
+
+  async #activateRuntime(
+    workspace: WorkspaceRecord,
+    session: SessionRecord,
+    input: ActivateInput,
+    accessMode: SessionAccessMode,
+    source?: SessionRecord,
+  ): Promise<SessionSummary> {
+    const workspaceId = session.workspaceId;
+    const sessionId = session.sessionId;
+    const key = bridgeWaiterKey(workspaceId, sessionId);
+    const ready = this.#bridgeWaiter(key);
+    const launchId = randomUUID();
+    let timer: NodeJS.Timeout | undefined;
+    let targetStartupAttempted = false;
+    try {
+      await this.#workers.checkCompatibility();
+      if (source) await this.#stopIdleWorker(source);
+      targetStartupAttempted = true;
+      session.state = "connecting";
+      this.#publishState(session);
+      const metadata = this.#management.session(workspaceId, sessionId) ?? this.#sessionDefaults(session);
+      const launch = await this.#workers.start({
+        workspaceId, sessionId, accessMode, launchId,
+        ...(metadata.name ? { name: metadata.name } : {}),
+        ...(metadata.model ? { model: metadata.model } : {}),
+      });
+      const outcome = await Promise.race([
+        ready.promise.then(() => ({ ready: true as const })),
+        launch.exit.then((exit) => ({ exit })),
+        new Promise<{ timeout: true }>((resolve) => { timer = setTimeout(() => resolve({ timeout: true }), 15_000); }),
+      ]);
+      if ("exit" in outcome) throw workerStartError(outcome.exit);
+      if ("timeout" in outcome) throw new HttpError(504, "worker_start_timeout", "TSPi did not publish a ready session in time");
+      if (this.#closing || !isLive(session) || !session.snapshot || session.accessMode !== accessMode) {
+        throw new HttpError(409, "worker_start_interrupted", "TSPi startup was interrupted before the session became ready");
+      }
+      const problem = promptProblem(session);
+      if (problem) throw new HttpError(409, problem, "The selected model is not configured for this TSPi runtime");
+      await this.#serializeMutation(async () => {
+        if (this.#closing || !isLive(session)) throw new HttpError(409, "worker_start_interrupted", "TSPi disconnected during activation");
+        await this.#management.rememberSessionActivation(workspaceId, this.#workspaceName(workspace),
+          sessionId, input.managementRevision, { ...metadata, accessMode });
+        // This is the activation commit point. A subsequent exit is a runtime
+        // state change, not a reason to roll back a successfully saved preference.
+        delete session.activating;
+        this.#publishState(session);
+      });
+      return this.#sessionSummary(session);
+    } catch (error) {
+      // A failed preflight has not touched the old runtime. Stop failures are
+      // attributed to their source by #stopIdleWorker, not to this target.
+      if (!targetStartupAttempted) throw error;
+      try {
+        if (this.#workers.request(workspaceId, sessionId)?.launchId === launchId) {
+          await this.#workers.stop(workspaceId, sessionId);
+          session.connection?.close();
+        }
+        session.state = this.#workers.owns(workspaceId, sessionId) ? "recovery_required" : "offline";
+      } catch {
+        session.state = "recovery_required";
+        throw new HttpError(409, "worker_cleanup_uncertain", "TSPi startup failed and process cleanup could not be confirmed");
+      }
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+      this.#cancelBridgeWaiter(key, ready.resolve);
+    }
   }
 
   async attachBridge(socket: Socket, registration: BridgeRegisterRecord): Promise<BridgeConnection> {
@@ -561,6 +674,8 @@ export class WorkspaceHub {
       throw new Error("Bridge workspace root did not match registry");
     }
     await this.#reconcileSessions(workspace);
+    await this.#workers.verifyWriter(registration.workspaceId, registration.workspaceRoot,
+      registration.sessionId, registration.accessMode, registration.pid);
 
     const workspaceMetadata = this.#management.workspace(registration.workspaceId);
     const sessionMetadata = this.#management.session(registration.workspaceId, registration.sessionId);
@@ -570,11 +685,19 @@ export class WorkspaceHub {
     if (sessionMetadata && sessionMetadata.lifecycleState !== "active") {
       throw new Error("Bridge cannot attach to an inactive session");
     }
-    if (sessionMetadata && sessionMetadata.accessMode !== registration.accessMode) {
-      throw new Error("Bridge access mode did not match managed session metadata");
+    const owned = this.#workers.request(registration.workspaceId, registration.sessionId);
+    if (owned) {
+      if (owned.launchId !== registration.launchId || owned.accessMode !== registration.accessMode) {
+        throw new Error("Bridge did not match the admitted TSPi launch");
+      }
+    } else if (registration.launchId) {
+      throw new Error("Bridge belongs to an unknown TSPi launch; runtime recovery is required");
     }
 
     const existing = workspace.sessions.get(registration.sessionId);
+    if ((existing?.activating && !owned) || existing?.switching) {
+      throw new Error("Conversation runtime admission is already reserved");
+    }
     if (this.#guardedWorkspaces.has(registration.workspaceId)) {
       throw new Error("Workspace lifecycle operation is in progress");
     }
@@ -599,13 +722,14 @@ export class WorkspaceHub {
     delete session.snapshotEventId;
     delete session.activeAgentRunId;
     session.messageCommands.clear();
+    session.unstartedPrompts.clear();
+    session.observedPrompts.clear();
 
     const connection = new BridgeConnection(socket, registration, this.#config.commandTimeoutMs);
     session.connection = connection;
     this.#publishState(session);
     connection.onRecord((record) => this.#handleBridgeRecord(session, connection, record));
     connection.onClose(() => this.#handleBridgeClose(session, connection));
-    this.#resolveBridgeWaiters(bridgeWaiterKey(registration.workspaceId, registration.sessionId));
     return connection;
   }
 
@@ -690,11 +814,21 @@ export class WorkspaceHub {
   async prompt(workspaceId: string, sessionId: string, input: PromptInput): Promise<void> {
     const session = await this.#connectedSession(workspaceId, sessionId);
     this.#assertRevision(session, input.sessionRevision);
+    if (session.activating || session.switching || this.#guardedWorkspaces.has(workspaceId)
+      || this.#closing || (session.state !== "idle" && session.state !== "running")) {
+      throw new HttpError(409, "session_not_ready", "The session is changing or requires recovery; refresh before sending");
+    }
     const existing = session.messageCommands.get(input.clientMessageId);
-    if (existing) return existing;
+    const digest = createHash("sha256").update(input.message).digest("hex");
+    if (existing) {
+      if (existing.digest !== digest) throw new HttpError(409, "message_id_conflict", "Message identity was already used with different content");
+      return existing.result;
+    }
     const problem = promptProblem(session);
     if (problem) throw new HttpError(409, problem, "The TSPi model is not ready to receive messages");
     const connection = session.connection!;
+    session.pendingPrompts += 1;
+    session.unstartedPrompts.add(input.clientMessageId);
     const command = (this.#workers.owns(workspaceId, sessionId)
       ? this.#workers.prompt(workspaceId, sessionId, input.message, session.state === "running").then(() => {
         if (session.connection !== connection) {
@@ -715,13 +849,15 @@ export class WorkspaceHub {
       clientMessageId: input.clientMessageId,
       message: input.message,
     })).catch((error) => {
+      session.unstartedPrompts.delete(input.clientMessageId);
+      session.observedPrompts.delete(input.clientMessageId);
       if (error instanceof RuntimeError && (error.code === "command_ambiguous" || error.code === "bridge_disconnected")) {
         session.state = "recovery_required";
         this.#publishState(session);
       }
       throw error;
-    });
-    session.messageCommands.set(input.clientMessageId, command);
+    }).finally(() => { session.pendingPrompts -= 1; });
+    session.messageCommands.set(input.clientMessageId, { digest, result: command });
     this.#trimMessageCommands(session.messageCommands);
     return command;
   }
@@ -792,6 +928,7 @@ export class WorkspaceHub {
   }
 
   async close(): Promise<void> {
+    this.#closing = true;
     clearInterval(this.#staleTimer);
     for (const workspace of this.#records.values()) {
       for (const session of workspace.sessions.values()) session.connection?.close();
@@ -802,6 +939,7 @@ export class WorkspaceHub {
     }
     this.#bridgeWaiters.clear();
     await this.#workers.close();
+    await Promise.allSettled([...this.#activations.values()].map((activation) => activation.result));
   }
 
   #handleBridgeRecord(
@@ -849,6 +987,7 @@ export class WorkspaceHub {
       session.snapshotEventId = session.journal.publish(
         "session.snapshot",
         {
+          ...this.#sessionSummary(session),
           ...snapshot,
           activeAgentRunId: session.activeAgentRunId ?? null,
           messages: [...snapshot.messages],
@@ -862,6 +1001,7 @@ export class WorkspaceHub {
         identity,
       ).id;
       this.#publishState(session);
+      this.#resolveBridgeWaiters(bridgeWaiterKey(session.workspaceId, session.sessionId));
       return;
     }
     if (bridgeRecord.type === "approval.request") {
@@ -880,6 +1020,12 @@ export class WorkspaceHub {
     }
     // Native input is emitted before preflight; owned RPC prompts are published
     // above only after the request-correlated acknowledgement arrives.
+    if (bridgeRecord.eventType === "input") {
+      const payload = bridgeRecord.payload as { source?: string; clientMessageId?: string } | null;
+      const pending = payload?.clientMessageId ?? (payload?.source === "rpc"
+        ? [...session.unstartedPrompts].find((id) => !session.observedPrompts.has(id)) : undefined);
+      if (pending && session.unstartedPrompts.has(pending)) session.observedPrompts.add(pending);
+    }
     if (bridgeRecord.eventType === "input"
       && this.#workers.owns(session.workspaceId, session.sessionId)
       && (bridgeRecord.payload as { source?: unknown } | null)?.source === "rpc") return;
@@ -889,6 +1035,8 @@ export class WorkspaceHub {
         throw new Error("Bridge started a new agent run before settling the active run");
       }
       session.activeAgentRunId = agentRunId;
+      for (const id of session.observedPrompts) session.unstartedPrompts.delete(id);
+      session.observedPrompts.clear();
       session.state = "running";
       if (session.snapshot) session.snapshot.isStreaming = true;
     }
@@ -898,6 +1046,10 @@ export class WorkspaceHub {
         throw new Error("Bridge settled an agent run that was not active");
       }
       delete session.activeAgentRunId;
+      // Pi's settled event excludes queued continuations. Commands whose input
+      // event has not arrived are still reserved, including the RPC/Bridge gap.
+      for (const id of session.observedPrompts) session.unstartedPrompts.delete(id);
+      session.observedPrompts.clear();
       session.state = "idle";
       if (session.snapshot) session.snapshot.isStreaming = false;
     }
@@ -947,7 +1099,8 @@ export class WorkspaceHub {
     delete session.snapshotEventId;
     delete session.activeAgentRunId;
     session.messageCommands.clear();
-    session.state = session.state === "running" ? "recovery_required" : "offline";
+    session.state = session.state === "running" || session.state === "recovery_required"
+      || session.unstartedPrompts.size > 0 ? "recovery_required" : "offline";
     for (const [key, pending] of this.#approvals) {
       if (pending.connection === connection) this.#approvals.delete(key);
     }
@@ -960,7 +1113,7 @@ export class WorkspaceHub {
     const session = workspace.sessions.get(sessionId);
     if (!session) throw new HttpError(404, "session_not_found", "TSPi session was not found");
     if (!session.connection || session.connection.closed) {
-      throw new HttpError(409, "session_offline", "Start this TSPi session with --phone before using it");
+      throw new HttpError(409, "session_offline", "Continue this conversation from Phone or start its TSPi runtime");
     }
     return session;
   }
@@ -1001,7 +1154,7 @@ export class WorkspaceHub {
       const existing = workspace.sessions.get(sessionId);
       if (existing) {
         if (diskSession) existing.persisted = diskSession;
-        if (metadata && !isLive(existing)) existing.accessMode = metadata.accessMode;
+        if (metadata && !isLive(existing) && !existing.activating) existing.accessMode = metadata.accessMode;
         continue;
       }
       this.#createSession(
@@ -1015,7 +1168,7 @@ export class WorkspaceHub {
     for (const [sessionId, session] of workspace.sessions) {
       if (persisted.ids.has(sessionId)) continue;
       delete session.persisted;
-      if (!managedIds.has(sessionId) && !isLive(session)) this.#discardSession(workspace, sessionId);
+      if (!managedIds.has(sessionId) && !isLive(session) && !session.activating) this.#discardSession(workspace, sessionId);
     }
   }
 
@@ -1058,6 +1211,9 @@ export class WorkspaceHub {
       state: "offline",
       accessMode,
       messageCommands: new Map(),
+      pendingPrompts: 0,
+      unstartedPrompts: new Set(),
+      observedPrompts: new Set(),
     };
     if (persisted) session.persisted = persisted;
     workspace.sessions.set(sessionId, session);
@@ -1101,7 +1257,10 @@ export class WorkspaceHub {
       activeAgentRunId: session.activeAgentRunId ?? null,
       runtimeState: session.state,
       isStreaming: session.state === "running",
-      accessMode: metadata?.accessMode ?? session.accessMode,
+      accessMode: live ? session.accessMode : metadata?.accessMode ?? session.accessMode,
+      currentAccessMode: live && session.snapshot && !session.activating ? session.accessMode : null,
+      runtimeOwner: this.#workers.owns(session.workspaceId, session.sessionId) ? "host" : live ? "external" : null,
+      activation: this.#activationView(session),
       historyAvailable,
       historyOnly: session.state === "offline" && !live && historyAvailable,
       canPrompt: canPrompt(session) && lifecycleState === "active",
@@ -1110,7 +1269,7 @@ export class WorkspaceHub {
       lifecycleState,
       managementRevision: metadata?.managementRevision ?? "unmanaged",
       managed: metadata !== undefined,
-      canActivate: !live
+      canActivate: !session.activating && !session.switching && !live
         && session.state === "offline"
         && lifecycleState === "active"
         && (workspaceMetadata?.lifecycleState ?? "active") === "active"
@@ -1132,6 +1291,7 @@ export class WorkspaceHub {
 
   #publishState(session: SessionRecord): void {
     const connection = session.connection;
+    const summary = this.#sessionSummary(session);
     session.journal.publish("session_state", {
       state: session.state,
       sessionId: session.sessionId,
@@ -1146,6 +1306,12 @@ export class WorkspaceHub {
       canPrompt: canPrompt(session),
       promptProblem: promptProblem(session),
       capabilities: capabilitiesForSession(session),
+      currentAccessMode: summary.currentAccessMode,
+      runtimeOwner: summary.runtimeOwner,
+      activation: summary.activation,
+      canActivate: summary.canActivate,
+      managementRevision: summary.managementRevision,
+      lifecycleState: summary.lifecycleState,
     }, connection ? {
       instanceEpoch: connection.instanceEpoch,
       sessionGeneration: connection.sessionGeneration,
@@ -1164,7 +1330,7 @@ export class WorkspaceHub {
     }
   }
 
-  #trimMessageCommands(commands: Map<string, Promise<void>>): void {
+  #trimMessageCommands(commands: SessionRecord["messageCommands"]): void {
     while (commands.size > 1_000) {
       const first = commands.keys().next().value as string | undefined;
       if (!first) break;
@@ -1205,10 +1371,26 @@ export class WorkspaceHub {
 
   async #stopIdleOwnedWorkers(workspace: WorkspaceRecord): Promise<void> {
     for (const session of workspace.sessions.values()) {
-      if (!this.#workers.owns(workspace.workspace.id, session.sessionId)) continue;
-      if (session.state !== "idle" && session.state !== "offline") continue;
-      await this.#workers.stop(workspace.workspace.id, session.sessionId);
+      if (this.#runtimeConflict(session).switchable) await this.#stopIdleWorker(session);
+    }
+  }
+
+  async #stopIdleWorker(session: SessionRecord): Promise<void> {
+    if (!this.#isIdleOwnedRuntime(session)) {
+      throw new HttpError(409, "controller_session_active", "The current runtime is no longer idle; refresh before switching");
+    }
+    session.switching = true;
+    this.#publishState(session);
+    try {
+      await this.#workers.stop(session.workspaceId, session.sessionId);
       session.connection?.close();
+      session.state = "offline";
+    } catch (error) {
+      session.state = "recovery_required";
+      throw error;
+    } finally {
+      delete session.switching;
+      this.#publishState(session);
     }
   }
 
@@ -1227,10 +1409,7 @@ export class WorkspaceHub {
 
   #blockingWorkerCount(workspace: WorkspaceRecord): number {
     return [...workspace.sessions.values()].filter((session) => (
-      !(
-        this.#workers.owns(workspace.workspace.id, session.sessionId)
-        && (session.state === "idle" || session.state === "offline")
-      )
+      !this.#runtimeConflict(session).switchable
       && (
         isLive(session)
         || this.#workers.owns(workspace.workspace.id, session.sessionId)
@@ -1265,12 +1444,7 @@ export class WorkspaceHub {
         input.managementRevision,
       );
       if (lifecycleState !== "active") {
-        if (stopIdleWorker
-          && this.#workers.owns(workspaceId, sessionId)
-          && (session.state === "idle" || session.state === "offline")) {
-          await this.#workers.stop(workspaceId, sessionId);
-          session.connection?.close();
-        }
+        if (stopIdleWorker && this.#runtimeConflict(session).switchable) await this.#stopIdleWorker(session);
         this.#assertSessionCanHide(workspaceId, session);
       }
       await this.#management.transitionSession(
@@ -1289,6 +1463,7 @@ export class WorkspaceHub {
     workspaceId: string,
     expectedRevision: string,
   ): void {
+    this.#assertNoActivation(workspaceId);
     const actual = this.#management.workspace(workspaceId)?.managementRevision
       ?? "unmanaged";
     if (actual !== expectedRevision) {
@@ -1305,6 +1480,7 @@ export class WorkspaceHub {
     sessionId: string,
     expectedRevision: string,
   ): void {
+    this.#assertNoActivation(workspaceId);
     const actual = this.#management.session(workspaceId, sessionId)
       ?.managementRevision ?? "unmanaged";
     if (actual !== expectedRevision) {
@@ -1328,19 +1504,66 @@ export class WorkspaceHub {
     }
   }
 
-  async #releaseIdleController(workspace: WorkspaceRecord, targetSessionId: string): Promise<void> {
-    const current = [...workspace.sessions.values()].find((session) => (
-      session.sessionId !== targetSessionId
-      && session.accessMode === "controller"
+  #controller(workspace: WorkspaceRecord): SessionRecord | undefined {
+    return [...workspace.sessions.values()].find((session) => (
+      session.accessMode === "controller"
       && (isLive(session) || this.#workers.owns(workspace.workspace.id, session.sessionId))
     ));
-    if (!current) return;
-    if (!this.#workers.owns(workspace.workspace.id, current.sessionId)
-      || (current.state !== "idle" && current.state !== "offline")) {
-      throw new HttpError(409, "controller_session_active", "Another controller session is active in this workspace");
+  }
+
+  #runtimeConflict(session: SessionRecord): NonNullable<SessionActivation["conflict"]> {
+    const owned = this.#workers.owns(session.workspaceId, session.sessionId);
+    const name = this.#management.session(session.workspaceId, session.sessionId)?.name
+      ?? session.snapshot?.sessionName ?? session.persisted?.title;
+    return {
+      sessionId: session.sessionId,
+      sessionRevision: session.journal.epoch,
+      ...(name ? { sessionName: name } : {}),
+      owner: owned ? "host" : "external",
+      switchable: this.#isIdleOwnedRuntime(session) && !session.activating && !session.switching,
+    };
+  }
+
+  #isIdleOwnedRuntime(session: SessionRecord): boolean {
+    return this.#workers.owns(session.workspaceId, session.sessionId) && isLive(session)
+      && session.state === "idle" && session.pendingPrompts === 0 && session.unstartedPrompts.size === 0
+      && !session.activeAgentRunId && this.#sessionApprovalCount(session.workspaceId, session.sessionId) === 0;
+  }
+
+  #activationView(session: SessionRecord): SessionActivation {
+    const metadata = this.#management.session(session.workspaceId, session.sessionId);
+    const workspace = this.#records.get(session.workspaceId);
+    if (this.#closing || !this.#workers.available || !workspace) return { modes: [], problem: "worker_unavailable" };
+    if ((metadata?.lifecycleState ?? "active") !== "active"
+      || (this.#management.workspace(session.workspaceId)?.lifecycleState ?? "active") !== "active") {
+      return { modes: [], problem: "session_not_active" };
     }
-    await this.#workers.stop(workspace.workspace.id, current.sessionId);
-    current.connection?.close();
+    if (session.activating || session.switching || this.#activations.has(session.workspaceId)) {
+      return { modes: [], problem: "workspace_activating" };
+    }
+    if (session.state === "recovery_required" || (!isLive(session) && this.#workers.owns(session.workspaceId, session.sessionId))) {
+      return { modes: [], problem: "session_recovery_required" };
+    }
+    const controller = this.#controller(workspace);
+    if (isLive(session) && session.accessMode === "observer" && controller && controller !== session) {
+      return { modes: ["observer"], conflict: { ...this.#runtimeConflict(controller), switchable: false } };
+    }
+    const current = isLive(session) ? session : controller;
+    if (current) {
+      const conflict = this.#runtimeConflict(current);
+      const modes: SessionAccessMode[] = isLive(session)
+        ? [session.accessMode]
+        : ["observer"];
+      if (conflict.switchable) modes.push(session.accessMode === "controller" && isLive(session) ? "observer" : "controller");
+      return { modes, conflict };
+    }
+    return { modes: ["controller", "observer"] };
+  }
+
+  #assertNoActivation(workspaceId: string): void {
+    if (this.#activations.has(workspaceId)) {
+      throw new HttpError(409, "workspace_activating", "Wait for conversation activation before changing its lifecycle");
+    }
   }
 
   #bridgeWaiter(key: string): { promise: Promise<void>; resolve: () => void } {
@@ -1393,19 +1616,23 @@ function nextSessionId(ids: Iterable<string>): string {
   return `session_${highest + 1}`;
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function sameActivation(left: ActivateInput, right: ActivateInput): boolean {
+  return left.requestId === right.requestId && left.accessMode === right.accessMode
+    && left.managementRevision === right.managementRevision
+    && left.switchFrom?.sessionId === right.switchFrom?.sessionId
+    && left.switchFrom?.sessionRevision === right.switchFrom?.sessionRevision;
+}
+
+function cloneActivation(input: ActivateInput): ActivateInput {
+  return { ...input, ...(input.switchFrom ? { switchFrom: { ...input.switchFrom } } : {}) };
 }
 
 function workerStartError(exit: WorkerExit): HttpError {
-  const diagnostic = exit.diagnostic
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean)
-    ?.replace(/[\u0000-\u001f\u007f]/g, " ")
-    .slice(0, 500);
-  const detail = diagnostic
-    || (exit.signal ? `TSPi Worker stopped with ${exit.signal}` : `TSPi Worker exited with code ${exit.code ?? "unknown"}`);
+  // Launcher/provider stderr can contain private configuration. Expose only
+  // process outcome; model readiness failures already have specific safe codes.
+  const detail = exit.signal
+    ? `TSPi Worker stopped before readiness with ${exit.signal}`
+    : `TSPi Worker exited before readiness with code ${exit.code ?? "unknown"}`;
   return new HttpError(502, "worker_start_failed", detail);
 }
 
@@ -1459,7 +1686,8 @@ function promptProblem(session: SessionRecord): SessionSnapshot["promptProblem"]
 }
 
 function canPrompt(session: SessionRecord): boolean {
-  return isLive(session) && !promptProblem(session);
+  return isLive(session) && !session.activating && !session.switching
+    && (session.state === "idle" || session.state === "running") && !promptProblem(session);
 }
 
 function capabilitiesForSession(
@@ -1477,6 +1705,7 @@ function capabilitiesForSession(
       "activity.research",
     );
   }
+  capabilities.push("session.activate_mode");
   if (activeBranch && isLive(session)) {
     if (canPrompt(session)) capabilities.push("command.prompt");
     capabilities.push("command.abort", "interaction.approval");

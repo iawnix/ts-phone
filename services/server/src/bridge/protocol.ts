@@ -23,6 +23,7 @@ export interface BridgeRegisterRecord extends BridgeEnvelope {
   secret: string;
   workspaceRoot: string;
   pid: number;
+  launchId?: string;
 }
 
 export interface BridgeHeartbeatRecord extends BridgeEnvelope {
@@ -150,6 +151,7 @@ export function parseBridgeClientRecord(value: unknown): BridgeClientRecord {
         secret: requiredString(record.secret, "secret", 200),
         workspaceRoot: requiredString(record.workspaceRoot, "workspaceRoot", 4096),
         pid: positiveInteger(record.pid, "pid"),
+        ...(record.launchId === undefined ? {} : { launchId: requiredId(record.launchId, "launchId") }),
       };
     case "bridge.heartbeat":
       return { ...envelope, type, sequence: positiveInteger(record.sequence, "sequence") };

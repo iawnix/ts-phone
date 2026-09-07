@@ -696,6 +696,7 @@ class ReleaseBuilderTests(unittest.TestCase):
         branch_types = {
             branch["then"]["properties"]["payload"]["allOf"][1]["properties"]["type"]["const"]
             for branch in events["allOf"]
+            if branch.get("if", {}).get("properties", {}).get("type", {}).get("const") in {"agent_start", "agent_settled"}
         }
         self.assertEqual(branch_types, {"agent_start", "agent_settled"})
 

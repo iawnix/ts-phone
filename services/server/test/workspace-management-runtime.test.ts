@@ -14,7 +14,7 @@ import {
   type QuarantinedPath,
 } from "../src/workspace-registry.js";
 
-test("stale lifecycle requests preserve workers and deletion ignores stoppable idle workers", async () => {
+test("stale lifecycle requests preserve workers and unready runtimes block deletion", async () => {
   const root = await mkdtemp(join(tmpdir(), "ts-phone-workspace-lifecycle-"));
   const workspaceRoot = join(root, "workspaces");
   const stateDir = join(root, "state");
@@ -55,13 +55,12 @@ test("stale lifecycle requests preserve workers and deletion ignores stoppable i
     assert.equal(workers.owns("ts_001", "session_1"), true);
 
     const preflight = await hub.workspaceDeletionPreflight("ts_001");
-    assert.equal(preflight.activeWorkers, 0);
-    assert.equal(preflight.canDelete, true);
-    const trashed = await hub.trashWorkspace("ts_001", {
+    assert.equal(preflight.activeWorkers, 1);
+    assert.equal(preflight.canDelete, false);
+    await assert.rejects(() => hub.trashWorkspace("ts_001", {
       managementRevision: renamed.managementRevision,
-    });
-    assert.equal(trashed.lifecycleState, "trashed");
-    assert.equal(workers.owns("ts_001", "session_1"), false);
+    }), (error: unknown) => error instanceof HttpError && error.code === "workspace_delete_blocked");
+    assert.equal(workers.owns("ts_001", "session_1"), true);
   } finally {
     await hub.close();
   }

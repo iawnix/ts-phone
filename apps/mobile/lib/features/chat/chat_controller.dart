@@ -113,6 +113,7 @@ class ChatController extends ChangeNotifier {
     this.streamPreviewCharacterLimit = 6000,
     this.clientMessageIdFactory = createTsPhoneClientMessageId,
     ChatHistoryPreview? initialPreview,
+    SessionSummary? initialSession,
   }) : assert(streamPreviewCharacterLimit > 0),
        assert(!snapshotTimeout.isNegative && snapshotTimeout != Duration.zero),
        _runtimeState = initialRuntimeState,
@@ -124,6 +125,7 @@ class ChatController extends ChangeNotifier {
        _sessionRuntime = initialSessionRuntime,
        _promptProblem = initialPromptProblem,
        _activeAgentRunId = initialActiveAgentRunId {
+    if (initialSession != null) _applyManagement(initialSession);
     if (initialPreview != null && initialPreview.revision == _sessionRevision) {
       _timelineHistory = initialPreview.history;
       _selectedBranchId =
@@ -191,6 +193,10 @@ class ChatController extends ChangeNotifier {
   String? _activeAgentRunId;
   bool _historyAvailable;
   bool _canPrompt;
+  String _managementRevision = 'unmanaged';
+  bool _canActivate = false;
+  SessionActivation? _activation;
+  String? _runtimeOwner;
   bool _commandInFlight = false;
   bool _eventStreamEnabled = true;
   bool _snapshotReady = false;
@@ -228,6 +234,12 @@ class ChatController extends ChangeNotifier {
   ValueListenable<List<SessionTimelineItem>> get timelineUpdates =>
       _timelineUpdates;
   RuntimeState get runtimeState => _runtimeState;
+  String get managementRevision => _managementRevision;
+  SessionActivation? get activation => _activation;
+  String? get runtimeOwner => _runtimeOwner;
+  bool get canActivate => _canActivate && !viewingInactiveBranch;
+  bool get supportsModeActivation =>
+      _capabilities.contains('session.activate_mode');
   EventConnectionState get eventConnectionState => _eventConnectionState;
   String? get streamingText => _streamingTextChunks?.join();
   bool get hasStreamingText => _streamingTextChunks != null;
@@ -324,6 +336,7 @@ class ChatController extends ChangeNotifier {
     _eventGeneration += 1;
     await _cancelEventSubscriptionAndWait();
     if (_disposed) return;
+    _applyManagement(session);
     accessMode = session.accessMode;
     _runtimeState = session.runtimeState;
     _historyAvailable = session.historyAvailable;
@@ -345,6 +358,54 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> refreshMessages() => _refreshMessages();
+
+  Future<SessionSummary> refreshSessionMetadata() async {
+    final sessions = await api.listSessions(workspaceId);
+    final session = sessions
+        .where((value) => value.sessionId == sessionId)
+        .firstOrNull;
+    if (session == null) {
+      throw const TsPhoneApiException(
+        'Conversation is no longer available',
+        statusCode: 404,
+        code: 'session_not_found',
+      );
+    }
+    if (!_disposed) {
+      _applyManagement(session);
+      _notify();
+    }
+    return session;
+  }
+
+  void _applyManagement(SessionSummary session) {
+    _managementRevision = session.managementRevision;
+    _canActivate = session.canActivate;
+    _activation = session.activation;
+    _runtimeOwner = session.runtimeOwner;
+    _capabilities = {
+      ..._capabilities.where((value) => value != 'session.activate_mode'),
+      if (session.capabilities.contains('session.activate_mode'))
+        'session.activate_mode',
+    };
+  }
+
+  void _applyManagementEvent(Map<String, Object?>? payload) {
+    if (payload?['managementRevision'] case final String revision) {
+      _managementRevision = revision;
+    }
+    if (payload?['canActivate'] case final bool available) {
+      _canActivate = available;
+    }
+    if (payload?['activation'] case final Map value) {
+      _activation = SessionActivation.fromJson(
+        Map<String, Object?>.from(value),
+      );
+    }
+    if (payload?.containsKey('runtimeOwner') == true) {
+      _runtimeOwner = payload!['runtimeOwner'] as String?;
+    }
+  }
 
   Future<void> _refreshMessages({
     bool allowUnavailable = false,
@@ -880,6 +941,12 @@ class ChatController extends ChangeNotifier {
     _eventStreamEnabled = true;
     _retrySeconds = 1;
     _eventProblem = null;
+    if (api is TsPhoneManagementGateway) {
+      // History synchronization keeps its own visible error and retry path.
+      unawaited(
+        refreshSessionMetadata().then<void>((_) {}, onError: (Object _) {}),
+      );
+    }
     if (canRefresh) {
       unawaited(refreshMessages());
     } else {
@@ -1115,6 +1182,7 @@ class ChatController extends ChangeNotifier {
     var notifyController = true;
     switch (event.type) {
       case 'session_state':
+        _applyManagementEvent(payload);
         _promptProblem = payload?['promptProblem'] as String?;
         final previous = _runtimeState;
         late final RuntimeState nextState;
@@ -1151,6 +1219,7 @@ class ChatController extends ChangeNotifier {
           unawaited(refreshMessages());
         }
       case 'session.snapshot':
+        _applyManagementEvent(payload);
         _promptProblem = payload?['promptProblem'] as String?;
         final messages = payload?['messages'];
         if (messages is List &&

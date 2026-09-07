@@ -207,6 +207,71 @@ class SessionRuntimeSnapshot {
   final DateTime updatedAt;
 }
 
+class SessionActivationConflict {
+  const SessionActivationConflict({
+    required this.sessionId,
+    required this.sessionRevision,
+    required this.owner,
+    required this.switchable,
+    this.sessionName,
+  });
+
+  factory SessionActivationConflict.fromJson(Map<String, Object?> json) {
+    if (json['sessionId'] is! String ||
+        json['sessionRevision'] is! String ||
+        !{'host', 'external'}.contains(json['owner']) ||
+        json['switchable'] is! bool ||
+        (json['sessionName'] != null && json['sessionName'] is! String)) {
+      throw const FormatException('Session activation conflict is invalid');
+    }
+    return SessionActivationConflict(
+      sessionId: json['sessionId']! as String,
+      sessionRevision: json['sessionRevision']! as String,
+      owner: json['owner']! as String,
+      switchable: json['switchable']! as bool,
+      sessionName: json['sessionName'] as String?,
+    );
+  }
+
+  final String sessionId;
+  final String sessionRevision;
+  final String owner;
+  final bool switchable;
+  final String? sessionName;
+
+  Map<String, Object?> get confirmation => {
+    'sessionId': sessionId,
+    'sessionRevision': sessionRevision,
+  };
+}
+
+class SessionActivation {
+  const SessionActivation({this.modes = const {}, this.problem, this.conflict});
+
+  factory SessionActivation.fromJson(Map<String, Object?> json) {
+    final modes = json['modes'];
+    final conflict = json['conflict'];
+    if (modes is! List ||
+        (json['problem'] != null && json['problem'] is! String) ||
+        (conflict != null && conflict is! Map)) {
+      throw const FormatException('Session activation state is invalid');
+    }
+    return SessionActivation(
+      modes: Set.unmodifiable(modes.map(SessionAccessMode.parse)),
+      problem: json['problem'] as String?,
+      conflict: conflict == null
+          ? null
+          : SessionActivationConflict.fromJson(
+              Map<String, Object?>.from(conflict as Map),
+            ),
+    );
+  }
+
+  final Set<SessionAccessMode> modes;
+  final String? problem;
+  final SessionActivationConflict? conflict;
+}
+
 class SessionSummary {
   const SessionSummary({
     required this.sessionId,
@@ -227,6 +292,9 @@ class SessionSummary {
     this.managementRevision = 'unmanaged',
     this.managed = false,
     this.canActivate = false,
+    this.activation,
+    this.currentAccessMode,
+    this.runtimeOwner,
     this.updatedAt,
     this.deletedAt,
   }) : assert(!historyOnly || historyAvailable);
@@ -294,6 +362,15 @@ class SessionSummary {
       runtimeState: runtimeState,
       isStreaming: isStreaming,
       accessMode: SessionAccessMode.parse(json['accessMode']),
+      currentAccessMode: json['currentAccessMode'] == null
+          ? null
+          : SessionAccessMode.parse(json['currentAccessMode']),
+      runtimeOwner: json['runtimeOwner'] as String?,
+      activation: json['activation'] == null
+          ? null
+          : SessionActivation.fromJson(
+              Map<String, Object?>.from(json['activation']! as Map),
+            ),
       historyAvailable: hasHistory,
       historyOnly:
           historyOnly == true ||
@@ -331,6 +408,9 @@ class SessionSummary {
   final String managementRevision;
   final bool managed;
   final bool canActivate;
+  final SessionActivation? activation;
+  final SessionAccessMode? currentAccessMode;
+  final String? runtimeOwner;
   final DateTime? updatedAt;
   final DateTime? deletedAt;
 

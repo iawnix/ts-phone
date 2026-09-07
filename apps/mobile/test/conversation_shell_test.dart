@@ -40,7 +40,14 @@ const otherWorkspace = WorkspaceSummary(
   sessionCount: 2,
 );
 
-SessionSummary session(String id) => SessionSummary(
+SessionSummary session(
+  String id, {
+  String managementRevision = 'unmanaged',
+  Set<String> capabilities = const {'session.activate_mode'},
+  SessionActivation? activation = const SessionActivation(
+    modes: {SessionAccessMode.controller, SessionAccessMode.observer},
+  ),
+}) => SessionSummary(
   sessionId: id,
   sessionName: id == 'session_1'
       ? 'Transition-state search'
@@ -53,6 +60,9 @@ SessionSummary session(String id) => SessionSummary(
   historyOnly: true,
   canPrompt: false,
   canActivate: true,
+  managementRevision: managementRevision,
+  activation: activation,
+  capabilities: capabilities,
 );
 
 Widget shellApp(
@@ -551,6 +561,117 @@ void main() {
     expect(controller.canSend, isTrue);
   });
 
+  testWidgets(
+    'activation reads the latest revision and explicitly requests research mode',
+    (tester) async {
+      final gateway = ConversationGateway();
+      await tester.pumpWidget(shellApp(gateway));
+      await tester.pumpAndSettle();
+      await openRecent(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('chat-input')),
+        'Keep this draft',
+      );
+      gateway.sessions = [
+        session('session_1', managementRevision: 'fresh-revision'),
+      ];
+      await tester.tap(find.byKey(const ValueKey('continue-session')));
+      await tester.pumpAndSettle();
+      expect(gateway.activatedMode, SessionAccessMode.controller);
+      expect(gateway.activatedRevision, 'fresh-revision');
+      expect(gateway.activationRequestId, isNotEmpty);
+      expect(gateway.sent, 0);
+      expect(find.text('Keep this draft'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'switching uses the displayed source revision only after confirmation',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = ConversationGateway()
+        ..sessions = [
+          session(
+            'session_1',
+            activation: const SessionActivation(
+              modes: {SessionAccessMode.controller, SessionAccessMode.observer},
+              conflict: SessionActivationConflict(
+                sessionId: 'session_2',
+                sessionRevision: 'source-revision',
+                sessionName: 'Alternative mechanism',
+                owner: 'host',
+                switchable: true,
+              ),
+            ),
+          ),
+        ];
+      await tester.pumpWidget(shellApp(gateway));
+      await tester.pumpAndSettle();
+      await openRecent(tester);
+      await tester.tap(find.byKey(const ValueKey('continue-session')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(gateway.activations, 0);
+      await capture(tester, 'activation-switch');
+      await tester.tap(find.text('Switch').last);
+      await tester.pumpAndSettle();
+      expect(gateway.activationSource?.sessionRevision, 'source-revision');
+      expect(gateway.activations, 1);
+    },
+  );
+
+  testWidgets('external owner can be opened but never switched', (
+    tester,
+  ) async {
+    final gateway = ConversationGateway()
+      ..sessions = [
+        session(
+          'session_1',
+          activation: const SessionActivation(
+            modes: {SessionAccessMode.observer},
+            conflict: SessionActivationConflict(
+              sessionId: 'session_2',
+              sessionRevision: 'source-revision',
+              sessionName: 'Alternative mechanism',
+              owner: 'external',
+              switchable: false,
+            ),
+          ),
+        ),
+        session('session_2'),
+      ];
+    await tester.pumpWidget(shellApp(gateway));
+    await tester.pumpAndSettle();
+    await openRecent(tester);
+    await tester.tap(find.byKey(const ValueKey('continue-session')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Switch'), findsNothing);
+    await tester.tap(find.text('Open conversation'));
+    await tester.pumpAndSettle();
+    expect(gateway.activations, 0);
+    expect(find.text('Alternative mechanism'), findsWidgets);
+  });
+
+  testWidgets(
+    'an older Host never silently receives a preference-only research activation',
+    (tester) async {
+      final gateway = ConversationGateway()
+        ..sessions = [session('session_1', capabilities: {}, activation: null)];
+      await tester.pumpWidget(shellApp(gateway));
+      await tester.pumpAndSettle();
+      await openRecent(tester);
+      await tester.tap(find.byKey(const ValueKey('continue-session')));
+      await tester.pumpAndSettle();
+      expect(gateway.activations, 0);
+      expect(find.textContaining('Update the TSPi Host'), findsOneWidget);
+    },
+  );
+
   for (final locale in ['en', 'zh']) {
     for (final dark in [false, true]) {
       for (final size in [
@@ -691,6 +812,10 @@ class MemorySelectionStore implements ConversationSelectionStore {
 
 class ConversationGateway implements TsPhoneGateway, TsPhoneManagementGateway {
   int activations = 0;
+  SessionAccessMode? activatedMode;
+  String? activatedRevision;
+  String? activationRequestId;
+  SessionActivationConflict? activationSource;
   int creations = 0;
   int sent = 0;
   final failedSummaryWorkspaces = <String>{};
@@ -746,9 +871,16 @@ class ConversationGateway implements TsPhoneGateway, TsPhoneManagementGateway {
   Future<SessionSummary> activateSession(
     String workspaceId,
     String sessionId,
-    String revision,
-  ) {
+    String revision, {
+    SessionAccessMode? accessMode,
+    String? requestId,
+    SessionActivationConflict? switchFrom,
+  }) {
     activations++;
+    activatedMode = accessMode;
+    activatedRevision = revision;
+    activationRequestId = requestId;
+    activationSource = switchFrom;
     return activation?.future ?? Future.value(session(sessionId));
   }
 

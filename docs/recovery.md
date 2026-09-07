@@ -32,7 +32,7 @@ use the refresh action.
 
 Offline history can be read and manually refreshed, but it cannot accept a
 prompt, abort request, or approval response. Opening history does not start a
-Worker. Use Continue conversation to activate a managed session; any local draft
+Worker. Use Continue research to request Controller for the same session; any local draft
 still requires an explicit send after activation. The latest 50 items load first.
 Use the visible page or load-all controls for older history; the loaded/total counter distinguishes a partial client view
 from missing server history. A matching Bridge reconnect resets the session
@@ -68,6 +68,36 @@ configured. For manual recovery, restart a controller with:
 ./TSPi --workspace <workspace> --phone
 ~~~
 
-If another process still holds the workspace Root Agent lock, this command
-starts a new observer instead. Stop the actual controller first when controller
-recovery is intended.
+If another process holds the workspace Root lock or the same session writer
+guard, this command fails without downgrading access. Open its conversation or
+close that process after the run settles. An explicit
+`--phone --phone-access observer` opens a separate read-only assistant.
+
+The app can continue an existing session without a terminal when Session Host
+and the guard-compatible launcher are installed. An idle mode/session switch
+requires confirmation of the current source revision. External CLIs, pending
+inputs, active runs and uncertain Workers block switching. A failed new start
+does not restart a source that was explicitly stopped. History is retained.
+If compatibility checks fail before the source is stopped, the existing runtime
+remains usable. If stopping the source is uncertain, that source requires
+recovery and the target is not started. These failures are not equivalent.
+
+`session_guard_upgrade_required` or `session_writer_unverified` requires a
+matching TSPi installation and restart of affected unguarded writers, not an
+edited `management.json`. `model_auth_missing` concerns host model credentials,
+not the Phone token. `worker_cleanup_uncertain` requires inspection of the owned
+process before another startup. Never unlink occupied guard files.
+`worker_start_failed`, `worker_start_timeout`, and `worker_start_interrupted`
+mean the requested runtime did not reach readiness. Refresh the session state
+before a new activation; no draft has been sent by activation. Raw Worker stderr
+is not forwarded to the Phone API.
+An `activation_outcome_unknown` client error instead means the response was not
+received. The Host may still finish activation. Refresh authoritative state;
+do not infer failure, create another session, or automatically replay the request.
+
+Guard checks use Linux `/proc` and owner-only installation operational state.
+Stop/reopen replaces managed in-process new/resume/fork. Reopening preserves
+the original Pi context and does not copy history or replay prompts/jobs.
+Phone prompt receipts remain bounded and in memory: a Host restart cannot
+prove an unconfirmed command's delivery. Durable receipts and orphan adoption
+are not implemented. Normal Host shutdown stops its Workers, not external CLIs.

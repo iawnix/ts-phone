@@ -13,6 +13,7 @@ import '../../models/chat_message.dart';
 import '../../models/connection_settings.dart';
 import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
+import '../../navigation/adaptive_page_route.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/chat_message_view.dart';
@@ -42,6 +43,7 @@ class ChatPage extends StatefulWidget {
     this.gatewayFactory,
     this.memory,
     this.onOpenNavigation,
+    this.onOpenSession,
     this.onNewSession,
     this.creatingSession = false,
     this.embedded = false,
@@ -55,6 +57,7 @@ class ChatPage extends StatefulWidget {
   final TsPhoneGateway Function()? gatewayFactory;
   final ChatViewMemory? memory;
   final VoidCallback? onOpenNavigation;
+  final ValueChanged<SessionSummary>? onOpenSession;
   final VoidCallback? onNewSession;
   final bool creatingSession;
   final bool embedded;
@@ -104,6 +107,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           TsPhoneApi(widget.settings),
       workspaceId: widget.workspace.id,
       sessionId: widget.session.sessionId,
+      initialSession: widget.session,
       initialSessionRevision: widget.session.sessionRevision,
       initialSessionTitle: widget.session.sessionName,
       initialSessionRuntime: widget.session.runtime,
@@ -539,20 +543,114 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   bool get _canActivate =>
-      widget.session.canActivate &&
       _controller.api is TsPhoneManagementGateway &&
       !_controller.viewingInactiveBranch &&
-      _controller.runtimeState == RuntimeState.offline;
+      (_controller.canActivate ||
+          (_controller.supportsModeActivation &&
+              _controller.accessMode == SessionAccessMode.observer &&
+              _controller.runtimeState.isAvailable));
 
-  Future<void> _activateSession() async {
-    if (_activating || !_canActivate) return;
+  Future<void> _activateSession({
+    SessionAccessMode mode = SessionAccessMode.controller,
+  }) async {
+    if (_activating || _controller.viewingInactiveBranch) return;
     setState(() => _activating = true);
     try {
+      final current = await _controller.refreshSessionMetadata();
+      if (!mounted) return;
+      if (!current.capabilities.contains('session.activate_mode')) {
+        _showActionMessage(context.l10n.activationUpgradeRequired);
+        return;
+      }
+      final activation = current.activation;
+      final conflict = activation?.conflict;
+      final needsSwitch =
+          conflict != null &&
+          ((conflict.sessionId == current.sessionId &&
+                  current.currentAccessMode != mode) ||
+              (conflict.sessionId != current.sessionId &&
+                  mode == SessionAccessMode.controller));
+      if (!needsSwitch && activation?.modes.contains(mode) != true) {
+        _showActionMessage(
+          describeTsPhoneProblem(
+            TsPhoneApiException(
+              'Session activation is unavailable',
+              code: activation?.problem ?? 'session_not_ready',
+            ),
+          ).localizedMessage(context.l10n),
+        );
+        return;
+      }
+      if (needsSwitch) {
+        final action = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(context.l10n.activationSwitchTitle),
+            content: Text(
+              conflict.switchable
+                  ? context.l10n.activationSwitchBody(
+                      conflict.sessionName ?? context.l10n.unnamedConversation,
+                    )
+                  : '${conflict.sessionName ?? context.l10n.unnamedConversation}\n\n${conflict.owner == 'external' ? context.l10n.activationExternalOwner : context.l10n.problemResourcesBusy}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(context.l10n.cancel),
+              ),
+              if (conflict.sessionId != widget.session.sessionId)
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'open'),
+                  child: Text(context.l10n.activationOpenOwner),
+                ),
+              if (conflict.switchable)
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'switch'),
+                  child: Text(context.l10n.activationSwitchConfirm),
+                ),
+            ],
+          ),
+        );
+        if (!mounted) return;
+        if (action == 'open') {
+          final sessions = await _controller.api.listSessions(
+            widget.workspace.id,
+          );
+          if (!mounted) return;
+          final target = sessions
+              .where((value) => value.sessionId == conflict.sessionId)
+              .firstOrNull;
+          if (target == null) {
+            throw const TsPhoneApiException(
+              'Conversation is unavailable',
+              code: 'session_offline',
+            );
+          }
+          if (widget.onOpenSession case final open?) {
+            open(target);
+          } else {
+            await pushTsPhonePage<void>(
+              context: context,
+              builder: (_) => ChatPage(
+                settings: widget.settings,
+                workspace: widget.workspace,
+                session: target,
+                gatewayFactory: widget.gatewayFactory,
+              ),
+            );
+          }
+          return;
+        }
+        if (action != 'switch') return;
+      }
       final selected = await (_controller.api as TsPhoneManagementGateway)
           .activateSession(
             widget.workspace.id,
             widget.session.sessionId,
-            widget.session.managementRevision,
+            current.managementRevision,
+            accessMode: mode,
+            requestId: createTsPhoneClientMessageId(),
+            switchFrom: needsSwitch ? conflict : null,
           );
       if (!mounted) return;
       await _controller.acceptActivation(selected);
@@ -572,9 +670,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     ActionFeedback.tap();
     setState(() => _syncing = true);
     try {
+      if (_controller.api is TsPhoneManagementGateway) {
+        await _controller.refreshSessionMetadata();
+      }
       await _controller.refreshMessages();
       if (!mounted || _controller.problem != null) return;
       _showActionMessage(context.l10n.messagesSynced);
+    } on Object catch (error) {
+      if (mounted) {
+        _showActionMessage(
+          describeTsPhoneProblem(error).localizedMessage(context.l10n),
+        );
+      }
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -825,11 +932,34 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     unawaited(_jumpToStart());
                   } else if (action == 'sync') {
                     unawaited(_sync());
+                  } else if (action == 'observer') {
+                    unawaited(
+                      _activateSession(mode: SessionAccessMode.observer),
+                    );
                   } else {
                     _showSessionDetails();
                   }
                 },
                 itemBuilder: (_) => [
+                  if (_controller.supportsModeActivation &&
+                      !_controller.viewingInactiveBranch)
+                    PopupMenuItem(
+                      value: 'observer',
+                      enabled:
+                          !_activating &&
+                          (_controller.canActivate ||
+                              _controller.activation?.modes.contains(
+                                    SessionAccessMode.observer,
+                                  ) ==
+                                  true),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.visibility_outlined, size: 20),
+                          const SizedBox(width: 12),
+                          Flexible(child: Text(l10n.readOnlyAssistant)),
+                        ],
+                      ),
+                    ),
                   PopupMenuItem(
                     value: 'details',
                     child: Row(

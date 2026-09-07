@@ -19,11 +19,17 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 const capture = ${JSON.stringify(capture)};
 const args = process.argv.slice(2);
+if (args.includes("--session-host-capabilities")) {
+  process.stdout.write(JSON.stringify({session_guard_contract: "tspi-session-guard/1"}));
+  process.exit(0);
+}
 if (args.includes("--lifecycle-preflight")) {
   process.stdout.write(JSON.stringify({
     schema_version: "ts-phone-project-preflight/2",
     workspace_root: join(dirname(process.argv[1]), "ts_007"),
     root_agent_active: true,
+    session_writers_active: false,
+    session_guard_contract: "tspi-session-guard/1",
     remote_calculations: 2,
     unresolved_remote_effects: 1,
   }));
@@ -72,6 +78,7 @@ setInterval(() => {}, 1000);
 
     assert.deepEqual(await supervisor.inspect("ts_007", join(root, "ts_007")), {
       rootAgentActive: true,
+      sessionWritersActive: false,
       remoteCalculations: 2,
       unresolvedRemoteEffects: 1,
     });
@@ -142,3 +149,18 @@ async function waitForJson(path: string): Promise<Record<string, any>> {
     }
   }
 }
+
+test("concurrent starts after capability probing share exactly one owned process", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ts-phone-concurrent-worker-"));
+  const executable = join(root, "TSPi");
+  await writeFakeTspi(executable, root);
+  const supervisor = new WorkerSupervisor(executable, 1000, join(root, "socket"), join(root, "secret"));
+  const request = { workspaceId: "ts_001", sessionId: "session_1", accessMode: "controller" as const, launchId: "one-launch" };
+  try {
+    const [left, right] = await Promise.all([supervisor.start(request), supervisor.start(request)]);
+    assert.equal(left.exit, right.exit);
+    assert.deepEqual(supervisor.request(request.workspaceId, request.sessionId), request);
+    await assert.rejects(() => supervisor.start({ ...request, launchId: "different-launch" }),
+      (error: unknown) => error instanceof HttpError && error.code === "worker_identity_conflict");
+  } finally { await supervisor.close(); }
+});

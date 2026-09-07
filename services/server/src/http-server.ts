@@ -11,6 +11,7 @@ import {
   API_VERSION,
   SERVICE_VERSION,
   type AbortInput,
+  type ActivateInput,
   type ApprovalInput,
   type CreateSessionInput,
   type CreateWorkspaceInput,
@@ -207,7 +208,7 @@ async function handleRequest(
       return;
     }
     if (sessionResource === "activate") {
-      sendData(response, 200, await hub.activateSession(workspaceId, sessionId, validateLifecycle(input)));
+      sendData(response, 200, await hub.activateSession(workspaceId, sessionId, validateActivation(input)));
       return;
     }
   }
@@ -447,6 +448,32 @@ function validateLifecycle(value: unknown): LifecycleInput {
     throw new HttpError(400, "invalid_lifecycle_change", "managementRevision is required");
   }
   return { managementRevision: validateManagementRevision(value.managementRevision) };
+}
+
+function validateActivation(value: unknown): ActivateInput {
+  if (!isObject(value)
+    || Object.keys(value).some((key) => !["managementRevision", "accessMode", "requestId", "switchFrom"].includes(key))
+    || typeof value.managementRevision !== "string"
+    || (value.accessMode !== undefined && value.accessMode !== "controller" && value.accessMode !== "observer")
+    || (value.requestId !== undefined && (typeof value.requestId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(value.requestId)))) {
+    throw new HttpError(400, "invalid_activation", "Activation requires a management revision and valid optional mode and request identity");
+  }
+  let switchFrom: ActivateInput["switchFrom"];
+  if (value.switchFrom !== undefined) {
+    const source = value.switchFrom;
+    if (!isObject(source) || Object.keys(source).length !== 2
+      || typeof source.sessionId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(source.sessionId)
+      || typeof source.sessionRevision !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(source.sessionRevision)) {
+      throw new HttpError(400, "invalid_activation", "Switch confirmation requires the source session and revision");
+    }
+    switchFrom = { sessionId: source.sessionId, sessionRevision: source.sessionRevision };
+  }
+  return {
+    managementRevision: validateManagementRevision(value.managementRevision),
+    ...(value.accessMode === undefined ? {} : { accessMode: value.accessMode }),
+    ...(value.requestId === undefined ? {} : { requestId: value.requestId }),
+    ...(switchFrom ? { switchFrom } : {}),
+  };
 }
 
 function validatePurge(value: unknown): PurgeInput {

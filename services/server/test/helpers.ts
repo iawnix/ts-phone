@@ -29,6 +29,7 @@ export async function connectFakeBridge(
     sessionId?: string;
     accessMode?: "controller" | "observer";
     instanceEpoch?: string;
+    launchId?: string;
     abortErrorCode?: "agent_not_running" | "agent_run_stale";
     model?: string;
     promptProblem?: "model_auth_missing" | "model_unavailable" | "model_check_failed";
@@ -205,6 +206,7 @@ export async function connectFakeBridge(
     ...envelope(),
     type: "bridge.register",
     accessMode,
+    ...(options.launchId ? { launchId: options.launchId } : {}),
     secret,
     workspaceRoot,
     pid: process.pid,

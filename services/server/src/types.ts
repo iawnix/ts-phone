@@ -1,6 +1,6 @@
 export const API_VERSION = "ts-phone-api/4" as const;
 export const EVENT_VERSION = "ts-phone-events/3" as const;
-export const SERVICE_VERSION = "0.7.1" as const;
+export const SERVICE_VERSION = "0.8.0" as const;
 
 export type RuntimeState =
   | "offline"
@@ -10,6 +10,7 @@ export type RuntimeState =
   | "recovery_required";
 
 export type SessionAccessMode = "controller" | "observer";
+export type RuntimeOwner = "host" | "external";
 export type LifecycleState = "active" | "archived" | "trashed";
 
 export type SessionCapability =
@@ -21,6 +22,7 @@ export type SessionCapability =
   | "activity.tools"
   | "activity.subagents"
   | "activity.research"
+  | "session.activate_mode"
   | "command.prompt"
   | "command.abort"
   | "interaction.approval";
@@ -50,6 +52,9 @@ export interface SessionSummary {
   runtimeState: RuntimeState;
   isStreaming: boolean;
   accessMode: SessionAccessMode;
+  currentAccessMode?: SessionAccessMode | null;
+  runtimeOwner?: RuntimeOwner | null;
+  activation?: SessionActivation;
   historyAvailable?: boolean;
   historyOnly?: boolean;
   canPrompt?: boolean;
@@ -85,7 +90,23 @@ export interface PurgeInput extends LifecycleInput {
   confirmation: string;
 }
 
-export interface ActivateInput extends LifecycleInput {}
+export interface ActivateInput extends LifecycleInput {
+  accessMode?: SessionAccessMode;
+  requestId?: string;
+  switchFrom?: { sessionId: string; sessionRevision: string };
+}
+
+export interface SessionActivation {
+  modes: SessionAccessMode[];
+  problem?: string;
+  conflict?: {
+    sessionId: string;
+    sessionRevision: string;
+    sessionName?: string;
+    owner: RuntimeOwner;
+    switchable: boolean;
+  };
+}
 
 export interface WorkspaceCreationResult {
   workspace: WorkspaceSummary;

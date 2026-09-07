@@ -997,7 +997,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get switchProject => 'Switch project';
 
   @override
-  String get continueSession => 'Continue conversation';
+  String get continueSession => 'Continue research';
+
+  @override
+  String get readOnlyAssistant => 'Read-only assistant';
+
+  @override
+  String get activationUpgradeRequired =>
+      'Update the TSPi Host to choose a session mode. History remains available.';
+
+  @override
+  String get activationExternalOwner =>
+      'This workspace is open in a terminal. Continue that conversation or close it before switching.';
+
+  @override
+  String get activationSwitchTitle => 'Switch the running conversation?';
+
+  @override
+  String activationSwitchBody(String name) {
+    return 'The idle runtime for $name will stop. Its history and remote calculations are kept. A failed start will not restart it automatically.';
+  }
+
+  @override
+  String get activationSwitchConfirm => 'Switch';
+
+  @override
+  String get activationOpenOwner => 'Open conversation';
+
+  @override
+  String get activationFailed =>
+      'The conversation did not become ready. Refresh and check the Host configuration. A runtime stopped during switching will stay offline; history and drafts are kept.';
+
+  @override
+  String get activationOutcomeUnknown =>
+      'The activation result was not received. The Host may still be preparing this conversation. Refresh its state before trying again.';
+
+  @override
+  String get activationCapacity =>
+      'The Host\'s activation records are full. Wait for active runs to settle, arrange a Host restart, then refresh.';
+
+  @override
+  String get activationRecoveryRequired =>
+      'The conversation process could not be confirmed. Inspect it on the Host before continuing. No message will be resent automatically.';
 
   @override
   String get preparingSession => 'Preparing conversation';

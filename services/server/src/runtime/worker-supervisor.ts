@@ -1,4 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { promisify } from "node:util";
 import { constants } from "node:fs";
 import { access, lstat, realpath } from "node:fs/promises";
 import { isAbsolute } from "node:path";
@@ -13,6 +14,7 @@ export interface WorkerStartRequest {
   workspaceId: string;
   sessionId: string;
   accessMode: SessionAccessMode;
+  launchId?: string;
   name?: string;
   model?: string;
 }
@@ -28,6 +30,7 @@ export interface WorkerLaunch {
 }
 
 interface WorkerRecord {
+  request: WorkerStartRequest;
   child: ChildProcessWithoutNullStreams;
   exit: Promise<WorkerExit>;
   stderr: BoundedText;
@@ -40,6 +43,7 @@ export class WorkerSupervisor {
   readonly #bridgeSocketPath: string;
   readonly #bridgeSecretPath: string;
   readonly #workers = new Map<string, WorkerRecord>();
+  #closing = false;
   onRuntimeError: ((request: WorkerStartRequest, error: HttpError) => void) | undefined;
 
   constructor(
@@ -62,11 +66,45 @@ export class WorkerSupervisor {
     return this.#workers.has(workerKey(workspaceId, sessionId));
   }
 
+  request(workspaceId: string, sessionId: string): WorkerStartRequest | undefined {
+    const request = this.#workers.get(workerKey(workspaceId, sessionId))?.request;
+    return request ? { ...request } : undefined;
+  }
+
+  async checkCompatibility(): Promise<void> {
+    await this.#checkGuardContract(await this.#executable());
+  }
+
+  async verifyWriter(workspaceId: string, workspaceRoot: string, sessionId: string,
+    accessMode: SessionAccessMode, pid: number): Promise<void> {
+    // A bridge-only deployment cannot launch or delete sessions. With Session
+    // Host configured, every admitted writer must prove the launcher's guards.
+    if (!this.available) return;
+    try {
+      const { stdout } = await promisify(execFile)(await this.#executable(), [
+        "--session-writer-check", "--workspace", workspaceId,
+        "--session-id", sessionId, "--phone-access", accessMode, "--writer-pid", String(pid),
+      ], { timeout: 10_000, maxBuffer: 4096 });
+      const value = JSON.parse(stdout);
+      if (value.session_guard_contract === "tspi-session-guard/1" && value.verified === true
+        && value.workspace_root === workspaceRoot && value.session_id === sessionId
+        && value.access_mode === accessMode && value.pid === pid) return;
+    } catch { /* Failed proof never authorizes runtime admission. */ }
+    throw new HttpError(409, "session_writer_unverified", "Restart this TSPi conversation with a guard-compatible launcher");
+  }
+
   async start(request: WorkerStartRequest): Promise<WorkerLaunch> {
+    const executable = await this.#executable();
+    await this.#checkGuardContract(executable);
+    if (this.#closing) throw new HttpError(503, "host_stopping", "TSPi Host is stopping");
     const key = workerKey(request.workspaceId, request.sessionId);
     const existing = this.#workers.get(key);
-    if (existing) return { exit: existing.exit };
-    const executable = await this.#executable();
+    if (existing) {
+      if (existing.request.accessMode !== request.accessMode || existing.request.launchId !== request.launchId) {
+        throw new HttpError(409, "worker_identity_conflict", "A different TSPi runtime already owns this conversation");
+      }
+      return { exit: existing.exit };
+    }
     const arguments_ = [
       "--workspace", request.workspaceId,
       "--phone-worker",
@@ -80,6 +118,7 @@ export class WorkerSupervisor {
         ...process.env,
         TS_PHONE_BRIDGE_SOCKET: this.#bridgeSocketPath,
         TS_PHONE_BRIDGE_SECRET_FILE: this.#bridgeSecretPath,
+        TS_PHONE_LAUNCH_ID: request.launchId ?? "",
       },
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -89,16 +128,16 @@ export class WorkerSupervisor {
     const exit = new Promise<WorkerExit>((resolve) => {
       child.once("error", (error) => {
         rpc.close();
-        this.#workers.delete(key);
+        if (this.#workers.get(key)?.child === child) this.#workers.delete(key);
         resolve({ code: null, signal: null, diagnostic: error.message });
       });
       child.once("exit", (code, signal) => {
         rpc.close();
-        this.#workers.delete(key);
+        if (this.#workers.get(key)?.child === child) this.#workers.delete(key);
         resolve({ code, signal, diagnostic: stderr.value });
       });
     });
-    this.#workers.set(key, { child, exit, stderr, rpc });
+    this.#workers.set(key, { request: { ...request }, child, exit, stderr, rpc });
     await new Promise<void>((resolve, reject) => {
       child.once("spawn", resolve);
       child.once("error", reject);
@@ -116,7 +155,11 @@ export class WorkerSupervisor {
     ]);
     if (settled) return;
     record.child.kill("SIGKILL");
-    await record.exit;
+    const killed = await Promise.race([
+      record.exit.then(() => true),
+      delay(this.#shutdownTimeoutMs).then(() => false),
+    ]);
+    if (!killed) throw new HttpError(409, "worker_cleanup_uncertain", "TSPi process exit could not be confirmed");
   }
 
   async prompt(workspaceId: string, sessionId: string, message: string, followUp: boolean): Promise<void> {
@@ -138,6 +181,7 @@ export class WorkerSupervisor {
   }
 
   async close(): Promise<void> {
+    this.#closing = true;
     const keys = [...this.#workers.keys()];
     await Promise.all(keys.map((key) => {
       const [workspaceId, sessionId] = key.split("\u0000", 2) as [string, string];
@@ -158,6 +202,16 @@ export class WorkerSupervisor {
     // TSPi derives its installation root from the invoked launcher location.
     // Validate the target, but preserve the stable installation symlink.
     return path;
+  }
+
+  async #checkGuardContract(executable: string): Promise<void> {
+    try {
+      const { stdout } = await promisify(execFile)(executable, ["--session-host-capabilities"], {
+        timeout: 10_000, maxBuffer: 4096,
+      });
+      if (JSON.parse(stdout).session_guard_contract === "tspi-session-guard/1") return;
+    } catch { /* Do not expose launcher output or credentials. */ }
+    throw new HttpError(409, "session_guard_upgrade_required", "Update the installed TSPi launcher before activating conversations");
   }
 }
 

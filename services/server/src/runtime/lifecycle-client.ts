@@ -6,6 +6,7 @@ const PREFLIGHT_TIMEOUT_MS = 15_000;
 
 export interface LifecyclePreflight {
   rootAgentActive: boolean;
+  sessionWritersActive: boolean;
   remoteCalculations: number;
   unresolvedRemoteEffects: number;
 }
@@ -71,8 +72,8 @@ export async function runLifecycle<T>(
     clearTimeout(timer);
     const value = parsePreflight(raw, workspaceRoot, guarded);
     if (!operation) return value;
-    if (value.rootAgentActive) {
-      throw new HttpError(409, "workspace_delete_blocked", "Stop the workspace Root Agent before deleting its data");
+    if (value.rootAgentActive || value.sessionWritersActive) {
+      throw new HttpError(409, "workspace_delete_blocked", "Stop workspace conversation writers before deleting its data");
     }
     const assertHeld = (): void => {
       if (ended || child.exitCode !== null || child.signalCode !== null) {
@@ -98,13 +99,16 @@ function parsePreflight(raw: unknown, workspaceRoot: string, guarded: boolean): 
   if (value.schema_version !== (guarded ? "ts-phone-project-guard/1" : "ts-phone-project-preflight/2")
     || value.workspace_root !== workspaceRoot
     || typeof value.root_agent_active !== "boolean"
+    || value.session_guard_contract !== "tspi-session-guard/1"
+    || typeof value.session_writers_active !== "boolean"
     || !count(value.remote_calculations)
     || !count(value.unresolved_remote_effects)
-    || (guarded && value.guard_acquired !== !value.root_agent_active)) {
+    || (guarded && value.guard_acquired !== !(value.root_agent_active || value.session_writers_active))) {
     throw unavailable("Workspace preflight returned invalid or incorrectly bound data");
   }
   return {
     rootAgentActive: value.root_agent_active,
+    sessionWritersActive: value.session_writers_active,
     remoteCalculations: value.remote_calculations,
     unresolvedRemoteEffects: value.unresolved_remote_effects,
   };

@@ -2,7 +2,7 @@
 
 ## Current Source
 
-Mobile `0.16.1+42` opens a work home with recent conversations and projects,
+Mobile `0.17.0+43` opens a work home with recent conversations and projects,
 with explicit navigation, a session sidebar and a single expanding text
 composer. Cold start requests summary lists only. History opens without starting a
 Worker, requests the latest 50 items first, and retains the explicit load-all
@@ -12,11 +12,14 @@ Menus, typography, settings rows and technical details use one visual hierarchy.
 Empty assistant records have explicit output notices; consecutive activity
 records fold without hiding failures or removing history.
 
-This patch adds bidirectional history navigation, stable reading anchors,
-active-only session counts, and clearer model and connection details. Server
-`0.7.1` waits for native Pi preflight receipts from managed Workers; TSPi
-`0.13.1` publishes model readiness and preserves failed assistant records.
-API v4, Events v3, and Bridge v3 remain unchanged.
+Continue research now explicitly requests Controller access to the original
+conversation, without a visible CLI. Read-only assistant remains a separate
+choice. Server `0.8.0` checks launch identity and model readiness, confirms idle
+session switches, and refuses to stop busy or externally owned runtimes. TSPi
+`0.14.0` acquires exact-session writer guards before Pi opens history. Activation
+preserves drafts and uses a separate 90-second wait budget. Activation receipts
+are bounded in-memory state, not durable crash recovery. API v4, Events v3, and
+Bridge v3 remain unchanged; explicit activation is capability-negotiated.
 
 Build with `apps/mobile/tool/build_release_android.sh --allow-dirty` while
 reviewing an uncommitted change, or omit the flag after commit. Local artifacts

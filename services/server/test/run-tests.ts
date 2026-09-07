@@ -13,3 +13,4 @@ import "./worker-supervisor.test.js";
 import "./worker-rpc.test.js";
 import "./history-page.test.js";
 import "./workspace-management-runtime.test.js";
+import "./session-activation.test.js";

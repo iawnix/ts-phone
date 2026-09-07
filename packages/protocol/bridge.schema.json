@@ -35,6 +35,13 @@
       "pattern": "^[A-Za-z0-9._:-]{1,160}$"
     },
     "accessMode": { "enum": ["controller", "observer"] },
+    "launchId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$",
+      "description": "Host-owned launch binding. Unknown launch IDs cannot register as external CLIs."
+    },
+    "pid": { "type": "integer", "minimum": 1 },
+    "workspaceRoot": { "type": "string", "minLength": 1, "maxLength": 4096 },
     "instanceEpoch": {
       "type": "string",
       "pattern": "^[A-Za-z0-9._:-]{1,160}$"

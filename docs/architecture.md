@@ -77,7 +77,11 @@ The Host verifies the absolute workspace path in the private TSPi reply.
 Before moving a project to Recently Deleted or purging project/session files,
 the Host opens `--lifecycle-guard`. TSPi acquires the same Root Agent lock used
 by interactive launches, reports a bounded preflight, and holds the lock until
-Host stdin closes. The Host blocks new Bridge registration during that
+Host stdin closes. Every Pi writer also holds a shared session-directory guard;
+the lifecycle guard acquires it exclusively before the Root lock. Observer
+writers therefore block destructive lifecycle actions even without a Bridge.
+Guard files remain in installation `.pi/session-host/guards/`, outside any
+quarantined workspace. The Host blocks new Bridge registration during that
 operation and checks guard liveness before filesystem/metadata changes. Idle
 Host-owned Workers can be stopped; external Controllers are never stopped by
 these actions. The ordinary preflight endpoint is read-only and never reserves
@@ -113,13 +117,68 @@ WorkspaceRecord
 
 Exactly one live controller is allowed per workspace. A Host-started controller
 acquires the Root Agent file lock and opens the requested Pi session ID in RPC
-mode. A requested observer never acquires that write lock. Manually invoked
-`TSPi --phone` retains the lock-contention fallback to an independent observer.
+mode. A requested observer never acquires the scientific Root lock, but holds
+an exclusive session writer guard because it also appends Pi JSONL. Manually
+invoked `TSPi --phone` reports contention instead of changing mode. Use
+`--phone --phone-access observer` explicitly with a different conversation.
 
 Observers are not passive mirrors. They can receive phone or local prompts and
 use a strict read-only tool allowlist. They cannot modify the scientific
 workspace, submit computation, render, report, notify, or invoke shell. This
 allows parallel inspection while keeping a single writer.
+
+## Session Activation
+
+The `session.activate_mode` capability adds explicit Controller/Observer
+activation to the existing endpoint. Stored `accessMode` is a preference, not
+proof of authority. `currentAccessMode` is null without a ready live runtime;
+`runtimeOwner` distinguishes Host and external CLI. Summaries, activation
+replies, and state/snapshot events share these fields and an `activation` view
+with available modes and the conflicting session identity.
+
+A workspace reservation admits one activation. Matching request IDs and inputs
+share its outcome; different parameters under the same ID are rejected. Up to
+1000 activation receipts are retained per Host generation. Capacity rejects new
+identified requests rather than forgetting and replaying them; schedule an idle
+maintenance restart at that limit. These receipts are in memory and contain no
+conversation text. They are not durable prompt delivery receipts.
+
+Startup waits outside the global metadata mutation queue. The fixed launcher
+must advertise `tspi-session-guard/1`; its child receives a private launch ID.
+Bridge registration must match the admitted launch mode/ID. A configured Host
+also calls the launcher's PID-bound writer check, which verifies actual held
+directory/session/Root flock descriptors in Linux `/proc`. Authentication alone
+does not make a Bridge ready: activation waits for an initialized snapshot and
+locally configured model authentication. It never makes a paid provider probe.
+Unknown launch IDs cannot enter as external CLIs. Bridge-only deployments without
+`TS_PHONE_TSPI` retain authenticated manual transport, but provide no Session
+Host activation/deletion or writer-proof guarantee.
+
+Switching requires the source session ID and its current session revision. Only
+idle Host-owned runtimes without pending inputs, RPC acknowledgements, approvals,
+or a live run may stop. External CLIs and uncertain processes are never stopped.
+If an Observer and a different Controller are both live, open the existing
+Controller instead of trying to replace both runtimes with one confirmation.
+After stopping the source, a failed target start does not restart the source.
+Only the newly owned child is cleaned up; uncertain cleanup blocks activation.
+Preferences are committed after readiness; a later exit is a runtime change,
+not a rollback of that saved preference.
+
+The launcher resolves new/continue/exact session selection before Pi opens any
+history and holds guards through exec. In-process new/resume/fork is cancelled
+using Pi's pre-switch hooks. Stop/reopen is required. Raw Pi and old direct
+launchers bypassing TSPi are outside this cooperative guard contract.
+
+ChatController owns fresh activation metadata, including foreground refresh and
+state events. Continue research requests Controller explicitly; Read-only
+assistant is a menu action. A conflicting conversation can be opened directly,
+or a permitted idle switch confirmed. Activation preserves the draft and never
+sends it. An older Host without the capability shows an upgrade requirement.
+Activation has a separate 90-second client request budget to cover compatibility,
+source shutdown, readiness, and cleanup with the default Host limits. Ordinary
+requests retain their 15-second timeout. Losing an activation response is an
+unknown outcome, not proof that the Worker failed: refresh state before a new
+attempt. Neither the client nor the Host automatically resends the request.
 
 ## Identity And Fencing
 
