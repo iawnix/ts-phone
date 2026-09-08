@@ -52,6 +52,9 @@ enum TsPhoneProblemCode {
   deliveryUncertain,
   activationExternalOwner,
   activationUpgradeRequired,
+  activationWriterActive,
+  activationInspectionFailed,
+  activationGuardInvalid,
   activationFailed,
   activationOutcomeUnknown,
   activationCapacity,
@@ -106,6 +109,10 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
       'external_controller' => TsPhoneProblemCode.activationExternalOwner,
       'session_guard_upgrade_required' || 'session_writer_unverified' =>
         TsPhoneProblemCode.activationUpgradeRequired,
+      'session_writer_active' => TsPhoneProblemCode.activationWriterActive,
+      'session_writer_inspection_failed' =>
+        TsPhoneProblemCode.activationInspectionFailed,
+      'session_guard_invalid' => TsPhoneProblemCode.activationGuardInvalid,
       'worker_start_failed' ||
       'worker_start_timeout' ||
       'worker_start_interrupted' => TsPhoneProblemCode.activationFailed,

@@ -150,6 +150,13 @@ also calls the launcher's PID-bound writer check, which verifies actual held
 directory/session/Root flock descriptors in Linux `/proc`. Authentication alone
 does not make a Bridge ready: activation waits for an initialized snapshot and
 locally configured model authentication. It never makes a paid provider probe.
+Guard failures before Pi starts carry a private `tspi.startup_error` stderr
+record. WorkerSupervisor accepts only its exact two-field shape and the known
+codes `session_writer_active`, `session_writer_inspection_failed`, and
+`session_guard_invalid`. It waits for stderr to drain, then maps the code to a
+fixed public message. Host logs contain the workspace ID and safe code, not raw
+stderr. The mobile app distinguishes these failures in both supported languages
+and retains drafts without resending them.
 Unknown launch IDs cannot enter as external CLIs. Bridge-only deployments without
 `TS_PHONE_TSPI` retain authenticated manual transport, but provide no Session
 Host activation/deletion or writer-proof guarantee.

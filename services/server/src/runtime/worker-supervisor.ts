@@ -23,6 +23,7 @@ export interface WorkerExit {
   code: number | null;
   signal: NodeJS.Signals | null;
   diagnostic: string;
+  startupError?: HttpError;
 }
 
 export interface WorkerLaunch {
@@ -131,10 +132,12 @@ export class WorkerSupervisor {
         if (this.#workers.get(key)?.child === child) this.#workers.delete(key);
         resolve({ code: null, signal: null, diagnostic: error.message });
       });
-      child.once("exit", (code, signal) => {
+      // close follows stdio drain; exit alone can lose the final error record.
+      child.once("close", (code, signal) => {
         rpc.close();
         if (this.#workers.get(key)?.child === child) this.#workers.delete(key);
-        resolve({ code, signal, diagnostic: stderr.value });
+        const startupError = readStartupError(stderr.value);
+        resolve({ code, signal, diagnostic: stderr.value, ...(startupError ? { startupError } : {}) });
       });
     });
     this.#workers.set(key, { request: { ...request }, child, exit, stderr, rpc });
@@ -213,6 +216,26 @@ export class WorkerSupervisor {
     } catch { /* Do not expose launcher output or credentials. */ }
     throw new HttpError(409, "session_guard_upgrade_required", "Update the installed TSPi launcher before activating conversations");
   }
+}
+
+function readStartupError(diagnostic: string): HttpError | undefined {
+  // Only fixed launcher codes cross the public boundary, never raw stderr.
+  for (const line of diagnostic.split("\n")) {
+    let record: unknown;
+    try { record = JSON.parse(line); } catch { continue; }
+    if (!record || typeof record !== "object" || Array.isArray(record)) continue;
+    const value = record as Record<string, unknown>;
+    if (value.type !== "tspi.startup_error" || Object.keys(value).length !== 2) continue;
+    switch (value.code) {
+      case "session_writer_active":
+        return new HttpError(409, value.code, "An existing workspace or conversation writer must exit before activation");
+      case "session_writer_inspection_failed":
+        return new HttpError(503, value.code, "The Host could not verify workspace writers; inspect its process permissions");
+      case "session_guard_invalid":
+        return new HttpError(409, value.code, "The Host could not validate the conversation history or its writer guards");
+    }
+  }
+  return undefined;
 }
 
 class BoundedText {

@@ -629,7 +629,11 @@ export class WorkspaceHub {
         launch.exit.then((exit) => ({ exit })),
         new Promise<{ timeout: true }>((resolve) => { timer = setTimeout(() => resolve({ timeout: true }), 15_000); }),
       ]);
-      if ("exit" in outcome) throw workerStartError(outcome.exit);
+      if ("exit" in outcome) {
+        const error = workerStartError(outcome.exit);
+        console.warn(JSON.stringify({ event: "worker_start_failed", workspaceId, code: error.code }));
+        throw error;
+      }
       if ("timeout" in outcome) throw new HttpError(504, "worker_start_timeout", "TSPi did not publish a ready session in time");
       if (this.#closing || !isLive(session) || !session.snapshot || session.accessMode !== accessMode) {
         throw new HttpError(409, "worker_start_interrupted", "TSPi startup was interrupted before the session became ready");
@@ -1628,6 +1632,7 @@ function cloneActivation(input: ActivateInput): ActivateInput {
 }
 
 function workerStartError(exit: WorkerExit): HttpError {
+  if (exit.startupError) return exit.startupError;
   // Launcher/provider stderr can contain private configuration. Expose only
   // process outcome; model readiness failures already have specific safe codes.
   const detail = exit.signal

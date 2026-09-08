@@ -1874,6 +1874,24 @@ abstract class AppLocalizations {
   /// **'Update the TSPi Host to choose a session mode. History remains available.'**
   String get activationUpgradeRequired;
 
+  /// No description provided for @activationWriterActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Another process owns this workspace or conversation. Close it on the Host before continuing. History and drafts are kept.'**
+  String get activationWriterActive;
+
+  /// No description provided for @activationInspectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The Host could not verify existing session processes. Check its process-access permissions before retrying. History and drafts are kept.'**
+  String get activationInspectionFailed;
+
+  /// No description provided for @activationGuardInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The Host could not validate the session history or its writer locks. Inspect the session files on the Host. Do not delete history or lock files to bypass this check.'**
+  String get activationGuardInvalid;
+
   /// No description provided for @activationExternalOwner.
   ///
   /// In en, this message translates to:

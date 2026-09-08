@@ -271,6 +271,63 @@ test("startup exit after a confirmed switch leaves both histories offline withou
   } finally { await f.application.close(); }
 });
 
+test("launcher guard errors reach HTTP and safe logs without leaking stderr", async (t) => {
+  const warnings: string[] = [];
+  t.mock.method(console, "warn", (line: string) => warnings.push(line));
+  for (const [code, status] of [
+    ["session_writer_active", 409],
+    ["session_writer_inspection_failed", 503],
+    ["session_guard_invalid", 409],
+  ] as const) {
+    const f = await fixture({
+      exitBeforeBridge: true,
+      startupStderr: "private-provider-diagnostic".repeat(1000) + "\n"
+        + JSON.stringify({ type: "tspi.startup_error", code }) + "\n",
+    });
+    try {
+      const created = await f.hub.createWorkspace({ name: "Guard failure" });
+      const response = await fetch(`http://127.0.0.1:${f.address.port}/api/v4/workspaces/${created.workspace.id}/sessions/${created.session.sessionId}/activate`, {
+        method: "POST", headers: { Authorization: `Bearer ${f.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ managementRevision: created.session.managementRevision, accessMode: "controller" }),
+      });
+      assert.equal(response.status, status);
+      const body = await response.text();
+      assert.equal(JSON.parse(body).error.code, code);
+      assert.ok(!body.includes("private-provider-diagnostic"));
+      assert.deepEqual(JSON.parse(warnings.at(-1)!), { event: "worker_start_failed", workspaceId: created.workspace.id, code });
+      const after = (await f.hub.listSessions(created.workspace.id))[0]!;
+      assert.equal(after.managementRevision, created.session.managementRevision);
+      assert.equal(after.runtimeState, "offline");
+      assert.equal(after.runtimeOwner, null);
+      assert.equal(after.canPrompt, false);
+    } finally { await f.application.close(); }
+  }
+});
+
+test("unknown or malformed startup diagnostics remain private generic failures", async (t) => {
+  const warnings: string[] = [];
+  t.mock.method(console, "warn", (line: string) => warnings.push(line));
+  for (const diagnostic of [
+    "session_writer_inspection_failed: private-provider-diagnostic",
+    JSON.stringify({ type: "tspi.startup_error", code: "private-provider-diagnostic" }),
+    JSON.stringify({ type: "tspi.startup_error", code: "session_writer_inspection_failed", message: "private-provider-diagnostic" }),
+    JSON.stringify({ type: "another-record", code: "session_writer_inspection_failed" }),
+    "{malformed-private-provider-diagnostic}",
+  ]) {
+    const f = await fixture({ exitBeforeBridge: true, startupStderr: diagnostic + "\n" });
+    try {
+      const created = await f.hub.createWorkspace({ name: "Private launch output" });
+      await assert.rejects(() => f.hub.activateSession(created.workspace.id, created.session.sessionId, {
+        managementRevision: created.session.managementRevision, accessMode: "controller",
+      }), (error: unknown) => error instanceof HttpError && error.code === "worker_start_failed"
+        && !error.message.includes("private-provider-diagnostic"));
+      assert.deepEqual(JSON.parse(warnings.at(-1)!), {
+        event: "worker_start_failed", workspaceId: created.workspace.id, code: "worker_start_failed",
+      });
+    } finally { await f.application.close(); }
+  }
+});
+
 test("activation metadata failure releases its new runtime and retains prior metadata", async (t) => {
   const f = await fixture();
   try {

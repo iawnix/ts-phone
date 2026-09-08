@@ -279,9 +279,16 @@ void main() {
     expect(gateway.activations, 1);
     expect(find.byType(ChatPage), findsOneWidget);
     gateway.activation!.completeError(
-      const TsPhoneApiException('unavailable', statusCode: 503),
+      const TsPhoneApiException(
+        'private diagnostic',
+        statusCode: 503,
+        code: 'session_writer_inspection_failed',
+      ),
     );
     await tester.pumpAndSettle();
+    final l10n = AppLocalizations.of(tester.element(find.byType(ChatPage)));
+    expect(find.text(l10n.activationInspectionFailed), findsOneWidget);
+    expect(find.text(l10n.activationFailed), findsNothing);
     expect(
       tester
           .widget<TextField>(find.byKey(const ValueKey('chat-input')))

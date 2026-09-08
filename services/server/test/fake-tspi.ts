@@ -8,6 +8,7 @@ export async function writeFakeTspi(path: string, workspaceRoot: string, rootAge
   guardCompatible?: boolean;
   writerVerified?: boolean;
   exitBeforeBridge?: boolean;
+  startupStderr?: string;
 } = {}): Promise<void> {
   await writeFile(path, `#!/usr/bin/env node
 import { join } from "node:path";
@@ -38,7 +39,7 @@ if (args.includes("--session-host-capabilities")) {
   if (guarded) { process.stdin.resume(); process.stdin.on("end", () => process.exit(0)); }
 } else {
   if (${options.exitBeforeBridge === true}) {
-    process.stderr.write("private-provider-diagnostic\\n");
+    await new Promise(resolve => process.stderr.write(${JSON.stringify(options.startupStderr ?? "private-provider-diagnostic\n")}, resolve));
     process.exit(1);
   }
   writeFileSync(${JSON.stringify(`${path}.launch`)}, JSON.stringify({launchId: process.env.TS_PHONE_LAUNCH_ID}));

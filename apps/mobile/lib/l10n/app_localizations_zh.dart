@@ -946,6 +946,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get activationUpgradeRequired => '请更新 TSPi Host 以选择会话模式。仍可浏览历史记录。';
 
   @override
+  String get activationWriterActive =>
+      '另一个进程正在占用此工作区或会话，请先在 Host 上关闭该进程。历史和草稿仍保留。';
+
+  @override
+  String get activationInspectionFailed =>
+      'Host 无法核验已有会话进程，请检查服务读取进程信息的权限后重试。历史和草稿仍保留。';
+
+  @override
+  String get activationGuardInvalid =>
+      'Host 无法验证会话历史或写入锁，请检查会话文件。不要通过删除历史或锁文件绕过检查。';
+
+  @override
   String get activationExternalOwner => '此工作区正在终端中打开。请继续该会话，或关闭终端会话后再切换。';
 
   @override

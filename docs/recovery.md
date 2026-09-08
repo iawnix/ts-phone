@@ -87,6 +87,19 @@ matching TSPi installation and restart of affected unguarded writers, not an
 edited `management.json`. `model_auth_missing` concerns host model credentials,
 not the Phone token. `worker_cleanup_uncertain` requires inspection of the owned
 process before another startup. Never unlink occupied guard files.
+
+`session_writer_active` means a real writer or lifecycle guard blocks startup;
+close the owning runtime after it settles. `session_writer_inspection_failed`
+means the launcher could not verify a candidate writer through Linux `/proc`.
+Check the Host's process visibility and permissions; refreshing the app alone
+does not repair that preflight. Unrelated system services are excluded by their
+command line before private process state is read. Do not grant the entire Host
+root access or disable writer checks. `session_guard_invalid` requires inspection
+of the session history and owner-only guard files, not their deletion.
+These failures occur before model execution. The service journal records the
+safe code under `worker_start_failed`; the API and journal do not expose raw
+launcher/provider stderr.
+
 `worker_start_failed`, `worker_start_timeout`, and `worker_start_interrupted`
 mean the requested runtime did not reach readiness. Refresh the session state
 before a new activation; no draft has been sent by activation. Raw Worker stderr

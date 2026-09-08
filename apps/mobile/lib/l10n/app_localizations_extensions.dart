@@ -82,6 +82,10 @@ extension TsPhoneProblemLocalizations on TsPhoneProblem {
     TsPhoneProblemCode.activationExternalOwner => l10n.activationExternalOwner,
     TsPhoneProblemCode.activationUpgradeRequired =>
       l10n.activationUpgradeRequired,
+    TsPhoneProblemCode.activationWriterActive => l10n.activationWriterActive,
+    TsPhoneProblemCode.activationInspectionFailed =>
+      l10n.activationInspectionFailed,
+    TsPhoneProblemCode.activationGuardInvalid => l10n.activationGuardInvalid,
     TsPhoneProblemCode.activationFailed => l10n.activationFailed,
     TsPhoneProblemCode.activationOutcomeUnknown =>
       l10n.activationOutcomeUnknown,

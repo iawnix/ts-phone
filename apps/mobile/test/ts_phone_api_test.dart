@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
+import 'package:ts_phone/l10n/app_localizations_en.dart';
+import 'package:ts_phone/l10n/app_localizations_extensions.dart';
+import 'package:ts_phone/l10n/app_localizations_zh.dart';
 import 'package:ts_phone/models/connection_settings.dart';
 import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
@@ -676,6 +679,10 @@ void main() {
         'worker_start_failed': TsPhoneProblemCode.activationFailed,
         'worker_start_timeout': TsPhoneProblemCode.activationFailed,
         'worker_start_interrupted': TsPhoneProblemCode.activationFailed,
+        'session_writer_active': TsPhoneProblemCode.activationWriterActive,
+        'session_writer_inspection_failed':
+            TsPhoneProblemCode.activationInspectionFailed,
+        'session_guard_invalid': TsPhoneProblemCode.activationGuardInvalid,
         'worker_cleanup_uncertain': TsPhoneProblemCode.runtimeRecoveryRequired,
         'session_recovery_required': TsPhoneProblemCode.runtimeRecoveryRequired,
         'activation_capacity_exceeded': TsPhoneProblemCode.activationCapacity,
@@ -691,6 +698,14 @@ void main() {
           ),
         );
         expect(problem.code, entry.value, reason: entry.key);
+        for (final l10n in [AppLocalizationsEn(), AppLocalizationsZh()]) {
+          final message = problem.localizedMessage(l10n);
+          expect(message, isNot(contains('private diagnostic')));
+          if (entry.key.startsWith('session_writer_') ||
+              entry.key == 'session_guard_invalid') {
+            expect(message, isNot(l10n.activationFailed));
+          }
+        }
       }
     },
   );
