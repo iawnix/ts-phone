@@ -1889,7 +1889,7 @@ abstract class AppLocalizations {
   /// No description provided for @activationInspectionFailed.
   ///
   /// In en, this message translates to:
-  /// **'The Host could not verify existing session processes. Check its process-access permissions before retrying. History and drafts are kept.'**
+  /// **'The Host could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.'**
   String get activationInspectionFailed;
 
   /// No description provided for @activationGuardInvalid.

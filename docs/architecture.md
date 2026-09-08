@@ -162,14 +162,14 @@ conversation text. They are not durable prompt delivery receipts.
 
 Startup waits outside the global metadata mutation queue. The fixed launcher
 must advertise `tspi-session-guard/1`; its child receives a private launch ID.
-Bridge registration must match the admitted launch mode/ID. A configured Host
+Bridge registration must match the admitted launch mode/ID and spawned child PID. A configured Host
 also calls the launcher's PID-bound writer check, which verifies actual held
 directory/session/Root flock descriptors in Linux `/proc`. Authentication alone
 does not make a Bridge ready: activation waits for an initialized snapshot and
 locally configured model authentication. It never makes a paid provider probe.
 Guard failures before Pi starts carry a private `tspi.startup_error` stderr
-record. WorkerSupervisor accepts only its exact two-field shape and the known
-codes `session_writer_active`, `session_writer_inspection_failed`, and
+record. The Worker and lifecycle clients share one parser for its exact
+two-field shape and known codes `session_writer_active`, `session_writer_inspection_failed`, `session_guard_upgrade_required`, and
 `session_guard_invalid`. It waits for stderr to drain, then maps the code to a
 fixed public message. Host logs contain the workspace ID and safe code, not raw
 stderr. The mobile app distinguishes these failures in both supported languages
@@ -192,6 +192,12 @@ The launcher resolves new/continue/exact session selection before Pi opens any
 history and holds guards through exec. In-process new/resume/fork is cancelled
 using Pi's pre-switch hooks. Stop/reopen is required. Raw Pi and old direct
 launchers bypassing TSPi are outside this cooperative guard contract.
+Legacy process inspection belongs to first-time Package guard enrollment;
+daily startup consults the installed guard record and actual OS locks, never
+global Pi environments. Inspection failure is distinct from lock contention.
+The installed `TSPi`, `TSPhoneServer`, and `TSPhoneCtl` aliases share the Package
+dispatcher and private installation dotenv reader. Component `bin/` entrypoints
+remain standalone development tools and are not production suite launchers.
 
 ChatController owns fresh activation metadata, including foreground refresh and
 state events. Continue research requests Controller explicitly; Read-only

@@ -24,8 +24,8 @@ test("owned Worker prompts use RPC preflight and publish one accepted input", as
     // Cold subprocess startup is not a one-second performance assertion.
     await waitFor(async () => (await fixture.application.hub.listSessions("ts_001"))[0]?.runtimeState, "connecting", 5_000);
     await waitFor(async () => readFile(`${fixture.config.tspiPath}.launch`, "utf8").then(() => true, () => false), true, 5_000);
-    const { launchId } = JSON.parse(await readFile(`${fixture.config.tspiPath}.launch`, "utf8"));
-    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, { sessionId: session.sessionId, launchId });
+    const { launchId, pid } = JSON.parse(await readFile(`${fixture.config.tspiPath}.launch`, "utf8"));
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, { sessionId: session.sessionId, launchId, pid });
     await activation;
     await waitForState(fixture, "idle");
     const journal = await fixture.application.hub.journal("ts_001", session.sessionId);

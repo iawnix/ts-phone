@@ -23,7 +23,7 @@ the protocol versions in this table:
 | --- | ---: | --- |
 | TS Phone server | 0.9.0 | API v4, Events v3, Bridge v3, model selection, terminal attach and guarded idle switching |
 | TSPi package | 0.15.0 | Shared terminal/Phone Host, exact session Workers, model readiness and guard/1 |
-| Mobile app | 0.18.0+45 | Composer model picker, compact session controls and navigation-safe prompt receipts |
+| Mobile app | 0.18.1+46 | Composer model picker, navigation-safe prompt receipts and distinct session guard diagnostics |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in
@@ -147,17 +147,17 @@ scientific turn merely to upgrade transport.
 
 1. Confirm the selected Package and managed Agent runtime passed the checks
    above.
-2. Preserve `/home/iaw/.config/ts-phone/server.env`, `auth.token`, and
-   `bridge.secret` outside the release.
-   Set `TS_PHONE_TSPI=/home/iaw/TS-pi-agent/TSPi`; without it the Host remains a
-   read-only session browser and cannot activate managed sessions.
+2. Preserve installation `.pi/ts-phone/server.env`, `auth.token`, and
+   `bridge.secret` outside the release. The suite's three conversation aliases
+   share one configuration reader. Launcher and workspace bindings default to
+   the installation root; explicit environment overrides must refer to that
+   same installation. Existing credentials are not copied or regenerated.
 3. Make the user service invoke the suite-owned stable launcher. For the
    standard installation, its effective service settings must include:
 
 ~~~ini
 [Service]
 WorkingDirectory=/home/iaw/TS-pi-agent
-EnvironmentFile=/home/iaw/.config/ts-phone/server.env
 ExecStart=
 ExecStart=/home/iaw/TS-pi-agent/TSPhoneServer
 ReadWritePaths=/home/iaw/.local/state/ts-phone
@@ -168,6 +168,13 @@ ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
 ReadWritePaths=-%h/.pi/agent
 ~~~
+
+Prefer the installer-generated `.pi/ts-phone/ts-phone.service` template for
+new deployments; it uses actual installation/state/Pi paths rather than the
+example paths above. Existing templates are preserved. `TSPhoneServer --print-service`
+prints a fresh template without starting the Host. Review legacy systemd
+EnvironmentFile/drop-in overrides before changing configuration: explicit
+environment still takes precedence over the installation dotenv file.
 
 `ProtectHome=read-only` applies to TSPi child processes too. The explicit paths
 above are required for workspace/Pi sessions and the managed Python/cache state.

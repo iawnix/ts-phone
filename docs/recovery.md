@@ -82,9 +82,11 @@ If compatibility checks fail before the source is stopped, the existing runtime
 remains usable. If stopping the source is uncertain, that source requires
 recovery and the target is not started. These failures are not equivalent.
 
-`session_guard_upgrade_required` or `session_writer_unverified` requires a
-matching TSPi installation and restart of affected unguarded writers, not an
-edited `management.json`. `model_auth_missing` concerns host model credentials,
+`session_guard_upgrade_required` requires the matching Package installer to
+finish guard enrollment after old TSPi writers have exited. Do not edit the
+installation record or `management.json` to bypass it. `session_writer_unverified`
+means a Bridge could not prove its exact process identity and held guards; it is
+not an instruction to upgrade an otherwise valid history. `model_auth_missing` concerns host model credentials,
 not the Phone token. `model_storage_unavailable` means that Pi cannot access or
 lock its credential/cache storage; check the service's `ReadWritePaths` against
 the actual `PI_CODING_AGENT_DIR` (default `~/.pi/agent`). Reading these files also
@@ -105,12 +107,12 @@ Back from an approval panel defers the decision. Use **Pending approvals** in
 the chat to reopen it; only the explicit approve/reject controls send a decision.
 
 `session_writer_active` means a real writer or lifecycle guard blocks startup;
-close the owning runtime after it settles. `session_writer_inspection_failed`
-means the launcher could not verify a candidate writer through Linux `/proc`.
-Check the Host's process visibility and permissions; refreshing the app alone
-does not repair that preflight. Unrelated system services are excluded by their
-command line before private process state is read. Do not grant the entire Host
-root access or disable writer checks. `session_guard_invalid` requires inspection
+close the owning runtime after it settles. Normal guarded startup no longer
+scans unrelated Pi processes or their private environment. A remaining
+`session_writer_inspection_failed` from an older installation requires the
+Package repair and installation diagnostics, not closing other projects or
+granting the Host broader privileges. Legacy process inspection is an installer
+upgrade check, outside normal activation. `session_guard_invalid` requires inspection
 of the session history and owner-only guard files, not their deletion.
 These failures occur before model execution. The service journal records the
 safe code under `worker_start_failed`; the API and journal do not expose raw

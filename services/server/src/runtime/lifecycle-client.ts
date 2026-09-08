@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { HttpError } from "../errors.js";
+import { readLauncherError } from "./launcher-errors.js";
 
 const MAX_REPLY_BYTES = 16 * 1024;
 const PREFLIGHT_TIMEOUT_MS = 15_000;
@@ -48,7 +49,7 @@ export async function runLifecycle<T>(
       child.once("error", reject);
       child.once("close", (code) => {
         if (code !== 0) {
-          reject(unavailable(diagnostic.trim().split(/\r?\n/)[0]?.slice(0, 500) || "Workspace preflight failed"));
+          reject(readLauncherError(diagnostic) ?? unavailable("Workspace preflight failed; inspect Host diagnostics"));
         } else if (!guarded) {
           parse();
         } else {

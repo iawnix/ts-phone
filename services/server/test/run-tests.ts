@@ -10,6 +10,7 @@ import "./http-server.test.js";
 import "./management-http.test.js";
 import "./management-store.test.js";
 import "./worker-supervisor.test.js";
+import "./launcher-errors.test.js";
 import "./worker-rpc.test.js";
 import "./history-page.test.js";
 import "./workspace-management-runtime.test.js";

@@ -6,6 +6,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/iaw/soft/ts-phone/current
+# Standalone development defaults. Unified TSPi installations generate their own unit.
+Environment=TS_PHONE_TSPI=/home/iaw/TS-pi-agent/TSPi
+Environment=TS_PHONE_WORKSPACES=/home/iaw/TS-pi-agent/workspaces
+Environment=TS_PHONE_STATE_DIR=/home/iaw/.local/state/ts-phone
 EnvironmentFile=/home/iaw/.config/ts-phone/server.env
 ExecStart=/usr/bin/node /home/iaw/soft/ts-phone/current/services/server/dist/index.js
 Restart=on-failure

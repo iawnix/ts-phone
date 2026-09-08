@@ -683,6 +683,7 @@ void main() {
         'session_writer_inspection_failed':
             TsPhoneProblemCode.activationInspectionFailed,
         'session_guard_invalid': TsPhoneProblemCode.activationGuardInvalid,
+        'session_writer_unverified': TsPhoneProblemCode.activationGuardInvalid,
         'worker_cleanup_uncertain': TsPhoneProblemCode.runtimeRecoveryRequired,
         'session_recovery_required': TsPhoneProblemCode.runtimeRecoveryRequired,
         'activation_capacity_exceeded': TsPhoneProblemCode.activationCapacity,

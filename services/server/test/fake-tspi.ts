@@ -47,7 +47,7 @@ if (args.includes("--phone-models")) {
     await new Promise(resolve => process.stderr.write(${JSON.stringify(options.startupStderr ?? "private-provider-diagnostic\n")}, resolve));
     process.exit(1);
   }
-  writeFileSync(${JSON.stringify(`${path}.launch`)}, JSON.stringify({launchId: process.env.TS_PHONE_LAUNCH_ID}));
+  writeFileSync(${JSON.stringify(`${path}.launch`)}, JSON.stringify({launchId: process.env.TS_PHONE_LAUNCH_ID, pid: process.pid}));
   if (${options.bridge === true}) {
     const workspaceId = args[args.indexOf("--workspace") + 1];
     const sessionId = args[args.indexOf("--session-id") + 1];

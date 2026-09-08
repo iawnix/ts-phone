@@ -955,7 +955,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activationInspectionFailed =>
-      'Host 无法核验已有会话进程，请检查服务读取进程信息的权限后重试。历史和草稿仍保留。';
+      'Host 未能完成会话守卫检查，请检查 TSPi 安装诊断后重试。历史和草稿仍保留。';
 
   @override
   String get activationGuardInvalid =>

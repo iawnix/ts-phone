@@ -320,7 +320,7 @@
   "readOnlyAssistant": "Read-only assistant",
   "activationUpgradeRequired": "Update the TSPi Host to choose a session mode. History remains available.",
   "activationWriterActive": "Another process owns this workspace or conversation. Close it on the Host before continuing. History and drafts are kept.",
-  "activationInspectionFailed": "The Host could not verify existing session processes. Check its process-access permissions before retrying. History and drafts are kept.",
+  "activationInspectionFailed": "The Host could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.",
   "activationGuardInvalid": "The Host could not validate the session history or its writer locks. Inspect the session files on the Host. Do not delete history or lock files to bypass this check.",
   "activationExternalOwner": "This workspace is open in a terminal. Continue that conversation or close it before switching.",
   "activationSwitchTitle": "Switch the running conversation?",

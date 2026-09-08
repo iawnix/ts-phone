@@ -1016,7 +1016,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activationInspectionFailed =>
-      'The Host could not verify existing session processes. Check its process-access permissions before retrying. History and drafts are kept.';
+      'The Host could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.';
 
   @override
   String get activationGuardInvalid =>

@@ -2,7 +2,7 @@
 
 ## Current Source
 
-Mobile `0.18.0+45` opens a work home with recent conversations and projects,
+Mobile `0.18.1+46` opens a work home with recent conversations and projects,
 with explicit navigation, a session sidebar and a single expanding text
 composer. Cold start requests summary lists only. History opens without starting a
 Worker, requests the latest 50 items first, and retains the explicit load-all
@@ -17,6 +17,9 @@ set of conversation controls. Host `0.9.0` serves the Phone app and the TSPi
 `0.15.0` thin terminal through the same authenticated session APIs, including
 bounded approval and prompt-receipt queries. Provider credentials remain with
 the Worker. Terminal detach does not stop generation or remote calculations.
+The patch distinguishes guard validation from an incomplete installation upgrade;
+it no longer advises broadening process-access permissions. Installed Host and
+terminal entrypoints share the same private configuration reader.
 
 It keeps pending prompt receipts across page navigation, reuses the
 original request identity for an explicit uncertain retry, and preserves newer

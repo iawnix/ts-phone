@@ -6,9 +6,10 @@ import { isAbsolute } from "node:path";
 import { HttpError } from "../errors.js";
 import type { SessionAccessMode } from "../types.js";
 import { runLifecycle, type LifecycleGuard, type LifecyclePreflight } from "./lifecycle-client.js";
-import { WorkerRpc, promptFailure } from "./worker-rpc.js";
+import { WorkerRpc } from "./worker-rpc.js";
 import { parseModelCatalog } from "./model-catalog.js";
 import type { PhoneModel } from "../types.js";
+import { readLauncherError } from "./launcher-errors.js";
 
 const MAX_DIAGNOSTIC_BYTES = 16 * 1024;
 
@@ -83,6 +84,10 @@ export class WorkerSupervisor {
     // A bridge-only deployment cannot launch or delete sessions. With Session
     // Host configured, every admitted writer must prove the launcher's guards.
     if (!this.available) return;
+    const owned = this.#workers.get(workerKey(workspaceId, sessionId));
+    if (owned && owned.child.pid !== pid) {
+      throw new HttpError(409, "session_writer_unverified", "The Bridge PID does not match the Host-managed Worker");
+    }
     try {
       const { stdout } = await promisify(execFile)(await this.#executable(), [
         "--session-writer-check", "--workspace", workspaceId,
@@ -92,8 +97,11 @@ export class WorkerSupervisor {
       if (value.session_guard_contract === "tspi-session-guard/1" && value.verified === true
         && value.workspace_root === workspaceRoot && value.session_id === sessionId
         && value.access_mode === accessMode && value.pid === pid) return;
-    } catch { /* Failed proof never authorizes runtime admission. */ }
-    throw new HttpError(409, "session_writer_unverified", "Restart this TSPi conversation with a guard-compatible launcher");
+    } catch (error) {
+      const failure = readLauncherError(error instanceof Error && "stderr" in error ? error.stderr : undefined);
+      if (failure) throw failure;
+    }
+    throw new HttpError(409, "session_writer_unverified", "The Host could not verify this conversation's process identity and writer guards");
   }
 
   async start(request: WorkerStartRequest): Promise<WorkerLaunch> {
@@ -138,7 +146,7 @@ export class WorkerSupervisor {
       child.once("close", (code, signal) => {
         rpc.close();
         if (this.#workers.get(key)?.child === child) this.#workers.delete(key);
-        const startupError = readStartupError(stderr.value);
+        const startupError = readLauncherError(stderr.value);
         resolve({ code, signal, diagnostic: stderr.value, ...(startupError ? { startupError } : {}) });
       });
     });
@@ -238,32 +246,12 @@ export class WorkerSupervisor {
         timeout: 10_000, maxBuffer: 4096,
       });
       if (JSON.parse(stdout).session_guard_contract === "tspi-session-guard/1") return;
-    } catch { /* Do not expose launcher output or credentials. */ }
+    } catch (error) {
+      const failure = readLauncherError(error instanceof Error && "stderr" in error ? error.stderr : undefined);
+      if (failure) throw failure;
+    }
     throw new HttpError(409, "session_guard_upgrade_required", "Update the installed TSPi launcher before activating conversations");
   }
-}
-
-function readStartupError(diagnostic: string): HttpError | undefined {
-  // Only fixed launcher codes cross the public boundary, never raw stderr.
-  for (const line of diagnostic.split("\n")) {
-    let record: unknown;
-    try { record = JSON.parse(line); } catch { continue; }
-    if (!record || typeof record !== "object" || Array.isArray(record)) continue;
-    const value = record as Record<string, unknown>;
-    if (value.type !== "tspi.startup_error" || Object.keys(value).length !== 2) continue;
-    switch (value.code) {
-      case "session_writer_active":
-        return new HttpError(409, value.code, "An existing workspace or conversation writer must exit before activation");
-      case "session_writer_inspection_failed":
-        return new HttpError(503, value.code, "The Host could not verify workspace writers; inspect its process permissions");
-      case "session_guard_invalid":
-        return new HttpError(409, value.code, "The Host could not validate the conversation history or its writer guards");
-      case "model_unavailable":
-      case "model_check_failed":
-        return promptFailure(value.code);
-    }
-  }
-  return undefined;
 }
 
 class BoundedText {

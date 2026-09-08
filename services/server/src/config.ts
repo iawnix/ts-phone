@@ -61,7 +61,7 @@ export function resolveConfig(
     host: loopbackHost(env.TS_PHONE_HOST),
     port,
     workspaceRoot: absolutePath(
-      env.TS_PHONE_WORKSPACES || "/home/iaw/TS-pi-agent/workspaces",
+      env.TS_PHONE_WORKSPACES || resolve(cwd, "workspaces"),
       "TS_PHONE_WORKSPACES",
     ),
     stateDir,

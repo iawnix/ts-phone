@@ -73,6 +73,10 @@ setInterval(() => {}, 1000);
     ]);
     assert.equal(record.socket, join(root, "bridge.sock"));
     assert.equal(record.secret, join(root, "bridge.secret"));
+    await assert.rejects(
+      () => supervisor.verifyWriter("ts_007", join(root, "ts_007"), "session_4", "observer", process.pid),
+      (error: unknown) => error instanceof HttpError && error.code === "session_writer_unverified",
+    );
     await supervisor.stop("ts_007", "session_4");
     assert.equal(supervisor.owns("ts_007", "session_4"), false);
 
