@@ -46,6 +46,7 @@ enum TsPhoneProblemCode {
   managementUnsupported,
   modelUnavailable,
   modelAuthMissing,
+  modelStorageUnavailable,
   modelCheckFailed,
   promptRejected,
   runtimeExtensionError,
@@ -85,6 +86,7 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
     final promptCode = switch (error.code) {
       'model_unavailable' => TsPhoneProblemCode.modelUnavailable,
       'model_auth_missing' => TsPhoneProblemCode.modelAuthMissing,
+      'model_storage_unavailable' => TsPhoneProblemCode.modelStorageUnavailable,
       'model_check_failed' => TsPhoneProblemCode.modelCheckFailed,
       'prompt_rejected' => TsPhoneProblemCode.promptRejected,
       'runtime_extension_error' => TsPhoneProblemCode.runtimeExtensionError,

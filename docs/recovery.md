@@ -85,8 +85,24 @@ recovery and the target is not started. These failures are not equivalent.
 `session_guard_upgrade_required` or `session_writer_unverified` requires a
 matching TSPi installation and restart of affected unguarded writers, not an
 edited `management.json`. `model_auth_missing` concerns host model credentials,
-not the Phone token. `worker_cleanup_uncertain` requires inspection of the owned
+not the Phone token. `model_storage_unavailable` means that Pi cannot access or
+lock its credential/cache storage; check the service's `ReadWritePaths` against
+the actual `PI_CODING_AGENT_DIR` (default `~/.pi/agent`). Reading these files also
+requires a writable lock directory. `model_check_failed` is a different local
+configuration/refresh failure. None of these means that the model generated an
+empty answer. `worker_cleanup_uncertain` requires inspection of the owned
 process before another startup. Never unlink occupied guard files.
+
+Returning from a chat does not cancel or resend a pending prompt. The mobile
+session keeps its request ID and receipt until the request completes. Confirmed
+rejections restore the submitted draft only if it has not been edited since;
+uncertain requests remain separate from the draft. An explicit retry first
+synchronizes and reuses the original ID and session revision. This in-memory
+state survives page navigation, not app process termination; after an app or
+Host restart inspect history before deciding whether another prompt is needed.
+
+Back from an approval panel defers the decision. Use **Pending approvals** in
+the chat to reopen it; only the explicit approve/reject controls send a decision.
 
 `session_writer_active` means a real writer or lifecycle guard blocks startup;
 close the owning runtime after it settles. `session_writer_inspection_failed`

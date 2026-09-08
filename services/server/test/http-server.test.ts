@@ -56,6 +56,7 @@ test("a connected bridge with an unready model is not promptable", async () => {
   for (const options of [
     { model: "unknown/unknown", expected: "model_unavailable" },
     { promptProblem: "model_auth_missing" as const, expected: "model_auth_missing" },
+    { promptProblem: "model_storage_unavailable" as const, expected: "model_storage_unavailable" },
   ]) {
     const fixture = await startFixture();
     try {

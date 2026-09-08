@@ -12,7 +12,14 @@ import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
 import 'chat_controller.dart';
 
-enum ApprovalPanelOutcome { approved, rejected, expired, stale, missing }
+enum ApprovalPanelOutcome {
+  approved,
+  rejected,
+  deferred,
+  expired,
+  stale,
+  missing,
+}
 
 Future<ApprovalPanelOutcome?> showApprovalPanel({
   required BuildContext context,
@@ -235,7 +242,7 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
   }
 
   Future<void> _handleBack() async {
-    if (_canRespond) await _respond(false);
+    if (_canRespond) Navigator.of(context).pop(ApprovalPanelOutcome.deferred);
   }
 
   @override

@@ -306,7 +306,10 @@ void main() {
       ..creation = Completer<SessionSummary>();
     await tester.pumpWidget(shellApp(gateway));
     await tester.pumpAndSettle();
-    await openRecent(tester);
+    await tester.tap(find.byKey(const ValueKey('workspace-row-ts_001')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Transition-state search'));
+    await tester.pumpAndSettle();
     final create = find.byKey(const ValueKey('chat-new-session'));
     final bounds = tester.getRect(create);
     await tester.tap(create);
@@ -325,6 +328,7 @@ void main() {
 
     await tester.binding.handlePopRoute();
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(ChatPage), findsNothing);
     final listCreate = find.byKey(const ValueKey('create-session'));
     expect(tester.widget<IconButton>(listCreate).onPressed, isNull);

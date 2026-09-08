@@ -2294,7 +2294,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('system back explicitly rejects an approval', (
+  testWidgets('system back defers an approval until an explicit decision', (
     WidgetTester tester,
   ) async {
     final gateway = UiFakeGateway();
@@ -2323,8 +2323,13 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
-    expect(gateway.approvalDecisions, <bool>[false]);
+    expect(gateway.approvalDecisions, isEmpty);
     expect(find.text('需要你的确认'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('pending-approvals')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('approval-reject')));
+    await tester.pumpAndSettle();
+    expect(gateway.approvalDecisions, <bool>[false]);
     expect(tester.takeException(), isNull);
   });
 

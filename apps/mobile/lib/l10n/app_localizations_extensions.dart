@@ -69,6 +69,8 @@ extension TsPhoneProblemLocalizations on TsPhoneProblem {
     TsPhoneProblemCode.incompatible => l10n.problemIncompatible,
     TsPhoneProblemCode.modelUnavailable => l10n.problemModelUnavailable,
     TsPhoneProblemCode.modelAuthMissing => l10n.problemModelAuthMissing,
+    TsPhoneProblemCode.modelStorageUnavailable =>
+      l10n.problemModelStorageUnavailable,
     TsPhoneProblemCode.modelCheckFailed => l10n.problemModelCheckFailed,
     TsPhoneProblemCode.promptRejected => l10n.problemPromptRejected,
     TsPhoneProblemCode.runtimeExtensionError =>

@@ -6,11 +6,17 @@ const MAX_RESPONSE_BYTES = 64 * 1024;
 
 export function promptFailure(error: unknown): HttpError {
   const text = typeof error === "string" ? error : "";
-  if (/no api key|api key.*not found|authentication|credentials/i.test(text)) {
+  if (/\b(?:EROFS|EACCES|EPERM|ELOCKED)\b|read-only file system|model_storage_unavailable/i.test(text)) {
+    return new HttpError(409, "model_storage_unavailable", "TSPi cannot access its model credential or cache storage");
+  }
+  if (/no api key|api key.*not found|authentication|credentials|\bmodel_auth_missing\b/i.test(text)) {
     return new HttpError(409, "model_auth_missing", "The selected model has no usable authentication on the TSPi host");
   }
-  if (/no model|model.*not found|unknown model/i.test(text)) {
+  if (/no model|model.*not found|unknown model|\bmodel_unavailable\b/i.test(text)) {
     return new HttpError(409, "model_unavailable", "No usable model is selected in this TSPi session");
+  }
+  if (/\bmodel_check_failed\b/i.test(text)) {
+    return new HttpError(409, "model_check_failed", "TSPi could not check the selected model");
   }
   // Provider and extension errors may contain keys, URLs, or request bodies.
   return new HttpError(409, "prompt_rejected", "Pi rejected this message before model execution");

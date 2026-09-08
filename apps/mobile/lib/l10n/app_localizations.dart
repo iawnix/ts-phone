@@ -362,6 +362,12 @@ abstract class AppLocalizations {
   /// **'The TSPi host could not verify the model configuration.'**
   String get problemModelCheckFailed;
 
+  /// No description provided for @problemModelStorageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'TSPi cannot access its model credentials or cache. Check the host service\'s Pi directory permissions.'**
+  String get problemModelStorageUnavailable;
+
   /// No description provided for @problemRuntimeExtensionError.
   ///
   /// In en, this message translates to:

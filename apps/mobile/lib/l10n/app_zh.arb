@@ -45,6 +45,7 @@
   "problemModelUnavailable": "当前 TSPi 会话没有可用模型，请检查主机上的模型选择。",
   "problemModelAuthMissing": "模型需要在 TSPi 主机上配置认证。手机与 TS Phone 的连接仍然有效。",
   "problemModelCheckFailed": "TSPi 主机无法核验模型配置。",
+  "problemModelStorageUnavailable": "TSPi 无法访问模型认证或缓存，请检查主机服务对 Pi 目录的读写权限。",
   "problemRuntimeExtensionError": "TSPi 会话中的扩展运行出错，请核对最新消息和主机日志。",
   "problemPromptRejected": "Pi 在模型执行前拒绝了这条消息，草稿已保留。",
   "problemDeliveryUncertain": "尚未确认消息是否送达。请先核对最新会话记录，再决定是否重发。",

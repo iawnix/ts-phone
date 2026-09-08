@@ -32,6 +32,9 @@ ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/runtime-cache
 ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/session-host
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
+# Pi reads credentials and its model cache under a filesystem lock.
+# A custom PI_CODING_AGENT_DIR needs a matching narrow ReadWritePaths override.
+ReadWritePaths=-/home/iaw/.pi/agent
 
 [Install]
 WantedBy=default.target

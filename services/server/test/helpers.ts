@@ -32,7 +32,7 @@ export async function connectFakeBridge(
     launchId?: string;
     abortErrorCode?: "agent_not_running" | "agent_run_stale";
     model?: string;
-    promptProblem?: "model_auth_missing" | "model_unavailable" | "model_check_failed";
+    promptProblem?: "model_auth_missing" | "model_unavailable" | "model_storage_unavailable" | "model_check_failed";
   } = {},
 ): Promise<FakeBridge> {
   const socket = createConnection(config.bridgeSocketPath);

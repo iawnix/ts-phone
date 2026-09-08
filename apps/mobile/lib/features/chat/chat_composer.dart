@@ -46,88 +46,94 @@ class ChatComposer extends StatelessWidget {
           final multiline =
               measure.didExceedMaxLines || value.text.contains('\n');
           measure.dispose();
-          return Material(
-            key: const ValueKey('chat-composer'),
-            color: colors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 56),
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      6,
-                      multiline ? 16 : 58,
-                      multiline ? 52 : 6,
-                    ),
-                    child: TextField(
-                      key: const ValueKey('chat-input'),
-                      controller: controller,
-                      focusNode: focusNode,
-                      enabled: canEdit,
-                      minLines: 1,
-                      maxLines: maxLines,
-                      style: style,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      textCapitalization: TextCapitalization.sentences,
-                      onTapOutside: (_) => focusNode.unfocus(),
-                      decoration: InputDecoration(
-                        hintText: hint,
-                        hintMaxLines: 2,
-                        isDense: true,
-                        filled: false,
-                        hintStyle: style.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10,
-                        ),
+          return TextFieldTapRegion(
+            child: Material(
+              key: const ValueKey('chat-composer'),
+              color: colors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        6,
+                        multiline ? 16 : 58,
+                        multiline ? 52 : 6,
                       ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: SizedBox.square(
-                      key: const ValueKey('composer-action-slot'),
-                      dimension: 44,
-                      child: IconButton.filled(
-                        key: const ValueKey('composer-send'),
-                        onPressed:
-                            canSend && value.text.trim().isNotEmpty && !sending
-                            ? onSend
-                            : null,
-                        tooltip: sending
-                            ? context.l10n.sending
-                            : context.l10n.send,
-                        style: IconButton.styleFrom(
-                          shape: const CircleBorder(),
-                          backgroundColor: colors.onSurface,
-                          foregroundColor: colors.surface,
-                          disabledBackgroundColor: colors.onSurface.withValues(
-                            alpha: 0.08,
+                      child: TextField(
+                        key: const ValueKey('chat-input'),
+                        controller: controller,
+                        focusNode: focusNode,
+                        enabled: canEdit,
+                        minLines: 1,
+                        maxLines: maxLines,
+                        style: style,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        textCapitalization: TextCapitalization.sentences,
+                        onTapOutside: (_) => focusNode.unfocus(),
+                        decoration: InputDecoration(
+                          hintText: hint,
+                          hintMaxLines: 2,
+                          isDense: true,
+                          filled: false,
+                          hintStyle: style.copyWith(
+                            color: colors.onSurfaceVariant,
                           ),
-                          minimumSize: const Size.square(44),
-                          padding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                          ),
                         ),
-                        icon: sending
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.arrow_upward_rounded, size: 22),
                       ),
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: SizedBox.square(
+                        key: const ValueKey('composer-action-slot'),
+                        dimension: 44,
+                        child: IconButton.filled(
+                          key: const ValueKey('composer-send'),
+                          onPressed:
+                              canSend &&
+                                  value.text.trim().isNotEmpty &&
+                                  !sending
+                              ? onSend
+                              : null,
+                          tooltip: sending
+                              ? context.l10n.sending
+                              : context.l10n.send,
+                          style: IconButton.styleFrom(
+                            shape: const CircleBorder(),
+                            backgroundColor: colors.onSurface,
+                            foregroundColor: colors.surface,
+                            disabledBackgroundColor: colors.onSurface
+                                .withValues(alpha: 0.08),
+                            minimumSize: const Size.square(44),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: sending
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.arrow_upward_rounded,
+                                  size: 22,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

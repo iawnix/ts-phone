@@ -137,7 +137,7 @@ export interface SessionRuntimeSnapshot {
   updatedAt: string;
 }
 
-export type PromptProblem = "model_unavailable" | "model_auth_missing" | "model_check_failed";
+export type PromptProblem = "model_unavailable" | "model_auth_missing" | "model_storage_unavailable" | "model_check_failed";
 
 export interface SessionSnapshot {
   sessionId: string;

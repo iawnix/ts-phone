@@ -221,7 +221,10 @@ and reconnect using the new checkpoint before enabling input again.
 
 A connected socket is not model readiness. Session summaries and snapshot/state
 events expose `promptProblem` when the model is unavailable, its authentication
-is unconfigured, or the local model check fails. These states omit
+is unconfigured, its local storage cannot be accessed, or the local model check
+fails. `model_storage_unavailable` includes auth/cache lock failures in a
+read-only service sandbox; it does not mean that the user has no API key.
+These states omit
 `command.prompt` and reject message submission with a model-specific 409, not a
 Phone-token authentication error. No provider key or raw error body is exposed.
 
@@ -285,6 +288,21 @@ Cold start reads project and session summaries without selecting a conversation
 or requesting its messages. Home retains at most five recent rows and limits
 summary request concurrency to three. Selecting a project always opens its
 list; selecting a conversation is the only entry into its history.
+
+Mobile navigation uses a nested route stack: Home to a conversation returns to
+Home; a conversation opened from a project returns to that project's list.
+Platform back and the toolbar use the same routes, including cancellable iOS
+edge gestures. The sidebar opens explicitly so it does not compete for that edge.
+
+Drafts and outgoing receipts belong to the session's app-scoped view memory,
+not its page controller. Returning while a send is pending keeps that one HTTP
+request alive until its bounded response completes. Reopening shows the same
+pending request. A definitive rejection restores the original draft only if no
+newer edit replaced it. An uncertain result requires explicit retry with the
+original request ID and revision; it never resends automatically or crosses a
+revision boundary. These receipts survive navigation, not app-process death;
+the server journal and Pi history remain authoritative. Back from an approval
+panel defers the choice; only an explicit approve/reject sends a decision.
 
 The registry derives unnamed session titles from user text in the first 64 KiB
 of a session file, capped at 80 Unicode code points. Explicit management and

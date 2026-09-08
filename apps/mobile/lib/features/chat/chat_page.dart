@@ -67,6 +67,7 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
+  late final ChatViewMemory _memory;
   late final ChatController _controller;
   late final StreamSubscription<ExtensionUiRequest> _uiSubscription;
   final TextEditingController _composer = TextEditingController();
@@ -85,6 +86,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _showJumpToStart = false;
   bool _showJumpToLatest = false;
   bool _drainingUiRequests = false;
+  bool _approvalDeferred = false;
   bool _syncing = false;
   bool _sending = false;
   bool _aborting = false;
@@ -100,6 +102,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _memory = widget.memory ?? ChatViewMemory();
     _controller = ChatController(
       api:
           widget.gateway ??
@@ -120,10 +123,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       initialCapabilities: widget.session.capabilities,
       recoveredSession: widget.recoveredSession,
       initialPreview: widget.memory?.preview,
+      outbox: _memory.outbox,
     )..addListener(_onControllerUpdate);
     _controller.streamingTextUpdates.addListener(_onStreamingTextUpdate);
     _uiSubscription = _controller.uiRequests.listen(_queueUiRequest);
-    _composer.text = widget.memory?.draft ?? '';
+    _composer.text = _memory.draft;
     _hasDraft = _composer.text.trim().isNotEmpty;
     if (widget.memory?.preview?.revision == widget.session.sessionRevision &&
         widget.memory?.following == false) {
@@ -131,11 +135,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       _streamUpdatesEnabled.value = false;
     }
     _composer.addListener(_onComposerChanged);
+    _memory.addListener(_onDraftChanged);
     unawaited(_controller.initialize());
   }
 
   @override
   void dispose() {
+    _memory.removeListener(_onDraftChanged);
     final memory = widget.memory;
     if (memory != null) {
       memory.draft = _composer.text;
@@ -518,21 +524,38 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   void _onComposerChanged() {
+    _memory.draft = _composer.text;
     final hasDraft = _composer.text.trim().isNotEmpty;
     if (hasDraft != _hasDraft && mounted) {
       setState(() => _hasDraft = hasDraft);
     }
   }
 
-  Future<void> _send() async {
+  void _onDraftChanged() {
+    if (_composer.text == _memory.draft) return;
+    _composer.value = TextEditingValue(
+      text: _memory.draft,
+      selection: TextSelection.collapsed(offset: _memory.draft.length),
+    );
+  }
+
+  Future<void> _send({String? retryText}) async {
     if (_sending) return;
+    final text = retryText ?? _composer.text;
+    final clearedRevision = retryText == null || _memory.draft.isEmpty
+        ? _memory.takeDraft()
+        : null;
     ActionFeedback.tap();
     setState(() => _sending = true);
     try {
-      final sent = await _controller.send(_composer.text);
+      final sent = await _controller.send(text);
+      if (!sent &&
+          clearedRevision != null &&
+          _memory.outbox.uncertain(text.trim()) == null) {
+        _memory.restoreDraft(text, clearedRevision);
+      }
       if (!mounted) return;
       if (sent) {
-        _composer.clear();
         _resumeTailFollow();
       } else {
         ActionFeedback.error();
@@ -823,11 +846,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   void _queueUiRequest(ExtensionUiRequest request) {
     _pendingUiRequests.add(request);
-    unawaited(_drainUiRequests());
+    if (_approvalDeferred) {
+      setState(() {});
+    } else {
+      unawaited(_drainUiRequests());
+    }
   }
 
   Future<void> _drainUiRequests() async {
     if (_drainingUiRequests) return;
+    setState(() => _approvalDeferred = false);
     _drainingUiRequests = true;
     try {
       while (mounted && _pendingUiRequests.isNotEmpty) {
@@ -854,6 +882,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         );
         if (!mounted) return;
         switch (outcome) {
+          case ApprovalPanelOutcome.deferred:
+            _pendingUiRequests.addFirst(request);
+            setState(() => _approvalDeferred = true);
+            return;
           case ApprovalPanelOutcome.expired:
             _showActionMessage(context.l10n.approvalExpired);
           case ApprovalPanelOutcome.stale:
@@ -886,18 +918,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             centerTitle: true,
             titleSpacing: 0,
             automaticallyImplyLeading: false,
-            leading: widget.onOpenNavigation != null
-                ? IconButton(
-                    tooltip: l10n.openSidebar,
-                    onPressed: widget.onOpenNavigation,
-                    icon: const Icon(Icons.menu_rounded),
-                  )
-                : widget.embedded
-                ? null
-                : BackButton(
-                    key: const ValueKey<String>('chat-back'),
-                    onPressed: _goBack,
-                  ),
+            leading: BackButton(
+              key: const ValueKey<String>('chat-back'),
+              onPressed: _goBack,
+            ),
             title: InkWell(
               key: const ValueKey('chat-session-details'),
               onTap: _showSessionDetails,
@@ -911,6 +935,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               ),
             ),
             actions: <Widget>[
+              if (widget.onOpenNavigation != null)
+                IconButton(
+                  tooltip: l10n.openSidebar,
+                  onPressed: widget.onOpenNavigation,
+                  icon: const Icon(Icons.menu_rounded),
+                ),
               if (widget.onNewSession case final create?)
                 IconButton(
                   key: const ValueKey('chat-new-session'),
@@ -1072,6 +1102,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     final showLiveRun =
         viewState.hasLiveRun ||
         _controller.activity?.kind == ChatActivityKind.toolFailed;
+    final retry = _controller.outbox.messages
+        .where((value) => value.state == ChatDeliveryState.uncertain)
+        .firstOrNull;
     return NotificationListener<SizeChangedLayoutNotification>(
       onNotification: (_) {
         _scheduleBottomDockMeasurement();
@@ -1103,6 +1136,34 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     onAbort: _confirmAbort,
                   ),
                 if (showLiveRun) const SizedBox(height: TsPhoneSpacing.small),
+                if (retry != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('retry-message'),
+                      onPressed:
+                          !_sending &&
+                              _controller.canSend &&
+                              !_controller.commandInFlight
+                          ? () => _send(retryText: retry.text)
+                          : null,
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      label: Text(context.l10n.retry),
+                    ),
+                  ),
+                if (_approvalDeferred)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('pending-approvals'),
+                      onPressed: _drainUiRequests,
+                      icon: const Icon(
+                        Icons.pending_actions_outlined,
+                        size: 20,
+                      ),
+                      label: Text(context.l10n.pendingApprovals),
+                    ),
+                  ),
                 if (_canActivate || _activating)
                   Align(
                     alignment: Alignment.centerLeft,
@@ -1170,6 +1231,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         liveRunReserve -
         navigationReserve -
         activationReserve -
+        (_approvalDeferred ? 48 : 0) -
+        (_controller.outbox.messages.any(
+              (value) => value.state == ChatDeliveryState.uncertain,
+            )
+            ? 48
+            : 0) -
         dockChrome;
     return (lineBudget / scaledLineHeight).floor().clamp(1, 5);
   }

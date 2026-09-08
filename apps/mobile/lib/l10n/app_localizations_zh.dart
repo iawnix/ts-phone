@@ -146,6 +146,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemModelCheckFailed => 'TSPi 主机无法核验模型配置。';
 
   @override
+  String get problemModelStorageUnavailable =>
+      'TSPi 无法访问模型认证或缓存，请检查主机服务对 Pi 目录的读写权限。';
+
+  @override
   String get problemRuntimeExtensionError => 'TSPi 会话中的扩展运行出错，请核对最新消息和主机日志。';
 
   @override

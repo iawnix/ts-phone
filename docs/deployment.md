@@ -23,7 +23,7 @@ the protocol versions in this table:
 | --- | ---: | --- |
 | TS Phone server | 0.8.0 | API v4, Events v3, Bridge v3, explicit-mode activation, readiness and confirmed idle switching |
 | TSPi package | 0.14.0 | Bridge v3, exact session Workers, model readiness and guard/1 |
-| Mobile app | 0.17.0+43 | API v4, Continue research, separate read-only assistant, activation recovery and conflict confirmation |
+| Mobile app | 0.17.1+44 | API v4, navigation-safe prompt receipts, model diagnostics, native back and approval deferral |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in
@@ -166,6 +166,7 @@ ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/runtime-cache
 ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/session-host
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
+ReadWritePaths=-/home/iaw/.pi/agent
 ~~~
 
 `ProtectHome=read-only` applies to TSPi child processes too. The explicit paths
@@ -173,6 +174,15 @@ above are required for workspace/Pi sessions and the managed Python/cache state.
 The TSPi installer creates the owner-only `.pi/session-host` directory before
 service activation; its guards must remain writable for Worker children.
 Source testing outside the installer must prepare this directory explicitly.
+Pi also locks `auth.json` and `models-store.json` when reading them. The service
+must allow writing to the actual Pi agent directory, not just reading the
+credential file. The standard directory is `/home/iaw/.pi/agent`; when using
+`PI_CODING_AGENT_DIR`, set it in the Host environment and replace this one
+`ReadWritePaths` entry with the selected directory. TUI, Workers and subagents
+must use the same selection. Do not copy credentials into each workspace.
+Prepare a private directory before activation; preserve existing credentials.
+Workers use `PI_OFFLINE=1` to avoid startup catalog/package downloads. Model
+requests and required provider authentication still use the network.
 Keep all other Home paths read-only. If a notification provider must refresh a
 credential, add only that provider's private state directory through a local
 systemd drop-in; do not make the whole skill, config tree, or Home writable.
@@ -185,6 +195,13 @@ systemctl --user restart ts-phone.service
 systemctl --user status ts-phone.service --no-pager
 curl --fail --silent --show-error http://127.0.0.1:22113/healthz
 ~~~
+
+A healthy HTTP service is not proof of model readiness. In a disposable test
+workspace, explicitly activate a Worker without sending a prompt and inspect
+`promptProblem`, the selected model and `canPrompt`. Do this under the service's
+actual sandbox, not just from an interactive shell. A storage failure requires
+fixing the scoped service permissions and restarting the Host, not a new Phone
+token or a model fallback.
 
 5. Exit legacy phone-mode TSPi processes only after their active turn has
    finished. The app can then activate a managed controller through the Host.

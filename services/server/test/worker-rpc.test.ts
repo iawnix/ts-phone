@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { WorkerRpc } from "../src/runtime/worker-rpc.js";
+import { WorkerRpc, promptFailure } from "../src/runtime/worker-rpc.js";
+
+test("model storage failures take precedence over missing authentication", () => {
+  const error = promptFailure("No API key: EROFS auth.json.lock private-key");
+  assert.equal(error.code, "model_storage_unavailable");
+  assert.doesNotMatch(error.message, /private-key/);
+});
+
+test("Worker RPC preserves explicit model readiness codes and redacts details", () => {
+  for (const code of ["model_unavailable", "model_auth_missing", "model_storage_unavailable", "model_check_failed"]) {
+    const error = promptFailure(`${code}: private-key`);
+    assert.equal(error.code, code);
+    assert.doesNotMatch(error.message, /private-key/);
+  }
+});
 
 test("Worker RPC waits for its exact prompt preflight response, not an input event", async () => {
   const input = new PassThrough();

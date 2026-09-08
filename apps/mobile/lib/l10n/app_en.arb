@@ -46,6 +46,7 @@
   "problemModelUnavailable": "No model is ready in this TSPi session. Check the model selection on the host.",
   "problemModelAuthMissing": "The model needs authentication on the TSPi host. Your TS Phone connection is still valid.",
   "problemModelCheckFailed": "The TSPi host could not verify the model configuration.",
+  "problemModelStorageUnavailable": "TSPi cannot access its model credentials or cache. Check the host service's Pi directory permissions.",
   "problemRuntimeExtensionError": "An extension failed in this TSPi session. Check the latest messages and host logs.",
   "problemPromptRejected": "Pi rejected this message before model execution. Your draft has been kept.",
   "problemDeliveryUncertain": "Message delivery is unconfirmed. Check the latest history before sending again.",

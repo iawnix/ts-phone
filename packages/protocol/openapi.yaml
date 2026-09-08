@@ -521,7 +521,7 @@ components:
         sessionName: { type: string }
         model: { type: string }
         promptProblem:
-          enum: [model_unavailable, model_auth_missing, model_check_failed]
+          enum: [model_unavailable, model_auth_missing, model_storage_unavailable, model_check_failed]
           description: Local model readiness failure; independent of Phone Bearer authentication
         runtime: { $ref: "#/components/schemas/SessionRuntime" }
         runtimeState: { $ref: "#/components/schemas/RuntimeState" }

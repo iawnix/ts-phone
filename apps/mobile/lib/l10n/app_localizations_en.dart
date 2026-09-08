@@ -150,6 +150,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The TSPi host could not verify the model configuration.';
 
   @override
+  String get problemModelStorageUnavailable =>
+      'TSPi cannot access its model credentials or cache. Check the host service\'s Pi directory permissions.';
+
+  @override
   String get problemRuntimeExtensionError =>
       'An extension failed in this TSPi session. Check the latest messages and host logs.';
 

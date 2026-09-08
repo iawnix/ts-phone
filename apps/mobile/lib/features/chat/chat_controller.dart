@@ -8,6 +8,7 @@ import '../../models/chat_message.dart';
 import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
 import 'chat_view_memory.dart';
+import 'chat_outbox.dart';
 
 enum EventConnectionState {
   connecting,
@@ -114,8 +115,10 @@ class ChatController extends ChangeNotifier {
     this.clientMessageIdFactory = createTsPhoneClientMessageId,
     ChatHistoryPreview? initialPreview,
     SessionSummary? initialSession,
+    ChatOutbox? outbox,
   }) : assert(streamPreviewCharacterLimit > 0),
        assert(!snapshotTimeout.isNegative && snapshotTimeout != Duration.zero),
+       outbox = outbox ?? ChatOutbox(),
        _runtimeState = initialRuntimeState,
        _historyAvailable = initialHistoryAvailable,
        _canPrompt = initialCanPrompt ?? initialRuntimeState.isAvailable,
@@ -151,9 +154,12 @@ class ChatController extends ChangeNotifier {
             .toList();
       }
     }
+    this.outbox.addListener(_syncOutbox);
+    _syncOutbox();
   }
 
   final TsPhoneGateway api;
+  final ChatOutbox outbox;
   final String workspaceId;
   final String sessionId;
   SessionAccessMode accessMode;
@@ -201,6 +207,7 @@ class ChatController extends ChangeNotifier {
   bool _eventStreamEnabled = true;
   bool _snapshotReady = false;
   bool _disposed = false;
+  bool _sendingRequest = false;
   StreamSubscription<TsPhoneEvent>? _eventSubscription;
   Future<void>? _eventCancellation;
   Future<void>? _snapshotSynchronization;
@@ -252,13 +259,21 @@ class ChatController extends ChangeNotifier {
           : describeTsPhoneProblem(
               TsPhoneApiException('Model not ready', code: _promptProblem),
             )) ??
+      (outbox.messages.any(
+            (value) => value.state == ChatDeliveryState.uncertain,
+          )
+          ? const TsPhoneProblem(
+              TsPhoneProblemKind.request,
+              TsPhoneProblemCode.deliveryUncertain,
+            )
+          : null) ??
       _eventProblem;
   bool get isSynchronizing => _snapshotSyncInProgress;
   String? get sessionTitle => _sessionTitle;
   SessionRuntimeSnapshot? get sessionRuntime => _sessionRuntime;
   String get sessionRevision => _sessionRevision;
   String? get activeAgentRunId => _activeAgentRunId;
-  bool get commandInFlight => _commandInFlight;
+  bool get commandInFlight => _commandInFlight || outbox.isSending;
   bool get historyAvailable => _historyAvailable;
   bool get historyOnly =>
       _runtimeState == RuntimeState.offline && _historyAvailable && !_canPrompt;
@@ -490,7 +505,7 @@ class ChatController extends ChangeNotifier {
     } finally {
       _snapshotSyncInProgress = false;
       if (!_disposed) {
-        _notify();
+        _syncOutbox();
         if (_eventStreamEnabled) _connectEventStream();
       }
     }
@@ -779,25 +794,40 @@ class ChatController extends ChangeNotifier {
 
   Future<bool> send(String value) async {
     final message = value.trim();
-    if (message.isEmpty || _commandInFlight || !canSend) return false;
+    if (message.isEmpty || commandInFlight || !canSend) return false;
     if (_viewingHistoryWindow && !await returnToLatest()) return false;
     if (!canSend) return false;
     final revision = _sessionRevision;
-    final clientMessageId = clientMessageIdFactory();
+    final retry = outbox.uncertain(message);
+    if (retry != null) {
+      if (retry.revision != revision) {
+        _setError(
+          const TsPhoneApiException(
+            'Session changed',
+            code: 'session_changed',
+            statusCode: 409,
+          ),
+        );
+        return false;
+      }
+      await refreshMessages();
+      if (_disposed || !canSend) return false;
+      if (outbox.accepted(retry)) return true;
+      if (_sessionRevision != revision) return false;
+    }
+    final outgoing =
+        retry ??
+        OutgoingChatMessage(
+          revision: revision,
+          id: clientMessageIdFactory(),
+          text: message,
+        );
+    final clientMessageId = outgoing.id;
     final messageIdentity = '$revision\u0000$clientMessageId';
-    _appendLiveMessage(
-      ChatMessage(
-        role: ChatRole.user,
-        text: message,
-        timestamp: DateTime.now(),
-        clientMessageId: clientMessageId,
-        origin: 'phone',
-        deliveryState: ChatDeliveryState.sending,
-      ),
-      localId: 'phone-$clientMessageId',
-    );
     _commandInFlight = true;
+    _sendingRequest = true;
     _operationProblem = null;
+    outbox.begin(outgoing);
     _notify();
     try {
       await api.sendMessage(
@@ -807,6 +837,7 @@ class ChatController extends ChangeNotifier {
         message,
         clientMessageId: clientMessageId,
       );
+      outbox.finish(outgoing, sent: true);
       if (_disposed) return true;
       if (!_receivedPhoneMessageIdentities.contains(messageIdentity)) {
         _updateOutgoingDelivery(
@@ -816,36 +847,80 @@ class ChatController extends ChangeNotifier {
       }
       return true;
     } on Object catch (error) {
-      if (_disposed) return false;
-      if (_acceptedPhoneMessageIdentities.contains(messageIdentity)) {
+      if (outbox.accepted(outgoing) ||
+          _acceptedPhoneMessageIdentities.contains(messageIdentity)) {
+        outbox.finish(outgoing, sent: true);
         return true;
       }
       final definitive =
           error is TsPhoneApiException &&
+          !const {
+            'command_ambiguous',
+            'bridge_disconnected',
+          }.contains(error.code) &&
           (const {
                 'model_unavailable',
                 'model_auth_missing',
+                'model_storage_unavailable',
                 'model_check_failed',
                 'prompt_rejected',
               }.contains(error.code) ||
               error.statusCode != null &&
                   error.statusCode! >= 400 &&
                   error.statusCode! < 500);
+      outbox.finish(outgoing, sent: false, uncertain: !definitive);
+      if (_disposed) return false;
       if (!definitive) {
         _updateOutgoingDelivery(clientMessageId, ChatDeliveryState.uncertain);
-        _operationProblem = const TsPhoneProblem(
-          TsPhoneProblemKind.request,
-          TsPhoneProblemCode.deliveryUncertain,
-        );
         return false;
       }
       _removePendingOutgoing(clientMessageId, includeReceived: true);
       _setError(error);
       return false;
     } finally {
+      _sendingRequest = false;
       _commandInFlight = false;
+      if (_disposed) api.close();
       _notify();
     }
+  }
+
+  void _syncOutbox() {
+    if (_disposed) return;
+    if (_snapshotSyncInProgress ||
+        _historyNavigationInProgress ||
+        _viewingHistoryWindow) {
+      _notify();
+      return;
+    }
+    final pending = outbox.messages
+        .where((value) => value.revision == _sessionRevision)
+        .toList();
+    final ids = pending.map((value) => value.id).toSet();
+    for (final message in _messages.toList()) {
+      final id = message.clientMessageId;
+      if (id != null && message.deliveryState != null && !ids.contains(id)) {
+        _removePendingOutgoing(id);
+      }
+    }
+    for (final message in pending) {
+      if (_messages.any((value) => value.clientMessageId == message.id)) {
+        _updateOutgoingDelivery(message.id, message.state);
+      } else {
+        _appendLiveMessage(
+          ChatMessage(
+            role: ChatRole.user,
+            text: message.text,
+            timestamp: message.at,
+            clientMessageId: message.id,
+            origin: 'phone',
+            deliveryState: message.state,
+          ),
+          localId: 'phone-${message.id}',
+        );
+      }
+    }
+    _notify();
   }
 
   Future<bool> abort({
@@ -1593,6 +1668,11 @@ class ChatController extends ChangeNotifier {
       return;
     }
     if (identity != null) {
+      outbox.receive(
+        event.sessionRevision,
+        clientMessageId!,
+        preflightAccepted: payload['preflightAccepted'] == true,
+      );
       if (payload['preflightAccepted'] == true) {
         _acceptedPhoneMessageIdentities.add(identity);
         while (_acceptedPhoneMessageIdentities.length > 200) {
@@ -1743,6 +1823,12 @@ class ChatController extends ChangeNotifier {
     TsPhoneTimelineSnapshot snapshot, {
     required bool reset,
   }) {
+    outbox.reconcile(
+      snapshot.sessionRevision,
+      snapshot.items.whereType<TimelineMessageItem>().map(
+        (value) => value.message,
+      ),
+    );
     final previousBranch = _timelineHistory?.selectedBranchId;
     final incomingIds = snapshot.items.map((item) => item.id).toList();
     final branchChanged =
@@ -1773,6 +1859,7 @@ class ChatController extends ChangeNotifier {
       _mergeTimelinePage(snapshot.items);
     }
     _latestTimelineItemIds = incomingIds;
+    _syncOutbox();
   }
 
   void _prependTimelinePage(List<SessionTimelineItem> incoming) {
@@ -1905,6 +1992,7 @@ class ChatController extends ChangeNotifier {
       throw const FormatException('Message pagination cursor is invalid');
     }
     final parsed = _parseMessagePage(snapshot.messages, rawIds);
+    outbox.reconcile(snapshot.sessionRevision, parsed.messages);
     _hasLaterHistory = snapshot.hasLater;
     _nextAfter = snapshot.nextAfter;
     final branchChanged =
@@ -1923,6 +2011,7 @@ class ChatController extends ChangeNotifier {
       _mergeMessagePage(parsed);
     }
     _latestSnapshotMessageIds = rawIds ?? const <String>[];
+    _syncOutbox();
   }
 
   void _prependMessagePage(_ParsedMessagePage parsed) {
@@ -2066,6 +2155,7 @@ class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    outbox.removeListener(_syncOutbox);
     _disposed = true;
     _eventStreamEnabled = false;
     _eventGeneration += 1;
@@ -2076,7 +2166,7 @@ class ChatController extends ChangeNotifier {
     _snapshotTimeoutTimer = null;
     _cancelStreamRender();
     _cancelEventSubscription();
-    api.close();
+    if (!_sendingRequest) api.close();
     unawaited(_uiRequests.close());
     _messagesUpdates.dispose();
     _timelineUpdates.dispose();

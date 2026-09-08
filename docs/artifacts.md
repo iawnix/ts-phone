@@ -2,7 +2,7 @@
 
 ## Current Source
 
-Mobile `0.17.0+43` opens a work home with recent conversations and projects,
+Mobile `0.17.1+44` opens a work home with recent conversations and projects,
 with explicit navigation, a session sidebar and a single expanding text
 composer. Cold start requests summary lists only. History opens without starting a
 Worker, requests the latest 50 items first, and retains the explicit load-all
@@ -11,6 +11,14 @@ display state, not command authority. See `architecture.md` for cache limits.
 Menus, typography, settings rows and technical details use one visual hierarchy.
 Empty assistant records have explicit output notices; consecutive activity
 records fold without hiding failures or removing history.
+
+This patch keeps pending prompt receipts across page navigation, reuses the
+original request identity for an explicit uncertain retry, and preserves newer
+draft edits when a late response arrives. Native back and the toolbar share
+the same route stack; back from an approval panel defers the decision. Model
+storage failures now have a distinct diagnostic instead of appearing as missing
+models or credentials. Host deployment must include the selected Pi directory's
+narrow write permission; see `deployment.md`.
 
 Continue research now explicitly requests Controller access to the original
 conversation, without a visible CLI. Read-only assistant remains a separate
