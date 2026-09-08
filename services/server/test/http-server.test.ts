@@ -16,11 +16,14 @@ test("owned Worker prompts use RPC preflight and publish one accepted input", as
   fixture.config.tspiPath = join(fixture.config.stateDir, "fake-TSPi.mjs");
   await writeFakeTspi(fixture.config.tspiPath, fixture.config.workspaceRoot);
   await restartFixture(fixture);
+  let activation: Promise<unknown> | undefined;
   try {
     const session = await fixture.application.hub.createSession("ts_001", { accessMode: "controller" });
-    const activation = fixture.application.hub.activateSession("ts_001", session.sessionId, { managementRevision: session.managementRevision });
-    await waitFor(async () => (await fixture.application.hub.listSessions("ts_001"))[0]?.runtimeState, "connecting");
-    await waitFor(async () => readFile(`${fixture.config.tspiPath}.launch`, "utf8").then(() => true, () => false), true);
+    activation = fixture.application.hub.activateSession("ts_001", session.sessionId, { managementRevision: session.managementRevision });
+    void activation.catch(() => {});
+    // Cold subprocess startup is not a one-second performance assertion.
+    await waitFor(async () => (await fixture.application.hub.listSessions("ts_001"))[0]?.runtimeState, "connecting", 5_000);
+    await waitFor(async () => readFile(`${fixture.config.tspiPath}.launch`, "utf8").then(() => true, () => false), true, 5_000);
     const { launchId } = JSON.parse(await readFile(`${fixture.config.tspiPath}.launch`, "utf8"));
     fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace, { sessionId: session.sessionId, launchId });
     await activation;
@@ -49,6 +52,7 @@ test("owned Worker prompts use RPC preflight and publish one accepted input", as
   } finally {
     await fixture.bridge?.close();
     await fixture.application.close();
+    await activation?.catch(() => {});
   }
 });
 
@@ -86,11 +90,12 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     const versionResponse = await api(fixture, "/api/v4/version");
     assert.equal(versionResponse.status, 200);
     const version = await versionResponse.json() as {
-      data: { apiVersion: string; serviceVersion: string };
+      data: { apiVersion: string; serviceVersion: string; capabilities: string[] };
     };
     assert.deepEqual(version.data, {
       apiVersion: "ts-phone-api/4",
-      serviceVersion: "0.8.0",
+      serviceVersion: "0.9.0",
+      capabilities: ["terminal.attach"],
     });
     assert.equal((await api(fixture, "/api/v3/version")).status, 404);
 
@@ -580,6 +585,12 @@ test("phone approval responses are fenced to a live workspace session", async ()
       true,
     );
     const approvalEvent = journal.since(undefined).find((event) => event.type === "approval.request");
+    const listing = await api(fixture, "/api/v4/workspaces/ts_001/sessions/session-test/approvals");
+    assert.equal(listing.status, 200);
+    const pending = (await listing.json() as any).data;
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].id, "approval-1");
+    assert.equal(pending[0].sessionRevision, await currentRevision(fixture));
     assert.deepEqual(approvalEvent?.payload, {
       id: "approval-1",
       method: "confirm",
@@ -608,6 +619,7 @@ test("phone approval responses are fenced to a live workspace session", async ()
       body: JSON.stringify({ approved: true, sessionRevision: await currentRevision(fixture) }),
     });
     assert.equal(replay.status, 404);
+    assert.deepEqual(await fixture.application.hub.pendingApprovals("ts_001", "session-test"), []);
   } finally {
     await fixture.bridge?.close();
     await fixture.application.close();
@@ -1112,8 +1124,9 @@ async function readSseRecord(reader: ReadableStreamDefaultReader<Uint8Array>): P
   return buffer.slice(0, buffer.indexOf("\n\n"));
 }
 
-async function waitFor<T>(read: () => Promise<T>, expected: T): Promise<T> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+async function waitFor<T>(read: () => Promise<T>, expected: T, timeoutMs = 1_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     try {
       const value = await read();
       if (value === expected) return value;

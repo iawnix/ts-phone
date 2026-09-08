@@ -153,7 +153,7 @@ void main() {
     await tester.pumpWidget(fixtures.shellApp(gateway));
     await tester.pumpAndSettle();
     await fixtures.openRecent(tester);
-    await tester.tap(find.byTooltip('Projects and conversations'));
+    await fixtures.openSidebar(tester);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('sidebar-home')), findsOneWidget);
     await tester.binding.handlePopRoute();

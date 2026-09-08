@@ -130,7 +130,6 @@ class _ConversationShellState extends State<ConversationShell> {
       final session = await management.createSession(
         workspace.id,
         accessMode: SessionAccessMode.controller,
-        model: _session?.modelRef,
       );
       if (!mounted || _workspace?.id != workspace.id) return;
       setState(() {
@@ -266,8 +265,6 @@ class _ConversationShellState extends State<ConversationShell> {
           ? null
           : () => _scaffold.currentState?.openDrawer(),
       embedded: true,
-      onNewSession: _management == null ? null : _newSession,
-      creatingSession: _creating,
     );
     return Scaffold(
       key: _scaffold,

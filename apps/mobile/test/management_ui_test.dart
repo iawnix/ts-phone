@@ -12,6 +12,7 @@ import 'package:ts_phone/features/workspaces/workspace_list_page.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
 import 'package:ts_phone/models/connection_settings.dart';
 import 'package:ts_phone/models/workspace.dart';
+import 'package:ts_phone/models/phone_model.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 
 final _settings = ConnectionSettings(
@@ -230,10 +231,10 @@ void main() {
       find.widgetWithText(TextField, 'Session name (optional)'),
       'Independent review',
     );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Model (optional)'),
-      'cpa/gpt-5.6-sol',
-    );
+    await tester.tap(find.text('Host default model'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('model-cpa/gpt-5.6-sol')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Create session').last);
     await tester.pumpAndSettle();
 
@@ -575,7 +576,7 @@ SessionSummary _session({
 );
 
 class _ManagementGateway extends Fake
-    implements TsPhoneGateway, TsPhoneManagementGateway {
+    implements TsPhoneGateway, TsPhoneManagementGateway, TsPhoneModelGateway {
   _ManagementGateway({
     Map<LifecycleState, List<WorkspaceSummary>>? workspaces,
     Map<LifecycleState, List<SessionSummary>>? sessions,
@@ -622,6 +623,16 @@ class _ManagementGateway extends Fake
   final List<String> renamedWorkspaceNames = <String>[];
   final List<String> renamedSessionNames = <String>[];
   final List<SessionDraft> createdSessions = <SessionDraft>[];
+
+  @override
+  Future<List<PhoneModel>> models() async => const [
+    PhoneModel(
+      provider: 'cpa',
+      id: 'gpt-5.6-sol',
+      name: 'GPT-5.6 Sol',
+      contextWindow: 128000,
+    ),
+  ];
 
   @override
   Future<List<WorkspaceSummary>> listWorkspaces() =>

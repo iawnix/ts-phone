@@ -206,7 +206,10 @@ class _SessionListPageState extends State<SessionListPage>
   Future<void> _createManagedSession() async {
     final management = _managementApi;
     if (management == null || _interactionLocked) return;
-    final draft = await showSessionCreator(context);
+    final draft = await showSessionCreator(
+      context,
+      models: _api is TsPhoneModelGateway ? _api as TsPhoneModelGateway : null,
+    );
     if (!mounted || draft == null) return;
     setState(() => _creatingSession = true);
     try {

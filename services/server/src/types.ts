@@ -1,6 +1,6 @@
 export const API_VERSION = "ts-phone-api/4" as const;
 export const EVENT_VERSION = "ts-phone-events/3" as const;
-export const SERVICE_VERSION = "0.8.0" as const;
+export const SERVICE_VERSION = "0.9.0" as const;
 
 export type RuntimeState =
   | "offline"
@@ -25,6 +25,7 @@ export type SessionCapability =
   | "session.activate_mode"
   | "command.prompt"
   | "command.abort"
+  | "command.model"
   | "interaction.approval";
 
 export interface WorkspaceSummary {
@@ -69,6 +70,7 @@ export interface SessionSummary {
 
 export interface CreateWorkspaceInput {
   name: string;
+  workspaceId?: string;
 }
 
 export interface CreateSessionInput {
@@ -143,6 +145,7 @@ export interface SessionSnapshot {
   sessionId: string;
   sessionName?: string;
   model?: string;
+  modelControl?: boolean;
   promptProblem?: PromptProblem;
   runtime?: SessionRuntimeSnapshot;
   thinkingLevel?: string;
@@ -272,6 +275,7 @@ export interface PromptInput {
   clientMessageId: string;
   sessionRevision: string;
   message: string;
+  clientKind?: "phone" | "terminal";
 }
 
 export interface ApprovalInput {
@@ -282,4 +286,17 @@ export interface ApprovalInput {
 export interface AbortInput {
   sessionRevision: string;
   agentRunId: string;
+}
+
+export interface PhoneModel {
+  provider: string;
+  id: string;
+  name: string;
+  contextWindow: number;
+}
+
+export interface ModelSelectionInput {
+  sessionRevision: string;
+  provider: string;
+  modelId: string;
 }

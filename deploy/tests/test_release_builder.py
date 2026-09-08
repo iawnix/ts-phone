@@ -940,7 +940,7 @@ def _write_protocol_documents(root: Path, server_version: str = "0.4.1") -> None
         "required": ["type", "origin", "turnId", "agentRunId"],
         "properties": {
             "type": {"enum": ["agent_start", "agent_settled"]},
-            "origin": {"enum": ["local", "extension", "phone", "unknown"]},
+            "origin": {"enum": ["local", "extension", "phone", "terminal", "host", "unknown"]},
             "turnId": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,160}$"},
             "agentRunId": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,160}$"},
         },

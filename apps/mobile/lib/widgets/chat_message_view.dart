@@ -8,6 +8,7 @@ import '../l10n/app_localizations_extensions.dart';
 import '../theme/ts_phone_theme.dart';
 import 'markdown_message.dart';
 import 'presentation.dart';
+import 'activity_label.dart';
 import 'ts_phone_brand_mark.dart';
 
 class ChatMessageView extends StatelessWidget {
@@ -354,16 +355,12 @@ class _ToolDetailView extends StatelessWidget {
     final title = detail.title.isEmpty ? context.l10n.toolResult : detail.title;
     final stateLabel = detail.isError
         ? context.l10n.statusError
-        : context.l10n.statusReady;
+        : context.l10n.timelineCompleted;
     return Padding(
       padding: const EdgeInsets.only(top: TsPhoneSpacing.xSmall),
-      child: TsContentSurface(
+      child: Material(
         key: const ValueKey<String>('tool-disclosure-row'),
-        backgroundColor: theme.colorScheme.surfaceContainerLow,
-        borderColor: detail.isError
-            ? terminal.error.withValues(alpha: 0.42)
-            : theme.colorScheme.outlineVariant.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
+        color: Colors.transparent,
         child: ExpansionTile(
           dense: true,
           visualDensity: VisualDensity.compact,
@@ -392,7 +389,9 @@ class _ToolDetailView extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  title,
+                  activityLabel(title, context.l10n),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
@@ -421,7 +420,7 @@ class _ToolDetailView extends StatelessWidget {
           children: <Widget>[
             TsTerminalBlock(
               key: const ValueKey<String>('tool-raw-output'),
-              body: detail.body,
+              body: '${detail.title}\n${detail.body}',
               isError: detail.isError,
             ),
           ],

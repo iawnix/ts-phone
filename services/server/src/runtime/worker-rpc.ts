@@ -22,10 +22,11 @@ export function promptFailure(error: unknown): HttpError {
   return new HttpError(409, "prompt_rejected", "Pi rejected this message before model execution");
 }
 
-/** Only Pi's request-correlated preflight response acknowledges a prompt. */
+/** Only Pi's request-correlated response acknowledges a command. */
 export class WorkerRpc {
   readonly #pending = new Map<string, {
-    resolve: () => void;
+    command: string;
+    resolve: (data: unknown) => void;
     reject: (error: Error) => void;
     timer: NodeJS.Timeout;
   }>();
@@ -45,15 +46,23 @@ export class WorkerRpc {
   }
 
   prompt(message: string, followUp: boolean): Promise<void> {
+    return this.#request({ type: "prompt", message, ...(followUp ? { streamingBehavior: "followUp" } : {}) }).then(() => {});
+  }
+
+  setModel(provider: string, modelId: string): Promise<unknown> {
+    return this.#request({ type: "set_model", provider, modelId });
+  }
+
+  #request(command: { type: string; [key: string]: unknown }): Promise<unknown> {
     if (this.#closed) return Promise.reject(new HttpError(409, "session_offline", "TSPi Worker is offline"));
     const id = randomUUID();
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
-        reject(new RuntimeError("command_ambiguous", "Pi prompt receipt timed out; do not resend automatically"));
+        reject(new RuntimeError("command_ambiguous", "Pi command receipt timed out; do not resend automatically"));
       }, this.timeoutMs);
-      this.#pending.set(id, { resolve, reject, timer });
-      this.input.write(`${JSON.stringify({ id, type: "prompt", message, ...(followUp ? { streamingBehavior: "followUp" } : {}) })}\n`,
+      this.#pending.set(id, { command: command.type, resolve, reject, timer });
+      this.input.write(`${JSON.stringify({ id, ...command })}\n`,
         (error) => { if (error) this.close(); });
     });
   }
@@ -63,7 +72,7 @@ export class WorkerRpc {
     this.#buffer = Buffer.alloc(0);
     for (const request of this.#pending.values()) {
       clearTimeout(request.timer);
-      request.reject(new RuntimeError("command_ambiguous", "Worker closed before acknowledging the prompt"));
+      request.reject(new RuntimeError("command_ambiguous", "Worker closed before acknowledging the command"));
     }
     this.#pending.clear();
   }
@@ -100,12 +109,16 @@ export class WorkerRpc {
       this.onExtensionError(new HttpError(409, "runtime_extension_error", "An extension failed in the TSPi session"));
       return;
     }
-    if (value.type !== "response" || value.command !== "prompt" || typeof value.id !== "string") return;
+    if (value.type !== "response" || typeof value.id !== "string") return;
     const pending = this.#pending.get(value.id);
-    if (!pending || typeof value.success !== "boolean") return;
+    if (!pending || value.command !== pending.command || typeof value.success !== "boolean") return;
     this.#pending.delete(value.id);
     clearTimeout(pending.timer);
-    if (value.success) pending.resolve();
-    else pending.reject(promptFailure(value.error));
+    if (value.success) pending.resolve(value.data);
+    else {
+      const error = promptFailure(value.error);
+      pending.reject(pending.command === "set_model" && error.code === "prompt_rejected"
+        ? new HttpError(409, "model_check_failed", "Pi could not select the requested model") : error);
+    }
   }
 }

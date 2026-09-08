@@ -30,6 +30,137 @@ async function fixture(options: Parameters<typeof writeFakeTspi>[3] = {}) {
   return { root, config, application, hub: application.hub, address, token };
 }
 
+test("terminal and Phone attach to one Worker and reconcile exact prompt receipts", async () => {
+  const f = await fixture();
+  const base = `http://127.0.0.1:${f.address.port}/api/v4`;
+  const headers = { Authorization: `Bearer ${f.token}`, "Content-Type": "application/json" };
+  const post = (path: string, body: unknown) => fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  try {
+    const created = await f.hub.createWorkspace({ name: "Shared clients", workspaceId: "ts_terminal" });
+    const path = `/workspaces/${created.workspace.id}/sessions/${created.session.sessionId}`;
+    assert.equal((await fetch(`${base}${path}/messages?limit=80`, { headers })).status, 200);
+    await assert.rejects(readFile(`${f.config.tspiPath}.starts`), { code: "ENOENT" });
+    const results = await Promise.all([1, 2].map((id) => post(`${path}/activate`, {
+      managementRevision: created.session.managementRevision, requestId: `terminal-${id}`, accessMode: "controller",
+    })));
+    assert.ok(results.some((response) => response.status === 200));
+    assert.ok(results.every((response) => response.status === 200 || response.status === 409));
+    const active = (await f.hub.listSessions(created.workspace.id))[0]!;
+    for (const clientKind of ["terminal", "phone"] as const) {
+      const body = { message: `From ${clientKind}`, clientKind, clientMessageId: `${clientKind}-1`, sessionRevision: active.sessionRevision };
+      assert.equal((await post(`${path}/messages`, body)).status, 202);
+      assert.equal((await post(`${path}/messages`, body)).status, 202);
+      const receiptUrl = `${base}${path}/commands/${body.clientMessageId}?sessionRevision=${active.sessionRevision}`;
+      assert.equal((await fetch(receiptUrl)).status, 401);
+      const receipt = await (await fetch(receiptUrl, { headers })).json() as any;
+      assert.equal(receipt.data.status, "accepted");
+      assert.ok(!JSON.stringify(receipt).includes(body.message));
+      const changed = await post(`${path}/messages`, { ...body, message: "different prompt" });
+      assert.equal(changed.status, 409);
+    }
+    const journal = await f.hub.journal(created.workspace.id, active.sessionId);
+    const inputs = journal.since(undefined).filter((event) => event.type === "input") as any[];
+    assert.equal(inputs.length, 2);
+    assert.deepEqual(inputs.map((event) => event.payload.origin), ["terminal", "phone"]);
+    assert.equal((await f.hub.promptReceipt(created.workspace.id, active.sessionId, "terminal-1", "old-generation")).status, "unknown");
+    const starts = (await readFile(`${f.config.tspiPath}.starts`, "utf8")).trim().split("\n");
+    assert.equal(starts.length, 1);
+    assert.equal((await post(`${path}/messages`, {message: "invalid", clientMessageId: "bad", sessionRevision: active.sessionRevision, clientKind: "administrator"})).status, 400);
+  } finally { await f.application.close(); }
+});
+
+test("named project creation stays within configured root and never overwrites identities", async () => {
+  const f = await fixture();
+  const url = `http://127.0.0.1:${f.address.port}/api/v4/workspaces`;
+  const headers = { Authorization: `Bearer ${f.token}`, "Content-Type": "application/json" };
+  try {
+    for (const workspaceId of ["../escape", "/tmp/escape", ".", "a/b"]) {
+      assert.equal((await fetch(url, {method: "POST", headers, body: JSON.stringify({name: "project", workspaceId})})).status, 400);
+    }
+    await f.hub.createWorkspace({ name: "project", workspaceId: "ts_named" });
+    await assert.rejects(f.hub.createWorkspace({ name: "replacement", workspaceId: "ts_named" }), {code: "workspace_exists"});
+    assert.equal((await f.hub.listWorkspaces())[0]!.name, "project");
+    await assert.rejects(readFile(`${f.config.tspiPath}.starts`), { code: "ENOENT" });
+  } finally { await f.application.close(); }
+});
+
+test("model catalog needs authentication and never creates or starts a conversation", async () => {
+  const f = await fixture();
+  try {
+    const url = `http://127.0.0.1:${f.address.port}/api/v4/models`;
+    assert.equal((await fetch(url)).status, 401);
+    const response = await fetch(url, { headers: { authorization: `Bearer ${f.token}` } });
+    assert.equal(response.status, 200);
+    const body = await response.json() as any;
+    assert.equal(body.data[0].id, "fake-model");
+    assert.deepEqual(await f.hub.listWorkspaces(), []);
+    await assert.rejects(readFile(`${f.config.tspiPath}.starts`), { code: "ENOENT" });
+  } finally { await f.application.close(); }
+});
+
+test("model selection is exact, persisted, and excludes prompt and lifecycle races", async () => {
+  const f = await fixture({ modelControl: true });
+  try {
+    const created = await f.hub.createWorkspace({ name: "Model controls" });
+    const id = created.workspace.id;
+    const active = await f.hub.activateSession(id, created.session.sessionId, {
+      managementRevision: created.session.managementRevision,
+    });
+    assert.ok(active.capabilities.includes("command.model"));
+    const input = { sessionRevision: active.sessionRevision, provider: "test", modelId: "second" };
+    await assert.rejects(f.hub.setModel(id, active.sessionId, {...input, sessionRevision: "old"}), {code: "session_resync_required"});
+    const switching = f.hub.setModel(id, active.sessionId, input);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await assert.rejects(f.hub.prompt(id, active.sessionId, {sessionRevision: active.sessionRevision,
+      clientMessageId: "during-switch", message: "not sent"}), {code: "session_not_ready"});
+    await assert.rejects(f.hub.setModel(id, active.sessionId, input), {code: "session_not_ready"});
+    const selected = await switching;
+    assert.equal(selected.model, "test/second");
+    assert.equal(selected.runtime?.model.id, "second");
+    const store = await ManagementStore.open(f.config.stateDir);
+    assert.equal(store.session(id, active.sessionId)?.model, "test/second");
+    await assert.rejects(f.hub.setModel(id, active.sessionId, {...input, modelId: "rejected"}), {code: "model_unavailable"});
+    assert.equal((await f.hub.listSessions(id))[0]?.model, "test/second");
+    await f.hub.prompt(id, active.sessionId, {sessionRevision: active.sessionRevision,
+      clientMessageId: "pending", message: "queued"});
+    await assert.rejects(f.hub.setModel(id, active.sessionId, input), {code: "session_not_ready"});
+  } finally { await f.application.close(); }
+});
+
+test("model HTTP input is exact and unmanaged model control stays unavailable", async () => {
+  const f = await fixture();
+  try {
+    const created = await f.hub.createWorkspace({name: "Model capability"});
+    const active = await f.hub.activateSession(created.workspace.id, created.session.sessionId,
+      {managementRevision: created.session.managementRevision});
+    assert.ok(!active.capabilities.includes("command.model"));
+    const url = `http://127.0.0.1:${f.address.port}/api/v4/workspaces/${created.workspace.id}/sessions/${active.sessionId}/model`;
+    const input = {sessionRevision: active.sessionRevision, provider: "test", modelId: "second"};
+    assert.equal((await fetch(url, {method: "POST", body: JSON.stringify(input)})).status, 401);
+    const headers = {Authorization: `Bearer ${f.token}`, "Content-Type": "application/json"};
+    assert.equal((await fetch(url, {method: "POST", headers, body: JSON.stringify({...input, model: "extra"})})).status, 400);
+    const rejected = await fetch(url, {method: "POST", headers, body: JSON.stringify(input)});
+    assert.equal(rejected.status, 409);
+    assert.equal((await rejected.json() as any).error.code, "model_control_unavailable");
+  } finally { await f.application.close(); }
+});
+
+test("a confirmed model with failed persistence enters recovery, not ready", async (t) => {
+  const f = await fixture({modelControl: true});
+  try {
+    const created = await f.hub.createWorkspace({name: "Model persistence"});
+    const active = await f.hub.activateSession(created.workspace.id, created.session.sessionId,
+      {managementRevision: created.session.managementRevision});
+    t.mock.method(ManagementStore.prototype, "rememberSessionModel", async () => { throw new Error("private-storage-error"); });
+    await assert.rejects(f.hub.setModel(created.workspace.id, active.sessionId,
+      {sessionRevision: active.sessionRevision, provider: "test", modelId: "second"}),
+      {code: "model_change_unconfirmed"});
+    const after = (await f.hub.listSessions(created.workspace.id))[0]!;
+    assert.equal(after.runtimeState, "recovery_required");
+    assert.equal(after.canPrompt, false);
+  } finally { t.mock.restoreAll(); await f.application.close(); }
+});
+
 test("explicit activation resumes legacy Observer history without replacing it", async () => {
   const f = await fixture();
   try {
@@ -278,6 +409,8 @@ test("launcher guard errors reach HTTP and safe logs without leaking stderr", as
     ["session_writer_active", 409],
     ["session_writer_inspection_failed", 503],
     ["session_guard_invalid", 409],
+    ["model_unavailable", 409],
+    ["model_check_failed", 409],
   ] as const) {
     const f = await fixture({
       exitBeforeBridge: true,

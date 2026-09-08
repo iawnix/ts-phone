@@ -79,3 +79,25 @@ test("Worker RPC skips oversized event lines and never retries an uncertain prom
     await assert.rejects(interrupted, { code: "command_ambiguous" });
   } finally { rpc.close(); }
 });
+
+test("model receipt binds both command and request, preserving model-specific errors", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const rpc = new WorkerRpc(input, output, () => {});
+  try {
+    let accepted = false;
+    const pending = rpc.setModel("test", "second").then((data) => { accepted = true; return data; });
+    const command = JSON.parse(input.read().toString());
+    output.write(JSON.stringify({type: "response", id: command.id, command: "prompt", success: true}) + "\n");
+    await Promise.resolve();
+    assert.equal(accepted, false);
+    output.write(JSON.stringify({type: "response", id: command.id, command: "set_model", success: true,
+      data: {provider: "test", id: "second"}}) + "\n");
+    assert.deepEqual(await pending, {provider: "test", id: "second"});
+    const rejected = rpc.setModel("test", "missing");
+    const next = JSON.parse(input.read().toString());
+    output.write(JSON.stringify({type: "response", id: next.id, command: "set_model", success: false,
+      error: "private unexpected provider failure"}) + "\n");
+    await assert.rejects(rejected, (error: any) => error.code === "model_check_failed" && !error.message.includes("private"));
+  } finally { rpc.close(); }
+});

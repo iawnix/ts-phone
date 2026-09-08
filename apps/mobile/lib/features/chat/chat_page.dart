@@ -26,6 +26,8 @@ import 'live_run_strip.dart';
 import 'session_notice.dart';
 import 'session_view_state.dart';
 import 'timeline_widgets.dart';
+import 'model_picker.dart';
+import '../management/management_dialogs.dart';
 
 enum _ChatScrollMode { following, reading }
 
@@ -44,8 +46,6 @@ class ChatPage extends StatefulWidget {
     this.memory,
     this.onOpenNavigation,
     this.onOpenSession,
-    this.onNewSession,
-    this.creatingSession = false,
     this.embedded = false,
   });
 
@@ -58,8 +58,6 @@ class ChatPage extends StatefulWidget {
   final ChatViewMemory? memory;
   final VoidCallback? onOpenNavigation;
   final ValueChanged<SessionSummary>? onOpenSession;
-  final VoidCallback? onNewSession;
-  final bool creatingSession;
   final bool embedded;
 
   @override
@@ -834,6 +832,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => _SessionDetailsSheet(
+        title: _navigationTitle,
+        onRename: _controller.api is TsPhoneManagementGateway
+            ? () {
+                Navigator.of(context).pop();
+                unawaited(_renameSession());
+              }
+            : null,
         runtime: _controller.sessionRuntime,
         configuredModel: widget.session.modelRef,
         workspaceName: widget.workspace.name,
@@ -842,6 +847,53 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         sessionId: widget.session.sessionId,
       ),
     );
+  }
+
+  Future<void> _renameSession() async {
+    final name = await showNameEditor(
+      context,
+      title: context.l10n.rename,
+      fieldLabel: context.l10n.sessionNameOptional,
+      actionLabel: context.l10n.rename,
+      initialValue: _navigationTitle,
+    );
+    if (!mounted || name == null) return;
+    try {
+      final current = await _controller.refreshSessionMetadata();
+      await (_controller.api as TsPhoneManagementGateway).renameSession(
+        widget.workspace.id,
+        widget.session.sessionId,
+        current.managementRevision,
+        name,
+      );
+      await _controller.refreshSessionMetadata();
+    } catch (error) {
+      if (mounted) {
+        _showActionMessage(
+          describeTsPhoneProblem(error).localizedMessage(context.l10n),
+        );
+      }
+    }
+  }
+
+  Future<void> _chooseModel() async {
+    final gateway = _controller.modelGateway;
+    if (gateway == null || !_controller.canSelectModel) return;
+    final hadFocus = _composerFocus.hasFocus;
+    final selection = _composer.selection;
+    _composerFocus.unfocus();
+    final model = _controller.sessionRuntime?.model;
+    await showModelPicker(
+      context,
+      gateway: gateway,
+      selected: model == null ? null : '${model.provider}/${model.id}',
+      onSelect: _controller.selectModel,
+      canSelect: () => _controller.canSelectModel,
+      state: _controller,
+    );
+    if (!mounted) return;
+    _composer.selection = selection;
+    if (hadFocus) _composerFocus.requestFocus();
   }
 
   void _queueUiRequest(ExtensionUiRequest request) {
@@ -915,7 +967,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           resizeToAvoidBottomInset: true,
           appBar: AppBar(
             toolbarHeight: _chatToolbarHeight,
-            centerTitle: true,
+            centerTitle: false,
             titleSpacing: 0,
             automaticallyImplyLeading: false,
             leading: BackButton(
@@ -927,41 +979,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               onTap: _showSessionDetails,
               child: _ChatNavigationTitle(
                 title: _navigationTitle,
-                runtimeState: _controller.runtimeState,
-                isHistorical: viewState.isHistorical && !_canActivate,
-                compactStatus: MediaQuery.textScalerOf(context).scale(12) > 18,
-                connectionState: _controller.eventConnectionState,
-                workspace: widget.embedded ? widget.workspace.name : null,
+                state: viewState,
+                canActivate: _canActivate,
+                workspace: widget.workspace.name,
               ),
             ),
             actions: <Widget>[
-              if (widget.onOpenNavigation != null)
-                IconButton(
-                  tooltip: l10n.openSidebar,
-                  onPressed: widget.onOpenNavigation,
-                  icon: const Icon(Icons.menu_rounded),
-                ),
-              if (widget.onNewSession case final create?)
-                IconButton(
-                  key: const ValueKey('chat-new-session'),
-                  tooltip: l10n.newSession,
-                  onPressed: widget.creatingSession ? null : create,
-                  icon: widget.creatingSession
-                      ? const SizedBox.square(
-                          dimension: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add_comment_outlined, size: 22),
-                ),
               PopupMenuButton<String>(
                 key: const ValueKey('chat-menu'),
-                tooltip: l10n.sessionRuntimeDetails,
+                tooltip: l10n.moreActions,
                 icon: const Icon(Icons.more_horiz_rounded),
                 onSelected: (action) {
                   if (action == 'start') {
                     unawaited(_jumpToStart());
                   } else if (action == 'sync') {
                     unawaited(_sync());
+                  } else if (action == 'sidebar') {
+                    widget.onOpenNavigation?.call();
                   } else if (action == 'observer') {
                     unawaited(
                       _activateSession(mode: SessionAccessMode.observer),
@@ -971,6 +1005,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   }
                 },
                 itemBuilder: (_) => [
+                  if (widget.onOpenNavigation != null)
+                    PopupMenuItem(
+                      key: const ValueKey('chat-open-sidebar'),
+                      value: 'sidebar',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.view_sidebar_outlined, size: 20),
+                          const SizedBox(width: 12),
+                          Flexible(child: Text(l10n.openSidebar)),
+                        ],
+                      ),
+                    ),
                   if (_controller.supportsModeActivation &&
                       !_controller.viewingInactiveBranch)
                     PopupMenuItem(
@@ -990,16 +1036,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         ],
                       ),
                     ),
-                  PopupMenuItem(
-                    value: 'details',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline, size: 20),
-                        const SizedBox(width: 12),
-                        Flexible(child: Text(l10n.sessionRuntimeDetails)),
-                      ],
-                    ),
-                  ),
                   PopupMenuItem(
                     key: const ValueKey('chat-sync'),
                     value: 'sync',
@@ -1099,9 +1135,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     required double availableHeight,
   }) {
     _scheduleBottomDockMeasurement();
-    final showLiveRun =
-        viewState.hasLiveRun ||
-        _controller.activity?.kind == ChatActivityKind.toolFailed;
     final retry = _controller.outbox.messages
         .where((value) => value.state == ChatDeliveryState.uncertain)
         .firstOrNull;
@@ -1128,14 +1161,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: TsPhoneSpacing.small),
                 ],
-                if (showLiveRun)
-                  LiveRunStrip(
-                    activity: _controller.activity,
-                    canAbort: viewState.canAbort,
-                    aborting: _aborting,
-                    onAbort: _confirmAbort,
-                  ),
-                if (showLiveRun) const SizedBox(height: TsPhoneSpacing.small),
                 if (retry != null)
                   Align(
                     alignment: Alignment.centerLeft,
@@ -1195,7 +1220,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     maxLines: _composerMaxLines(
                       context,
                       availableHeight: availableHeight,
-                      showLiveRun: showLiveRun,
                     ),
                   ),
               ],
@@ -1209,13 +1233,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   int _composerMaxLines(
     BuildContext context, {
     required double availableHeight,
-    required bool showLiveRun,
   }) {
     if (!availableHeight.isFinite) return 5;
     final scaler = MediaQuery.textScalerOf(context);
     final scaledLineHeight = scaler.scale(16) * 1.45;
-    final extraLineHeight = (scaledLineHeight - 23.2).clamp(0, double.infinity);
-    final liveRunReserve = showLiveRun ? 64 + extraLineHeight * 1.5 : 0;
     final navigationReserve = _showJumpToLatest ? 52.0 : 0;
     final activationReserve = _canActivate || _activating
         ? (16 + scaler.scale(12) * 1.4 * 2).clamp(44, double.infinity)
@@ -1224,11 +1245,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     final dockChrome =
         78.0 +
         MediaQuery.paddingOf(context).bottom.clamp(8, double.infinity) +
-        (showLiveRun ? TsPhoneSpacing.small : 0) +
         (navigationReserve > 0 ? TsPhoneSpacing.small : 0);
     final lineBudget =
         availableHeight -
-        liveRunReserve -
         navigationReserve -
         activationReserve -
         (_approvalDeferred ? 48 : 0) -
@@ -1371,6 +1390,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       maxLines: maxLines,
       onSend: _send,
       hint: canDraft ? context.l10n.composerMessage : _composerHint(),
+      modelLabel: _controller.sessionRuntime?.model.knownId,
+      modelHint: _controller.canSelectModel
+          ? context.l10n.chooseModel
+          : context.l10n.modelSelectionUnavailable,
+      onSelectModel: _controller.canSelectModel ? _chooseModel : null,
+      onAbort: viewState.canAbort ? _confirmAbort : null,
+      aborting: _aborting,
     );
   }
 
@@ -1407,106 +1433,51 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 class _ChatNavigationTitle extends StatelessWidget {
   const _ChatNavigationTitle({
     required this.title,
-    required this.runtimeState,
-    required this.isHistorical,
-    required this.compactStatus,
-    required this.connectionState,
-    this.workspace,
+    required this.state,
+    required this.canActivate,
+    required this.workspace,
   });
 
   final String title;
-  final RuntimeState runtimeState;
-  final bool isHistorical;
-  final bool compactStatus;
-  final EventConnectionState connectionState;
-  final String? workspace;
+  final SessionViewState state;
+  final bool canActivate;
+  final String workspace;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (workspace != null) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              const SizedBox(width: 6),
-              _SessionStatusLine(
-                runtimeState: runtimeState,
-                isHistorical: isHistorical,
-                compact: true,
-                connectionState: connectionState,
-              ),
-            ],
-          ),
-          if (!compactStatus)
-            Text(
-              workspace!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-        ],
-      );
-    }
-    if (compactStatus) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Flexible(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          _SessionStatusLine(
-            runtimeState: runtimeState,
-            isHistorical: isHistorical,
-            compact: true,
-            connectionState: connectionState,
-          ),
-        ],
-      );
-    }
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
           style: theme.textTheme.titleMedium?.copyWith(
             color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
         ),
-        const SizedBox(height: 1),
-        _SessionStatusLine(
-          runtimeState: runtimeState,
-          isHistorical: isHistorical,
-          compact: compactStatus,
-          connectionState: connectionState,
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                workspace,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: _SessionStatusLine(state: state, canActivate: canActivate),
+            ),
+          ],
         ),
       ],
     );
@@ -1514,134 +1485,81 @@ class _ChatNavigationTitle extends StatelessWidget {
 }
 
 class _SessionStatusLine extends StatelessWidget {
-  const _SessionStatusLine({
-    required this.runtimeState,
-    required this.isHistorical,
-    required this.compact,
-    required this.connectionState,
-  });
+  const _SessionStatusLine({required this.state, required this.canActivate});
 
-  final RuntimeState runtimeState;
-  final bool isHistorical;
-  final bool compact;
-  final EventConnectionState connectionState;
+  final SessionViewState state;
+  final bool canActivate;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = TsPhoneStatusTheme.resolve(context);
     final l10n = context.l10n;
-    final (color, label, pulsing) = isHistorical
-        ? (
-            theme.colorScheme.onSurfaceVariant,
-            l10n.historyReadOnlyStatus,
-            false,
-          )
-        : switch (connectionState) {
-            EventConnectionState.connected => switch (runtimeState) {
-              RuntimeState.idle => (
-                status.connected,
-                runtimeState.localizedLabel(l10n),
-                false,
+    final label = switch (state.phase) {
+      SessionUiPhase.failed => l10n.chatFailed,
+      SessionUiPhase.recovery => l10n.chatRecovery,
+      SessionUiPhase.history =>
+        canActivate ? l10n.chatCanContinue : l10n.chatHistory,
+      SessionUiPhase.offline =>
+        canActivate ? l10n.chatCanContinue : l10n.chatOffline,
+      SessionUiPhase.synchronizing => l10n.chatConnecting,
+      SessionUiPhase.reconnecting => l10n.chatReconnecting,
+      SessionUiPhase.running => l10n.chatRunning,
+      SessionUiPhase.ready => l10n.chatReady,
+    };
+    final (icon, color) = switch (state.phase) {
+      SessionUiPhase.failed ||
+      SessionUiPhase.recovery => (Icons.error_outline_rounded, status.error),
+      SessionUiPhase.running => (
+        Icons.hourglass_top_rounded,
+        theme.colorScheme.onSurfaceVariant,
+      ),
+      SessionUiPhase.synchronizing ||
+      SessionUiPhase.reconnecting => (Icons.sync_rounded, status.warning),
+      SessionUiPhase.history => (
+        Icons.history_rounded,
+        theme.colorScheme.onSurfaceVariant,
+      ),
+      SessionUiPhase.offline => (
+        Icons.cloud_off_outlined,
+        theme.colorScheme.onSurfaceVariant,
+      ),
+      SessionUiPhase.ready => (
+        Icons.check_circle_outline_rounded,
+        status.connected,
+      ),
+    };
+    return Semantics(
+      key: const ValueKey('chat-session-status'),
+      label: label,
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, color: color, size: 13),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
               ),
-              RuntimeState.running || RuntimeState.connecting => (
-                status.warning,
-                runtimeState.localizedLabel(l10n),
-                true,
-              ),
-              RuntimeState.recoveryRequired => (
-                status.error,
-                runtimeState.localizedLabel(l10n),
-                false,
-              ),
-              RuntimeState.offline => (
-                theme.colorScheme.onSurfaceVariant,
-                runtimeState.localizedLabel(l10n),
-                false,
-              ),
-            },
-            EventConnectionState.suspended => (
-              theme.colorScheme.onSurfaceVariant,
-              l10n.liveSyncSuspended,
-              false,
-            ),
-            EventConnectionState.closed => (
-              theme.colorScheme.onSurfaceVariant,
-              l10n.liveSyncClosed,
-              false,
-            ),
-            EventConnectionState.failed => (
-              status.error,
-              l10n.liveSyncFailed,
-              false,
-            ),
-            EventConnectionState.reconnecting => (
-              status.warning,
-              l10n.liveSyncRestoring,
-              true,
-            ),
-            EventConnectionState.connecting => (
-              status.warning,
-              l10n.liveSyncConnecting,
-              true,
-            ),
-          };
-    if (compact) {
-      final compactIcon = switch (connectionState) {
-        EventConnectionState.connected => switch (runtimeState) {
-          RuntimeState.offline => Icons.cloud_off_outlined,
-          RuntimeState.recoveryRequired => Icons.error_outline_rounded,
-          RuntimeState.running => Icons.hourglass_top_rounded,
-          RuntimeState.connecting => Icons.sync_rounded,
-          RuntimeState.idle => Icons.check_circle_outline_rounded,
-        },
-        EventConnectionState.suspended => Icons.pause_circle_outline_rounded,
-        EventConnectionState.closed => Icons.cloud_off_outlined,
-        EventConnectionState.failed => Icons.error_outline_rounded,
-        EventConnectionState.reconnecting => Icons.sync_problem_rounded,
-        EventConnectionState.connecting => Icons.sync_rounded,
-      };
-      return Semantics(
-        key: ValueKey<String>(
-          isHistorical ? 'chat-history-status' : 'chat-compact-status',
-        ),
-        label: label,
-        child: ExcludeSemantics(
-          child: Tooltip(
-            message: label,
-            child: Icon(
-              isHistorical ? Icons.lock_outline_rounded : compactIcon,
-              size: 18,
-              color: color,
             ),
           ),
-        ),
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        TsStatusDot(color: color, size: 7, pulsing: pulsing),
-        const SizedBox(width: 5),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 class _SessionDetailsSheet extends StatelessWidget {
   const _SessionDetailsSheet({
+    required this.title,
+    this.onRename,
     required this.runtime,
     required this.workspaceName,
     required this.accessMode,
@@ -1650,6 +1568,8 @@ class _SessionDetailsSheet extends StatelessWidget {
     this.configuredModel,
   });
 
+  final String title;
+  final VoidCallback? onRename;
   final SessionRuntimeSnapshot? runtime;
   final String? configuredModel;
   final String workspaceName;
@@ -1701,11 +1621,24 @@ class _SessionDetailsSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(
-            l10n.sessionRuntimeDetails,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectableText(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (onRename != null)
+                IconButton(
+                  onPressed: onRename,
+                  tooltip: l10n.rename,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+            ],
           ),
           if (lastKnown) ...<Widget>[
             const SizedBox(height: TsPhoneSpacing.small),
@@ -2144,6 +2077,11 @@ class _MessageTimeline extends StatelessWidget {
     final showLater =
         controller.canLoadLaterMessages ||
         controller.historyNavigationInProgress;
+    final showActivity =
+        !showLater &&
+        !controller.viewingInactiveBranch &&
+        (SessionViewState.fromController(controller).hasLiveRun ||
+            controller.activity?.kind == ChatActivityKind.toolFailed);
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: onScrollMetricsNotification,
       child: NotificationListener<ScrollNotification>(
@@ -2153,9 +2091,22 @@ class _MessageTimeline extends StatelessWidget {
           controller: scrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(0, 8, 0, bottomContentInset + 8),
-          itemCount: itemCount + headerOffset + (showLater ? 1 : 0),
+          itemCount:
+              itemCount +
+              headerOffset +
+              (showLater ? 1 : 0) +
+              (showActivity ? 1 : 0),
           itemBuilder: (context, index) {
             if (header != null && index == 0) return header!;
+            if (showActivity && index == itemCount + headerOffset) {
+              return ValueListenableBuilder<String?>(
+                valueListenable: streamingTextListenable,
+                builder: (context, text, _) =>
+                    text?.isNotEmpty == true && controller.activity == null
+                    ? const SizedBox.shrink()
+                    : LiveRunStrip(activity: controller.activity),
+              );
+            }
             if (index == itemCount + headerOffset && showLater) {
               return Center(
                 child: TextButton.icon(

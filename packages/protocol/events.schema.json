@@ -127,7 +127,7 @@
       "required": ["type", "origin", "turnId", "agentRunId"],
       "properties": {
         "type": { "enum": ["agent_start", "agent_settled"] },
-        "origin": { "enum": ["local", "extension", "phone", "unknown"] },
+        "origin": { "enum": ["local", "extension", "phone", "terminal", "host", "unknown"] },
         "turnId": {
           "type": "string",
           "pattern": "^[A-Za-z0-9._:-]{1,160}$"

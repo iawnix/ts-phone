@@ -143,6 +143,18 @@ export class ManagementStore {
     });
   }
 
+  async rememberSessionModel(workspaceId: string, workspaceName: string, sessionId: string,
+    model: string, defaults: NewSessionMetadata): Promise<void> {
+    await this.#mutate((document) => {
+      const workspace = ensureWorkspace(document, workspaceId, workspaceName);
+      const session = workspace.sessions[sessionId] ?? createSessionRecord(defaults, new Date().toISOString());
+      session.model = model;
+      revise(session);
+      workspace.sessions[sessionId] = session;
+      touch(workspace, session.updatedAt);
+    });
+  }
+
   async renameWorkspace(
     workspaceId: string,
     fallbackName: string,

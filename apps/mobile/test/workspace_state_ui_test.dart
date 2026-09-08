@@ -164,10 +164,10 @@ void main() {
     await tester.pumpAndSettle();
 
     final compactStatus = tester.widget<Semantics>(
-      find.byKey(const ValueKey<String>('chat-compact-status')),
+      find.byKey(const ValueKey<String>('chat-session-status')),
     );
-    expect(compactStatus.properties.label, '已连接 · 可发送');
-    expect(find.text('已连接 · 可发送'), findsNothing);
+    expect(compactStatus.properties.label, '就绪');
+    expect(find.text('就绪'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_outline_rounded), findsOneWidget);
     expect(find.text('测试会话'), findsOneWidget);
     final appBarRect = tester.getRect(find.byType(AppBar));
@@ -178,19 +178,31 @@ void main() {
     expect(
       appBarRect.contains(
         tester
-            .getRect(find.byKey(const ValueKey<String>('chat-compact-status')))
+            .getRect(find.byKey(const ValueKey<String>('chat-session-status')))
             .center,
       ),
       isTrue,
     );
-    expect(find.textContaining('gpt-5.6-sol'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.textContaining('gpt-5.6-sol'),
+      ),
+      findsNothing,
+    );
     await tester.tap(
       find.byKey(const ValueKey<String>('chat-session-details')),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('会话详情'), findsOneWidget);
-    expect(find.text('gpt-5.6-sol'), findsOneWidget);
+    expect(find.widgetWithText(SelectableText, '测试会话'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('session-runtime-group')),
+        matching: find.text('gpt-5.6-sol'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('78,214 / 128,000'), findsOneWidget);
     expect(find.text('49,786 · 39%'), findsOneWidget);
     expect(find.text('Pi 估算'), findsOneWidget);
@@ -321,8 +333,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Connected · Ready'), findsOneWidget);
-    expect(find.textContaining('a-very-long-frontier'), findsNothing);
+    expect(find.text('Ready'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.textContaining('a-very-long-frontier'),
+      ),
+      findsNothing,
+    );
     await tester.tap(
       find.byKey(const ValueKey<String>('chat-session-details')),
     );
@@ -417,7 +435,7 @@ void main() {
 
     expect(find.text('已有历史消息'), findsOneWidget);
     expect(find.text('未命名会话'), findsOneWidget);
-    expect(find.text('历史 · 只读'), findsOneWidget);
+    expect(find.text('历史会话'), findsOneWidget);
     expect(find.textContaining('消息来自本机历史记录'), findsNothing);
     expect(find.text('只读观察模式'), findsNothing);
     expect(find.byType(TextField), findsNothing);
@@ -473,14 +491,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final historyStatus = find.byKey(
-      const ValueKey<String>('chat-history-status'),
+      const ValueKey<String>('chat-session-status'),
     );
     expect(historyStatus, findsOneWidget);
-    expect(
-      tester.widget<Semantics>(historyStatus).properties.label,
-      'History · Read-only',
-    );
-    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+    expect(tester.widget<Semantics>(historyStatus).properties.label, 'History');
+    expect(find.byIcon(Icons.history_rounded), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('chat-read-only-bar')),
@@ -608,7 +623,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('已连接 · 可发送'), findsOneWidget);
+    expect(find.text('就绪'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('chat-composer')), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
     expect(
@@ -1109,20 +1124,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Stop generation'), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('composer-stop')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('composer-stop')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsNothing);
     expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
     expect(
       tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
       'Message',
     );
     final liveStopBottom = tester
-        .getBottomRight(find.byKey(const ValueKey<String>('live-run-stop')))
+        .getBottomRight(find.byKey(const ValueKey<String>('composer-stop')))
         .dy;
     final composerTop = tester
         .getTopLeft(find.byKey(const ValueKey<String>('chat-composer')))
         .dy;
-    expect(liveStopBottom, lessThanOrEqualTo(composerTop));
+    expect(liveStopBottom, greaterThan(composerTop));
+    expect(
+      liveStopBottom,
+      lessThanOrEqualTo(
+        tester.getRect(find.byKey(const ValueKey('chat-composer'))).bottom,
+      ),
+    );
     expect(
       tester.getSize(find.byKey(const ValueKey<String>('chat-composer'))).width,
       idleComposerWidth,
@@ -1218,7 +1239,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final requestStop = tester
-        .widget<IconButton>(find.byKey(const ValueKey<String>('live-run-stop')))
+        .widget<IconButton>(find.byKey(const ValueKey<String>('composer-stop')))
         .onPressed!;
     requestStop();
     requestStop();
@@ -1237,7 +1258,7 @@ void main() {
     expect(gateway.abortCalls, 0);
     expect(find.byType(AlertDialog), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey<String>('live-run-stop')));
+    await tester.tap(find.byKey(const ValueKey<String>('composer-stop')));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Stop generation'));
     await tester.pumpAndSettle();
@@ -1282,7 +1303,7 @@ void main() {
     gateway.addAgentLifecycleEvent('agent_start');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey<String>('live-run-stop')));
+    await tester.tap(find.byKey(const ValueKey<String>('composer-stop')));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
 
@@ -1445,13 +1466,14 @@ void main() {
     );
     final appBar = tester.getRect(find.byType(AppBar));
     final stop = tester.getRect(
-      find.byKey(const ValueKey<String>('live-run-stop')),
+      find.byKey(const ValueKey<String>('composer-stop')),
     );
     expect(composer.top, greaterThanOrEqualTo(appBar.bottom));
     expect(composer.bottom, lessThanOrEqualTo(keyboardTop));
     expect(tester.getRect(textField).bottom, lessThanOrEqualTo(keyboardTop));
     expect(stop.top, greaterThanOrEqualTo(appBar.bottom));
-    expect(stop.bottom, lessThanOrEqualTo(composer.top));
+    expect(stop.top, greaterThanOrEqualTo(composer.top));
+    expect(stop.bottom, lessThanOrEqualTo(composer.bottom));
     expect(tester.takeException(), isNull);
   });
 
@@ -1927,7 +1949,7 @@ void main() {
         find.byKey(const ValueKey<String>('chat-read-only-bar')),
         findsNothing,
       );
-      expect(find.text('历史 · 只读'), findsOneWidget);
+      expect(find.text('历史会话'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2188,7 +2210,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Confirmation required'), findsOneWidget);
-    expect(find.text('Transition-state workspace'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Transition-state workspace'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('bash'), findsOneWidget);
     expect(find.textContaining('command: pwd'), findsOneWidget);
     final bottomSheet = tester.widget<BottomSheet>(find.byType(BottomSheet));

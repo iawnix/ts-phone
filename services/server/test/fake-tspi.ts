@@ -9,6 +9,7 @@ export async function writeFakeTspi(path: string, workspaceRoot: string, rootAge
   writerVerified?: boolean;
   exitBeforeBridge?: boolean;
   startupStderr?: string;
+  modelControl?: boolean;
 } = {}): Promise<void> {
   await writeFile(path, `#!/usr/bin/env node
 import { join } from "node:path";
@@ -17,7 +18,11 @@ import { createConnection } from "node:net";
 import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
 const args = process.argv.slice(2);
 const guarded = args.includes("--lifecycle-guard");
-if (args.includes("--session-host-capabilities")) {
+if (args.includes("--phone-models")) {
+  process.stdout.write(JSON.stringify({schemaVersion: "ts-phone-models/1", models: [
+    { provider: "test", id: "fake-model", name: "Fake model", contextWindow: 128000 }
+  ]}) + "\\n");
+} else if (args.includes("--session-host-capabilities")) {
   process.stdout.write(JSON.stringify({session_guard_contract: ${JSON.stringify(options.guardCompatible === false ? "unsupported" : "tspi-session-guard/1")}}) + "\\n");
 } else if (args.includes("--session-writer-check")) {
   process.stdout.write(JSON.stringify({session_guard_contract: "tspi-session-guard/1", verified: ${options.writerVerified !== false},
@@ -58,13 +63,20 @@ if (args.includes("--session-host-capabilities")) {
         secret: readFileSync(process.env.TS_PHONE_BRIDGE_SECRET_FILE, "utf8").trim(), pid: process.pid });
     });
     socket.once("data", () => setTimeout(() => write({ ...identity, type: "session.snapshot", sequence: 1,
-      snapshot: {sessionId, model: "test/fake-model", isStreaming: false, messages: [],
+      snapshot: {sessionId, model: "test/fake-model", modelControl: ${options.modelControl === true}, isStreaming: false, messages: [],
         ${options.promptProblem ? `promptProblem: ${JSON.stringify(options.promptProblem)},` : ""}
       } }), ${options.snapshotDelayMs ?? 0}));
     socket.on("error", () => {});
   }
   createInterface({input: process.stdin}).on("line", line => {
     const command = JSON.parse(line);
+    if (command.type === "set_model") {
+      const success = command.modelId !== "rejected";
+      setTimeout(() => process.stdout.write(JSON.stringify({type: "response", id: command.id,
+        command: "set_model", success, ...(success ? {data: {provider: command.provider, id: command.modelId,
+          name: command.modelId, contextWindow: 128000}} : {error: "Model not found: private-config"})}) + "\\n"), 80);
+      return;
+    }
     if (command.type !== "prompt") return;
     const success = command.message !== "reject-before-model";
     setTimeout(() => process.stdout.write(JSON.stringify({

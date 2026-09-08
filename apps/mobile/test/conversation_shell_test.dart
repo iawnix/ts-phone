@@ -113,23 +113,7 @@ Widget shellApp(
 );
 
 void main() {
-  setUpAll(() async {
-    if (Platform.environment['TS_PHONE_CAPTURE_UI'] != '1') return;
-    final fontPath = Platform.environment['TS_PHONE_PREVIEW_FONT'];
-    final iconPath = Platform.environment['TS_PHONE_PREVIEW_ICONS'];
-    if (fontPath != null) {
-      for (final family in ['Ahem', 'Roboto', 'monospace']) {
-        final font = FontLoader(family)
-          ..addFont(File(fontPath).readAsBytes().then(ByteData.sublistView));
-        await font.load();
-      }
-    }
-    if (iconPath != null) {
-      final icons = FontLoader('MaterialIcons')
-        ..addFont(File(iconPath).readAsBytes().then(ByteData.sublistView));
-      await icons.load();
-    }
-  });
+  setUpAll(loadPreviewFonts);
 
   testWidgets(
     'cold start lists recent history without opening or activating it',
@@ -179,7 +163,7 @@ void main() {
       find.byKey(const ValueKey('chat-input')),
       'Preserve this draft',
     );
-    await tester.tap(find.byTooltip('Projects and conversations'));
+    await openSidebar(tester);
     await tester.pumpAndSettle();
     expect(find.byType(ChoiceChip), findsNothing);
     expect(find.text('Active'), findsNothing);
@@ -192,7 +176,7 @@ void main() {
           .text,
       isEmpty,
     );
-    await tester.tap(find.byTooltip('Projects and conversations'));
+    await openSidebar(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('sidebar-session-session_1')));
     await tester.pumpAndSettle();
@@ -246,7 +230,8 @@ void main() {
     await tester.pumpWidget(shellApp(gateway));
     await tester.pumpAndSettle();
     await openRecent(tester);
-    await tester.tap(find.byKey(const ValueKey('chat-new-session')));
+    await openSidebar(tester);
+    await tester.tap(find.byKey(const ValueKey('sidebar-new-session')));
     await tester.pumpAndSettle();
     expect(gateway.creations, 1);
     expect(gateway.activations, 0);
@@ -310,12 +295,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Transition-state search'));
     await tester.pumpAndSettle();
-    final create = find.byKey(const ValueKey('chat-new-session'));
+    await openSidebar(tester);
+    final create = find.byKey(const ValueKey('sidebar-new-session'));
     final bounds = tester.getRect(create);
     await tester.tap(create);
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await openSidebar(tester);
     expect(tester.getRect(create), bounds);
-    expect(tester.widget<IconButton>(create).onPressed, isNull);
+    expect(tester.widget<ListTile>(create).onTap, isNull);
     expect(
       find.descendant(
         of: create,
@@ -326,6 +313,8 @@ void main() {
     await tester.tap(create);
     expect(gateway.creations, 1);
 
+    await tester.binding.handlePopRoute();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -357,9 +346,10 @@ void main() {
     await tester.pumpWidget(shellApp(gateway));
     await tester.pumpAndSettle();
     await openRecent(tester);
-    await tester.tap(find.byKey(const ValueKey('chat-new-session')));
+    await openSidebar(tester);
+    await tester.tap(find.byKey(const ValueKey('sidebar-new-session')));
     await tester.pump();
-    await tester.tap(find.byTooltip('Projects and conversations'));
+    await openSidebar(tester);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     final sidebarCreate = find.byKey(const ValueKey('sidebar-new-session'));
@@ -400,7 +390,7 @@ void main() {
       'First project draft',
     );
     Future<void> switchProject(WorkspaceSummary target) async {
-      await tester.tap(find.byTooltip('Projects and conversations'));
+      await openSidebar(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('sidebar-home')));
       await tester.pumpAndSettle();
@@ -432,7 +422,7 @@ void main() {
     await tester.pumpAndSettle();
     await openRecent(tester);
     gateway.workspaces = [workspace, otherWorkspace];
-    await tester.tap(find.byTooltip('Projects and conversations'));
+    await openSidebar(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('sidebar-home')));
     await tester.pumpAndSettle();
@@ -458,7 +448,7 @@ void main() {
     await openRecent(tester);
     final delayed = Completer<List<SessionSummary>>();
     gateway.nextSessionList = delayed;
-    await tester.tap(find.byTooltip('Projects and conversations'));
+    await openSidebar(tester);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
     await tester.tap(find.byKey(const ValueKey('sidebar-new-session')));
@@ -528,9 +518,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.messageLimits.length, 2);
     expect(gateway.activations, 0);
-    await tester.tap(find.byKey(const ValueKey('chat-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Session details'));
+    await tester.tap(find.byKey(const ValueKey('chat-session-details')));
     await tester.pumpAndSettle();
     expect(find.text('session_1'), findsNothing);
     expect(
@@ -732,11 +720,7 @@ void main() {
           await openRecent(tester);
           await capture(tester, '$locale-$dark-${size.width}-chat');
           if (size.width < 900) {
-            await tester.tap(
-              find.byTooltip(
-                locale == 'en' ? 'Projects and conversations' : '项目与会话',
-              ),
-            );
+            await openSidebar(tester);
             await tester.pumpAndSettle();
             expect(tester.takeException(), isNull);
             await capture(tester, '$locale-$dark-${size.width}-sidebar');
@@ -780,6 +764,17 @@ void main() {
   }
 }
 
+Future<void> openSidebar(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.tap(find.byKey(const ValueKey('chat-menu')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 350));
+  await tester.tap(find.byKey(const ValueKey('chat-open-sidebar')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 Future<void> openRecent(
   WidgetTester tester, {
   String workspaceId = 'ts_001',
@@ -789,6 +784,24 @@ Future<void> openRecent(
     find.byKey(ValueKey('recent-session-$workspaceId-$sessionId')),
   );
   await tester.pumpAndSettle();
+}
+
+Future<void> loadPreviewFonts() async {
+  if (Platform.environment['TS_PHONE_CAPTURE_UI'] != '1') return;
+  final fontPath = Platform.environment['TS_PHONE_PREVIEW_FONT'];
+  final iconPath = Platform.environment['TS_PHONE_PREVIEW_ICONS'];
+  if (fontPath != null) {
+    for (final family in ['Ahem', 'Roboto', 'monospace']) {
+      final font = FontLoader(family)
+        ..addFont(File(fontPath).readAsBytes().then(ByteData.sublistView));
+      await font.load();
+    }
+  }
+  if (iconPath != null) {
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(File(iconPath).readAsBytes().then(ByteData.sublistView));
+    await icons.load();
+  }
 }
 
 Future<void> capture(WidgetTester tester, String name) async {

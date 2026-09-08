@@ -21,9 +21,9 @@ the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.8.0 | API v4, Events v3, Bridge v3, explicit-mode activation, readiness and confirmed idle switching |
-| TSPi package | 0.14.0 | Bridge v3, exact session Workers, model readiness and guard/1 |
-| Mobile app | 0.17.1+44 | API v4, navigation-safe prompt receipts, model diagnostics, native back and approval deferral |
+| TS Phone server | 0.9.0 | API v4, Events v3, Bridge v3, model selection, terminal attach and guarded idle switching |
+| TSPi package | 0.15.0 | Shared terminal/Phone Host, exact session Workers, model readiness and guard/1 |
+| Mobile app | 0.18.0+45 | Composer model picker, compact session controls and navigation-safe prompt receipts |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in
@@ -213,7 +213,7 @@ token or a model fallback.
 
 ~~~bash
 cd /home/iaw/TS-pi-agent
-./TSPi --workspace ts_006 --phone
+./TSPi --workspace ts_006 --standalone --phone
 ~~~
 
 6. A second Controller launch must fail. For a separate read-only assistant use

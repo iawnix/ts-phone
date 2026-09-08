@@ -6,6 +6,7 @@ import { HttpError, RuntimeError } from "./errors.js";
 import { ManagementStore } from "./management-store.js";
 import { WorkspaceHub } from "./runtime/workspace-hub.js";
 import { WorkerSupervisor } from "./runtime/worker-supervisor.js";
+import { WORKSPACE_NAME_PATTERN } from "./workspace-registry.js";
 import { assertBearerAuthorization, ensureBearerToken, ensureBridgeSecret } from "./security.js";
 import {
   API_VERSION,
@@ -18,6 +19,7 @@ import {
   type LifecycleInput,
   type LifecycleState,
   type MessagePageRequest,
+  type ModelSelectionInput,
   type PromptInput,
   type PurgeInput,
   type RenameInput,
@@ -109,8 +111,14 @@ async function handleRequest(
     return;
   }
   assertBearerAuthorization(request.headers.authorization, token);
+  if (method === "GET" && url.pathname === "/api/v4/models") {
+    assertNoQuery(url, "Models");
+    sendData(response, 200, await hub.models());
+    return;
+  }
   if (method === "GET" && url.pathname === "/api/v4/version") {
-    sendData(response, 200, { apiVersion: API_VERSION, serviceVersion: SERVICE_VERSION });
+    sendData(response, 200, { apiVersion: API_VERSION, serviceVersion: SERVICE_VERSION,
+      capabilities: ["terminal.attach"] });
     return;
   }
   if (method === "GET" && url.pathname === "/api/v4/workspaces") {
@@ -178,6 +186,28 @@ async function handleRequest(
   }
   const sessionId = segments[5] || "";
   const sessionResource = segments[6];
+  if (sessionResource === "approvals" && segments.length === 7 && method === "GET") {
+    assertNoQuery(url, "Approvals");
+    sendData(response, 200, await hub.pendingApprovals(workspaceId, sessionId));
+    return;
+  }
+  if (sessionResource === "commands" && segments.length === 8 && method === "GET") {
+    const messageId = segments[7]!;
+    const revision = url.searchParams.get("sessionRevision") ?? "";
+    if (!/^[A-Za-z0-9._:-]{1,160}$/.test(messageId)
+      || [...url.searchParams.keys()].some((key) => key !== "sessionRevision")
+      || url.searchParams.getAll("sessionRevision").length !== 1) {
+      throw new HttpError(400, "invalid_receipt_query", "A command identity and sessionRevision are required");
+    }
+    validateRevision(revision);
+    sendData(response, 200, await hub.promptReceipt(workspaceId, sessionId, messageId, revision));
+    return;
+  }
+  if (sessionResource === "model" && segments.length === 7 && method === "POST") {
+    const input = validateModelSelection(await readJsonBody(request, config.maxBodyBytes));
+    sendData(response, 200, await hub.setModel(workspaceId, sessionId, input));
+    return;
+  }
   if (sessionResource === undefined && segments.length === 6 && method === "PATCH") {
     const input = validateRename(await readJsonBody(request, config.maxBodyBytes));
     sendData(response, 200, await hub.renameSession(workspaceId, sessionId, input));
@@ -387,7 +417,8 @@ function validatePrompt(value: unknown): PromptInput {
     throw new HttpError(400, "invalid_prompt", "message, clientMessageId, and sessionRevision must be strings");
   }
   const keys = Object.keys(value);
-  if (keys.some((key) => key !== "message" && key !== "clientMessageId" && key !== "sessionRevision")) {
+  if (keys.some((key) => !["message", "clientMessageId", "sessionRevision", "clientKind"].includes(key))
+    || (value.clientKind !== undefined && value.clientKind !== "phone" && value.clientKind !== "terminal")) {
     throw new HttpError(400, "invalid_prompt", "Prompt contained an unsupported field");
   }
   const message = value.message.trim();
@@ -398,16 +429,20 @@ function validatePrompt(value: unknown): PromptInput {
     throw new HttpError(400, "invalid_prompt", "clientMessageId is invalid");
   }
   validateRevision(value.sessionRevision);
-  return { message, clientMessageId: value.clientMessageId, sessionRevision: value.sessionRevision };
+  return { message, clientMessageId: value.clientMessageId, sessionRevision: value.sessionRevision,
+    ...(value.clientKind === undefined ? {} : { clientKind: value.clientKind }) };
 }
 
 function validateCreateWorkspace(value: unknown): CreateWorkspaceInput {
   if (!isObject(value)
-    || Object.keys(value).length !== 1
-    || typeof value.name !== "string") {
-    throw new HttpError(400, "invalid_workspace_create", "name is required and no other fields are accepted");
+    || Object.keys(value).some((key) => key !== "name" && key !== "workspaceId")
+    || typeof value.name !== "string"
+    || (value.workspaceId !== undefined && (typeof value.workspaceId !== "string"
+      || !WORKSPACE_NAME_PATTERN.test(value.workspaceId)))) {
+    throw new HttpError(400, "invalid_workspace_create", "name is required; workspaceId must be a bounded directory name");
   }
-  return { name: validateDisplayName(value.name) };
+  return { name: validateDisplayName(value.name),
+    ...(value.workspaceId === undefined ? {} : { workspaceId: value.workspaceId }) };
 }
 
 function validateCreateSession(value: unknown): CreateSessionInput {
@@ -527,6 +562,17 @@ function validateApproval(value: unknown): ApprovalInput {
   }
   validateRevision(value.sessionRevision);
   return { approved: value.approved, sessionRevision: value.sessionRevision };
+}
+
+function validateModelSelection(value: unknown): ModelSelectionInput {
+  if (!isObject(value) || Object.keys(value).length !== 3 || typeof value.sessionRevision !== "string"
+    || typeof value.provider !== "string" || typeof value.modelId !== "string"
+    || !value.provider.trim() || !value.modelId.trim() || value.provider.length > 160 || value.modelId.length > 240
+    || /[\u0000-\u001f]/.test(value.provider + value.modelId)) {
+    throw new HttpError(400, "invalid_model_selection", "sessionRevision, provider, and modelId are required");
+  }
+  validateRevision(value.sessionRevision);
+  return { sessionRevision: value.sessionRevision, provider: value.provider, modelId: value.modelId };
 }
 
 function validateAbort(value: unknown): AbortInput {

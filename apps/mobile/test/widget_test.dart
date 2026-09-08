@@ -171,7 +171,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shows a complete long tool name without ellipsis', (
+  testWidgets('bounds long activity labels and reveals the exact tool name', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(320, 640);
@@ -212,10 +212,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final title = tester.widget<Text>(find.text(toolName));
-    expect(title.maxLines, isNull);
-    expect(title.overflow, isNull);
-    expect(find.text('就绪'), findsOneWidget);
+    final title = tester.widget<Text>(find.text(toolName.replaceAll('_', ' ')));
+    expect(title.maxLines, 2);
+    expect(title.overflow, TextOverflow.ellipsis);
+    expect(find.text('就绪'), findsNothing);
     expect(find.text('TSPi'), findsNothing);
     expect(find.byKey(const ValueKey<String>('tool-raw-output')), findsNothing);
     expect(
@@ -233,6 +233,7 @@ void main() {
       find.byKey(const ValueKey<String>('tool-raw-output')),
       findsOneWidget,
     );
+    expect(find.textContaining(toolName), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -260,24 +261,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final disclosure = tester.widget<TsContentSurface>(
+    final disclosure = tester.widget<Material>(
       find.byKey(const ValueKey<String>('tool-disclosure-row')),
     );
-    expect(
-      disclosure.backgroundColor,
-      TsPhoneTheme.light().colorScheme.surfaceContainerLow,
-    );
+    expect(disclosure.color, Colors.transparent);
     expect(find.text('TSPi'), findsNothing);
     expect(find.text('raw calculation output'), findsNothing);
 
-    await tester.tap(find.text('ts_calc'));
+    await tester.tap(find.byKey(const ValueKey('tool-disclosure-row')));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey<String>('tool-raw-output')),
       findsOneWidget,
     );
-    expect(find.text('raw calculation output'), findsOneWidget);
+    expect(find.textContaining('raw calculation output'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -302,8 +300,8 @@ void main() {
 
     expect(find.text('TSPi'), findsNothing);
     expect(find.text('Research result'), findsOneWidget);
-    expect(find.text('ts_change'), findsOneWidget);
-    await tester.tap(find.text('ts_change'));
+    expect(find.text('记录研究决策'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tool-disclosure-row')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tool-raw-output')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -590,27 +588,24 @@ void main() {
               ChatActivityKind.runningTool,
               toolName: 'ts_workspace_decision_draft',
             ),
-            canAbort: true,
-            onAbort: () {},
           ),
         ),
       ),
     );
 
-    final label = find.textContaining('Ts workspace decision draft');
+    final label = find.textContaining('ts workspace decision draft');
     expect(label, findsOneWidget);
     expect(
       tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
-      isFalse,
+      isTrue,
     );
-    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('failed tool status keeps stop available for an active run', (
+  testWidgets('failed activity keeps its summary without duplicating stop', (
     WidgetTester tester,
   ) async {
-    var stopped = false;
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('en'),
@@ -623,17 +618,13 @@ void main() {
               ChatActivityKind.toolFailed,
               toolName: 'ts_calc',
             ),
-            canAbort: true,
-            onAbort: () => stopped = true,
           ),
         ),
       ),
     );
 
-    expect(find.text('Tool failed: Ts calc'), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey<String>('live-run-stop')));
-    expect(stopped, isTrue);
+    expect(find.text('Tool failed: Calculation'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

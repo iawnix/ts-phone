@@ -137,9 +137,9 @@ SessionUiPhase _resolvePhase({
   if (isSynchronizing || runtimeState == RuntimeState.connecting) {
     return SessionUiPhase.synchronizing;
   }
-  if (runtimeState == RuntimeState.running) return SessionUiPhase.running;
   if (eventConnectionState != EventConnectionState.connected) {
     return SessionUiPhase.reconnecting;
   }
+  if (runtimeState == RuntimeState.running) return SessionUiPhase.running;
   return SessionUiPhase.ready;
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.8.0
+  version: 0.9.0
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -27,9 +27,30 @@ paths:
   /api/v4/version:
     get:
       operationId: getVersion
+      description: Returns API/service versions and Host capabilities. terminal.attach covers the thin terminal's receipt and pending-interaction contract.
       responses:
         "200": { $ref: "#/components/responses/Success" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v4/models:
+    get:
+      operationId: listModels
+      description: Read the Host Pi model catalog without starting a session. Credentials and provider URLs are never returned.
+      responses:
+        "200":
+          description: Available authenticated models
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        maxItems: 2000
+                        items: { $ref: "#/components/schemas/PhoneModel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /api/v4/workspaces:
     get:
       operationId: listWorkspaces
@@ -60,6 +81,10 @@ paths:
               required: [name]
               properties:
                 name: { $ref: "#/components/schemas/DisplayName" }
+                workspaceId:
+                  type: string
+                  pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"
+                  description: Optional exact directory name within the configured root. Existing or reserved identities are never replaced.
               additionalProperties: false
       responses:
         "201": { $ref: "#/components/responses/Success" }
@@ -180,6 +205,31 @@ paths:
         - $ref: "#/components/parameters/sessionId"
       requestBody: { $ref: "#/components/requestBodies/Rename" }
       responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/SessionConflict" } }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/model:
+    post:
+      operationId: selectModel
+      description: Requires command.model, the exact live revision, and an idle managed Controller with no pending messages or approvals. Changes only this conversation, not shared Pi defaults. Wait for confirmation; never replay an ambiguous change automatically.
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionRevision, provider, modelId]
+              properties:
+                sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+                provider: { type: string, minLength: 1, maxLength: 160 }
+                modelId: { type: string, minLength: 1, maxLength: 240 }
+              additionalProperties: false
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/archive:
     post:
       operationId: archiveSession
@@ -274,6 +324,9 @@ paths:
               required: [clientMessageId, sessionRevision, message]
               properties:
                 clientMessageId: { $ref: "#/components/schemas/BoundedId" }
+                clientKind:
+                  enum: [phone, terminal]
+                  description: Display metadata only, never an authority claim. Omitted means phone.
                 sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
                 message:
                   type: string
@@ -288,6 +341,42 @@ paths:
         "409": { $ref: "#/components/responses/SessionConflict" }
         "504":
           description: Command outcome is ambiguous and must not be retried automatically
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/commands/{clientMessageId}:
+    get:
+      operationId: getPromptReceipt
+      description: Read-only receipt within this Host journal generation. Unknown after expiry, restart, or revision change is not permission to resend.
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+        - name: clientMessageId
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/BoundedId" }
+        - name: sessionRevision
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/SessionRevision" }
+      responses:
+        "200":
+          description: Current receipt without message text or credentials
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [clientMessageId, sessionRevision, status]
+                        properties:
+                          clientMessageId: { $ref: "#/components/schemas/BoundedId" }
+                          sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+                          status: { enum: [pending, accepted, rejected, unknown] }
+                        additionalProperties: false
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/abort:
     post:
       operationId: abortGeneration
@@ -374,6 +463,39 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/approvals:
+    get:
+      operationId: listPendingApprovals
+      description: Read up to 100 unexpired confirmations in the current session generation without starting a Worker. Read again after responding for any remaining entries.
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Up to 100 pending structured confirmations
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        maxItems: 100
+                        items:
+                          type: object
+                          required: [id, sessionRevision, toolName, preview, expiresAt]
+                          properties:
+                            id: { $ref: "#/components/schemas/BoundedId" }
+                            sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+                            toolName: { type: string }
+                            preview: { type: string }
+                            expiresAt: { type: string, format: date-time }
+                          additionalProperties: false
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/approvals/{approvalId}:
@@ -493,8 +615,18 @@ components:
         - activity.research
         - command.prompt
         - command.abort
+        - command.model
         - interaction.approval
         - session.activate_mode
+    PhoneModel:
+      type: object
+      required: [provider, id, name, contextWindow]
+      properties:
+        provider: { type: string, minLength: 1, maxLength: 160 }
+        id: { type: string, minLength: 1, maxLength: 240 }
+        name: { type: string, minLength: 1, maxLength: 240 }
+        contextWindow: { type: integer, minimum: 1 }
+      additionalProperties: false
     Workspace:
       type: object
       required: [id, name, runtimeState, isStreaming, liveSessionCount, sessionCount, lifecycleState, managementRevision, managed]

@@ -7,6 +7,7 @@ import '../../data/ts_phone_api.dart';
 import '../../models/chat_message.dart';
 import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
+import '../../models/phone_model.dart';
 import 'chat_view_memory.dart';
 import 'chat_outbox.dart';
 
@@ -314,6 +315,69 @@ class ChatController extends ChangeNotifier {
       _eventConnectionState == EventConnectionState.connected;
   Stream<ExtensionUiRequest> get uiRequests => _uiRequests.stream;
 
+  TsPhoneModelGateway? get modelGateway =>
+      api is TsPhoneModelGateway ? api as TsPhoneModelGateway : null;
+  bool get canSelectModel =>
+      modelGateway != null &&
+      _capabilities.contains('command.model') &&
+      accessMode == SessionAccessMode.controller &&
+      _runtimeState == RuntimeState.idle &&
+      _snapshotReady &&
+      !_snapshotSyncInProgress &&
+      !viewingInactiveBranch &&
+      !_historyNavigationInProgress &&
+      _eventConnectionState == EventConnectionState.connected &&
+      !commandInFlight &&
+      outbox.messages.isEmpty &&
+      _activeAgentRunId == null;
+
+  Future<void> selectModel(PhoneModel model) async {
+    if (!canSelectModel) {
+      throw const TsPhoneApiException(
+        'Session is not ready for model selection',
+        code: 'session_not_ready',
+      );
+    }
+    final revision = _sessionRevision;
+    _commandInFlight = true;
+    _notify();
+    try {
+      final session = await modelGateway!.selectModel(
+        workspaceId,
+        sessionId,
+        revision,
+        model,
+      );
+      if (_disposed) return;
+      if (_sessionRevision != revision ||
+          session.sessionId != sessionId ||
+          session.sessionRevision != revision) {
+        throw const TsPhoneApiException(
+          'Session changed',
+          code: 'session_resync_required',
+        );
+      }
+      _sessionRuntime = session.runtime;
+      _promptProblem = session.promptProblem;
+      _canPrompt = session.canPrompt;
+      _capabilities = session.capabilities;
+      _applyManagement(session);
+      _operationProblem = null;
+    } on Object {
+      // A lost HTTP receipt does not prove that Pi kept the old model. Block
+      // commands until a fresh Host snapshot reconciles the actual state.
+      if (!_disposed) {
+        _snapshotReady = false;
+        _canPrompt = false;
+        await _refreshMessages(allowUnavailable: true);
+      }
+      rethrow;
+    } finally {
+      _commandInFlight = false;
+      _notify();
+    }
+  }
+
   String messageKeyAt(int index) =>
       _messageIds[index] ??
       '${_messages[index].role.name}-${_messages[index].timestamp?.microsecondsSinceEpoch ?? 0}-$index';
@@ -394,6 +458,9 @@ class ChatController extends ChangeNotifier {
   }
 
   void _applyManagement(SessionSummary session) {
+    if (session.sessionName?.isNotEmpty == true) {
+      _sessionTitle = session.sessionName;
+    }
     _managementRevision = session.managementRevision;
     _canActivate = session.canActivate;
     _activation = session.activation;

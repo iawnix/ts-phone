@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/connection_settings.dart';
 import '../models/session_timeline.dart';
 import '../models/workspace.dart';
+import '../models/phone_model.dart';
 import 'sse_parser.dart';
 
 class TsPhoneApiException implements Exception {
@@ -88,6 +89,9 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
       'model_auth_missing' => TsPhoneProblemCode.modelAuthMissing,
       'model_storage_unavailable' => TsPhoneProblemCode.modelStorageUnavailable,
       'model_check_failed' => TsPhoneProblemCode.modelCheckFailed,
+      'model_control_unavailable' =>
+        TsPhoneProblemCode.activationUpgradeRequired,
+      'model_change_unconfirmed' => TsPhoneProblemCode.runtimeRecoveryRequired,
       'prompt_rejected' => TsPhoneProblemCode.promptRejected,
       'runtime_extension_error' => TsPhoneProblemCode.runtimeExtensionError,
       'command_ambiguous' ||
@@ -444,8 +448,22 @@ abstract interface class TsPhoneManagementGateway {
   });
 }
 
+abstract interface class TsPhoneModelGateway {
+  Future<List<PhoneModel>> models();
+  Future<SessionSummary> selectModel(
+    String workspaceId,
+    String sessionId,
+    String sessionRevision,
+    PhoneModel model,
+  );
+}
+
 class TsPhoneApi
-    implements TsPhoneGateway, TsPhoneManagementGateway, TsPhoneHistoryGateway {
+    implements
+        TsPhoneGateway,
+        TsPhoneManagementGateway,
+        TsPhoneHistoryGateway,
+        TsPhoneModelGateway {
   TsPhoneApi(
     this.settings, {
     http.Client? client,
@@ -578,6 +596,30 @@ class TsPhoneApi
       _asMap(value, 'Workspace deletion preflight'),
     );
   }
+
+  @override
+  Future<List<PhoneModel>> models() async {
+    final value = await _request('GET', '/api/v4/models');
+    if (value is! List) throw const FormatException('Invalid model catalog');
+    return value.map(PhoneModel.fromJson).toList(growable: false);
+  }
+
+  @override
+  Future<SessionSummary> selectModel(
+    String workspaceId,
+    String sessionId,
+    String sessionRevision,
+    PhoneModel model,
+  ) => _sessionMutation(
+    workspaceId,
+    sessionId,
+    'model',
+    body: {
+      'sessionRevision': sessionRevision,
+      'provider': model.provider,
+      'modelId': model.id,
+    },
+  );
 
   @override
   Future<SessionSummary> createSession(

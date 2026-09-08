@@ -1046,4 +1046,76 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutApp => '关于';
+
+  @override
+  String get chooseModel => '选择模型';
+
+  @override
+  String get moreActions => '更多操作';
+
+  @override
+  String get searchModels => '搜索模型';
+
+  @override
+  String get noModelsAvailable => '暂无可用模型';
+
+  @override
+  String get hostDefaultModel => '使用 Host 默认模型';
+
+  @override
+  String get modelSelectionUnavailable => '会话由 Host 运行且空闲时可切换模型';
+
+  @override
+  String get chatReady => '就绪';
+
+  @override
+  String get chatRunning => '处理中';
+
+  @override
+  String get chatConnecting => '连接中';
+
+  @override
+  String get chatReconnecting => '重连中';
+
+  @override
+  String get chatOffline => '离线';
+
+  @override
+  String get chatRecovery => '待恢复';
+
+  @override
+  String get chatFailed => '需要处理';
+
+  @override
+  String get chatHistory => '历史会话';
+
+  @override
+  String get chatCanContinue => '未运行';
+
+  @override
+  String get activityRead => '读取文件';
+
+  @override
+  String get activityWrite => '写入文件';
+
+  @override
+  String get activityShell => '执行命令';
+
+  @override
+  String get activityState => '读取工作区';
+
+  @override
+  String get activityChange => '记录研究决策';
+
+  @override
+  String get activityReview => '独立审查';
+
+  @override
+  String get activityReply => '回应审查';
+
+  @override
+  String get activityCalculation => '计算任务';
+
+  @override
+  String get activityRemote => '远程任务';
 }

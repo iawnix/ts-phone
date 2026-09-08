@@ -1109,4 +1109,77 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutApp => 'About';
+
+  @override
+  String get chooseModel => 'Choose model';
+
+  @override
+  String get moreActions => 'More actions';
+
+  @override
+  String get searchModels => 'Search models';
+
+  @override
+  String get noModelsAvailable => 'No available models';
+
+  @override
+  String get hostDefaultModel => 'Host default model';
+
+  @override
+  String get modelSelectionUnavailable =>
+      'Model selection is available in an idle Host conversation';
+
+  @override
+  String get chatReady => 'Ready';
+
+  @override
+  String get chatRunning => 'Working';
+
+  @override
+  String get chatConnecting => 'Connecting';
+
+  @override
+  String get chatReconnecting => 'Reconnecting';
+
+  @override
+  String get chatOffline => 'Offline';
+
+  @override
+  String get chatRecovery => 'Needs recovery';
+
+  @override
+  String get chatFailed => 'Needs attention';
+
+  @override
+  String get chatHistory => 'History';
+
+  @override
+  String get chatCanContinue => 'Not running';
+
+  @override
+  String get activityRead => 'Read file';
+
+  @override
+  String get activityWrite => 'Write file';
+
+  @override
+  String get activityShell => 'Run command';
+
+  @override
+  String get activityState => 'Read workspace';
+
+  @override
+  String get activityChange => 'Record research decision';
+
+  @override
+  String get activityReview => 'Independent review';
+
+  @override
+  String get activityReply => 'Respond to review';
+
+  @override
+  String get activityCalculation => 'Calculation';
+
+  @override
+  String get activityRemote => 'Remote task';
 }

@@ -5,43 +5,33 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../theme/ts_phone_theme.dart';
 import 'chat_controller.dart';
+import '../../widgets/activity_label.dart';
 
 /// A compact, persistent indication that the current turn is still running.
 ///
-/// This bar owns the single stop action for every abortable run, including the
-/// interval before a concrete tool is known. Once the turn settles, the strip
-/// disappears and the persisted timeline becomes the source of truth.
+/// This row lives in the timeline; the composer owns the single stop action.
+/// Once the turn settles, persisted activity becomes the source of truth.
 class LiveRunStrip extends StatelessWidget {
-  const LiveRunStrip({
-    super.key,
-    required this.activity,
-    required this.onAbort,
-    this.canAbort = false,
-    this.aborting = false,
-  });
+  const LiveRunStrip({super.key, required this.activity});
 
   final ChatActivity? activity;
-  final VoidCallback onAbort;
-  final bool canAbort;
-  final bool aborting;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final status = TsPhoneStatusTheme.resolve(context);
     final activity = this.activity;
     final failed = activity?.kind == ChatActivityKind.toolFailed;
     final name = activity?.toolName?.trim();
     final label = failed
         ? name == null || name.isEmpty
               ? context.l10n.toolFailed
-              : '${context.l10n.toolFailed}: ${_humanize(name)}'
+              : '${context.l10n.toolFailed}: ${activityLabel(name, context.l10n)}'
         : name == null || name.isEmpty
-        ? context.l10n.tspiGenerating
-        : context.l10n.toolRunning(_humanize(name));
+        ? context.l10n.runtimeCompactRunning
+        : activityLabel(name, context.l10n);
     final startedAt = failed ? null : activity?.startedAt;
-    final accent = failed ? colors.error : status.connected;
+    final accent = failed ? colors.error : colors.onSurfaceVariant;
     return Material(
       key: const ValueKey<String>('live-run-strip'),
       color: colors.surface,
@@ -76,6 +66,8 @@ class LiveRunStrip extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: colors.onSurface,
                               fontWeight: FontWeight.w600,
@@ -92,24 +84,6 @@ class LiveRunStrip extends StatelessWidget {
                   ),
                 ),
               ),
-              if (canAbort || aborting) ...<Widget>[
-                const SizedBox(width: TsPhoneSpacing.xSmall),
-                IconButton(
-                  key: const ValueKey<String>('live-run-stop'),
-                  onPressed: canAbort && !aborting ? onAbort : null,
-                  tooltip: aborting
-                      ? context.l10n.aborting
-                      : context.l10n.abortGeneration,
-                  color: colors.error,
-                  icon: aborting
-                      ? const SizedBox.square(
-                          dimension: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.stop_circle_outlined, size: 21),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
             ],
           ),
         ),
@@ -157,12 +131,6 @@ class _ElapsedLabelState extends State<_ElapsedLabel> {
       ),
     );
   }
-}
-
-String _humanize(String value) {
-  final normalized = value.replaceAll(RegExp(r'[_-]+'), ' ').trim();
-  if (normalized.isEmpty) return value;
-  return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
 }
 
 String _formatElapsed(Duration value) {

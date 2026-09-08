@@ -119,8 +119,25 @@ Exactly one live controller is allowed per workspace. A Host-started controller
 acquires the Root Agent file lock and opens the requested Pi session ID in RPC
 mode. A requested observer never acquires the scientific Root lock, but holds
 an exclusive session writer guard because it also appends Pi JSONL. Manually
-invoked `TSPi --phone` reports contention instead of changing mode. Use
-`--phone --phone-access observer` explicitly with a different conversation.
+invoked `TSPi --standalone --phone` reports contention instead of changing mode.
+Use `--standalone --phone --phone-access observer` explicitly with a different
+conversation. The default TSPi terminal and `--phone` alias now attach to Host;
+they acquire no Root or session writer lock.
+
+The terminal UI ships in the Agent component as `src/terminal/*.mjs`. It uses
+the same authenticated HTTP/SSE API as mobile, never a raw Worker RPC tunnel.
+The version endpoint advertises `terminal.attach` so old running Hosts fail
+early rather than accepting a partly supported UI. Client kind is optional
+`phone`/`terminal` display metadata, not a permission. Host-accepted RPC input
+is attributed to the submitting client; generic Worker turn events are
+`host`-origin because RPC does not encode the UI identity.
+
+New managed conversations return an empty message page before any Worker or
+JSONL exists. `GET .../approvals` recovers pending, unexpired confirmations on
+reconnect. `GET .../commands/:clientMessageId?sessionRevision=...` reads the
+existing in-memory prompt receipt. An unknown receipt, including after a
+Host journal change, never proves non-delivery. Terminal detach closes only
+its connections; generation abort and Worker lifecycle remain distinct.
 
 Observers are not passive mirrors. They can receive phone or local prompts and
 use a strict read-only tool allowlist. They cannot modify the scientific
@@ -242,6 +259,30 @@ acknowledgement means dispatch, not completed preflight. The Bridge checks model
 readiness before dispatch; clients do not treat its early input event as proof
 that a later failed request succeeded. Assistant failure/abort state survives
 message projection without exposing provider error bodies.
+
+### Conversation Model Selection
+
+`GET /api/v4/models` runs the fixed TSPi `--phone-models` entrypoint without
+bootstrapping a workspace or starting a Worker. It returns only available model
+identities, display names and context limits, never credentials/provider URLs.
+`POST .../sessions/:sessionId/model` binds the live revision and requires an idle
+Host-owned Controller with `command.model`, no queued prompts and no pending
+approvals. Selection reserves the existing switching guard, excluding prompt,
+activation and lifecycle mutations until Pi confirms the exact model.
+
+The managed TSPi Worker uses official Pi SDK/RPC with in-memory preference
+storage initialized using Pi's global/project merge rules. Authentication still
+uses `PI_CODING_AGENT_DIR` (default `~/.pi/agent`); model selection never writes
+shared settings. Pi history records the model change. The Host also records the
+confirmed preference for empty conversations, which Pi may not yet flush to
+disk. Existing saved history has priority over startup preferences.
+
+RPC receipts and Bridge snapshots are separate streams. A successful exact RPC
+receipt confirms the switch; it does not need a snapshot to arrive first.
+Uncertain outcomes enter recovery instead of retrying. The mobile client also
+resynchronizes after a failed/lost HTTP response before enabling commands.
+External CLI sessions never advertise model control because their settings may
+be shared with other CLI sessions.
 
 Every session has an independent bounded event journal. SSE reconnects replay
 events after Last-Event-ID. Slow clients are disconnected before unbounded

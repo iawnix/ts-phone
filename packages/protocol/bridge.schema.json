@@ -56,6 +56,7 @@
       "type": "string",
       "pattern": "^[A-Za-z0-9._:-]{1,160}$"
     },
+    "clientKind": { "enum": ["phone", "terminal"] },
     "agentRunId": {
       "type": "string",
       "pattern": "^[A-Za-z0-9._:-]{1,160}$"
@@ -145,7 +146,7 @@
       "required": ["type", "origin", "turnId", "agentRunId"],
       "properties": {
         "type": { "enum": ["agent_start", "agent_settled"] },
-        "origin": { "enum": ["local", "extension", "phone", "unknown"] },
+        "origin": { "enum": ["local", "extension", "phone", "terminal", "host", "unknown"] },
         "turnId": {
           "type": "string",
           "pattern": "^[A-Za-z0-9._:-]{1,160}$"
@@ -198,6 +199,7 @@
         "sessionName": { "type": "string", "minLength": 1, "maxLength": 500 },
         "model": { "type": "string", "minLength": 1, "maxLength": 500 },
         "promptProblem": { "enum": ["model_unavailable", "model_auth_missing", "model_storage_unavailable", "model_check_failed"] },
+        "modelControl": { "type": "boolean", "description": "Only true for a managed Worker with session-local settings; external CLIs cannot change their model through the Host." },
         "runtime": { "$ref": "#/$defs/sessionRuntime" },
         "thinkingLevel": { "type": "string", "minLength": 1, "maxLength": 100 },
         "isStreaming": { "type": "boolean" },

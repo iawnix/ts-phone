@@ -6,7 +6,9 @@ import { isAbsolute } from "node:path";
 import { HttpError } from "../errors.js";
 import type { SessionAccessMode } from "../types.js";
 import { runLifecycle, type LifecycleGuard, type LifecyclePreflight } from "./lifecycle-client.js";
-import { WorkerRpc } from "./worker-rpc.js";
+import { WorkerRpc, promptFailure } from "./worker-rpc.js";
+import { parseModelCatalog } from "./model-catalog.js";
+import type { PhoneModel } from "../types.js";
 
 const MAX_DIAGNOSTIC_BYTES = 16 * 1024;
 
@@ -171,6 +173,29 @@ export class WorkerSupervisor {
     await worker.rpc.prompt(message, followUp);
   }
 
+  async models(): Promise<PhoneModel[]> {
+    const executable = await this.#executable();
+    try {
+      const { stdout } = await promisify(execFile)(executable, ["--phone-models"], {
+        timeout: 10_000, maxBuffer: 1024 * 1024,
+      });
+      return parseModelCatalog(JSON.parse(stdout));
+    } catch {
+      throw new HttpError(503, "model_check_failed", "The Host could not read its Pi model catalog");
+    }
+  }
+
+  async setModel(workspaceId: string, sessionId: string, provider: string, modelId: string): Promise<PhoneModel> {
+    const worker = this.#workers.get(workerKey(workspaceId, sessionId));
+    if (!worker) throw new HttpError(409, "model_control_unavailable", "Model selection needs a Host-managed conversation");
+    const result = await worker.rpc.setModel(provider, modelId);
+    if (!result || typeof result !== "object" || !("provider" in result) || !("id" in result)
+      || result.provider !== provider || result.id !== modelId) {
+      throw new HttpError(409, "model_change_unconfirmed", "Pi did not confirm the selected model; refresh before sending");
+    }
+    return parseModelCatalog({ schemaVersion: "ts-phone-models/1", models: [result] })[0]!;
+  }
+
   async inspect(workspaceId: string, workspaceRoot: string): Promise<LifecyclePreflight> {
     return runLifecycle(await this.#executable(), workspaceId, workspaceRoot);
   }
@@ -233,6 +258,9 @@ function readStartupError(diagnostic: string): HttpError | undefined {
         return new HttpError(503, value.code, "The Host could not verify workspace writers; inspect its process permissions");
       case "session_guard_invalid":
         return new HttpError(409, value.code, "The Host could not validate the conversation history or its writer guards");
+      case "model_unavailable":
+      case "model_check_failed":
+        return promptFailure(value.code);
     }
   }
   return undefined;

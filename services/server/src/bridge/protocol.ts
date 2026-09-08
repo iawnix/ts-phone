@@ -92,6 +92,7 @@ export interface BridgePromptCommand {
   requestId: string;
   clientMessageId: string;
   message: string;
+  clientKind?: "phone" | "terminal";
 }
 
 export interface BridgeAbortCommand {
@@ -205,6 +206,7 @@ function parseSnapshot(value: unknown): BridgeSessionSnapshot {
       "sessionId",
       "sessionName",
       "model",
+      "modelControl",
       "promptProblem",
       "runtime",
       "thinkingLevel",
@@ -249,6 +251,7 @@ function parseSnapshot(value: unknown): BridgeSessionSnapshot {
   }
   if (snapshot.sessionName !== undefined) parsed.sessionName = requiredString(snapshot.sessionName, "sessionName", 500);
   if (snapshot.model !== undefined) parsed.model = requiredString(snapshot.model, "model", 500);
+  if (snapshot.modelControl !== undefined) parsed.modelControl = requiredBoolean(snapshot.modelControl, "modelControl");
   if (snapshot.promptProblem !== undefined) {
     if (snapshot.promptProblem !== "model_unavailable" && snapshot.promptProblem !== "model_auth_missing"
       && snapshot.promptProblem !== "model_storage_unavailable" && snapshot.promptProblem !== "model_check_failed") {

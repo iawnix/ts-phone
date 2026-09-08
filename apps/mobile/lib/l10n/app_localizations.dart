@@ -2053,6 +2053,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'About'**
   String get aboutApp;
+
+  /// No description provided for @chooseModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose model'**
+  String get chooseModel;
+
+  /// No description provided for @moreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get moreActions;
+
+  /// No description provided for @searchModels.
+  ///
+  /// In en, this message translates to:
+  /// **'Search models'**
+  String get searchModels;
+
+  /// No description provided for @noModelsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No available models'**
+  String get noModelsAvailable;
+
+  /// No description provided for @hostDefaultModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Host default model'**
+  String get hostDefaultModel;
+
+  /// No description provided for @modelSelectionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Model selection is available in an idle Host conversation'**
+  String get modelSelectionUnavailable;
+
+  /// No description provided for @chatReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get chatReady;
+
+  /// No description provided for @chatRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Working'**
+  String get chatRunning;
+
+  /// No description provided for @chatConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get chatConnecting;
+
+  /// No description provided for @chatReconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting'**
+  String get chatReconnecting;
+
+  /// No description provided for @chatOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get chatOffline;
+
+  /// No description provided for @chatRecovery.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs recovery'**
+  String get chatRecovery;
+
+  /// No description provided for @chatFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get chatFailed;
+
+  /// No description provided for @chatHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get chatHistory;
+
+  /// No description provided for @chatCanContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Not running'**
+  String get chatCanContinue;
+
+  /// No description provided for @activityRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read file'**
+  String get activityRead;
+
+  /// No description provided for @activityWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Write file'**
+  String get activityWrite;
+
+  /// No description provided for @activityShell.
+  ///
+  /// In en, this message translates to:
+  /// **'Run command'**
+  String get activityShell;
+
+  /// No description provided for @activityState.
+  ///
+  /// In en, this message translates to:
+  /// **'Read workspace'**
+  String get activityState;
+
+  /// No description provided for @activityChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Record research decision'**
+  String get activityChange;
+
+  /// No description provided for @activityReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Independent review'**
+  String get activityReview;
+
+  /// No description provided for @activityReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Respond to review'**
+  String get activityReply;
+
+  /// No description provided for @activityCalculation.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculation'**
+  String get activityCalculation;
+
+  /// No description provided for @activityRemote.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote task'**
+  String get activityRemote;
 }
 
 class _AppLocalizationsDelegate

@@ -56,7 +56,7 @@ from its local Bridge and refuses a second controller.
 
 - Node.js 22.19 or newer and npm for the broker
 - Flutter 3.44 or newer with Dart `>=3.12.0 <4.0.0` for mobile development
-- TSPi 0.13.0 for managed sessions and lifecycle guards; Bridge v3 for live transport
+- TSPi 0.15.0 for shared terminal/Phone sessions; Bridge v3 for live transport
 - An HTTPS origin reachable from the phone for remote use
 
 The broker listens only on `127.0.0.1` or `::1`. A reverse proxy must terminate
@@ -104,11 +104,16 @@ phone session remains supported for diagnostics:
 ```bash
 TS_PHONE_BRIDGE_SOCKET=/absolute/path/to/ts-phone-dev/run/bridge.sock \
 TS_PHONE_BRIDGE_SECRET_FILE=/absolute/path/to/ts-phone-dev/state/bridge.secret \
-  /path/to/tspi/TSPi --workspace WORKSPACE --phone
+  /path/to/tspi/TSPi --workspace WORKSPACE --standalone --phone
 ```
 
 Run the broker and TSPi as the same Unix user so both can access the protected
 socket and secret.
+
+Installed `TSPi` now opens a thin terminal client of this Host by default;
+`--phone` is an alias. Browsing or detaching does not start or stop a Worker.
+Use `--standalone` only when native Pi owns the session. See the TSPi
+[terminal guide](https://github.com/iawnix/TSPi/blob/ts-hypothesis-loop/docs/TERMINAL.md).
 
 Run the mobile app on a connected development device:
 
@@ -174,9 +179,9 @@ from another device.
 
 | Component | Current status |
 | --- | --- |
-| Broker | 0.7.1; API v4, Events v3, Bridge v3 |
-| Android | App 0.16.1+42; Android 7.0 or newer |
-| TSPi compatibility | TSPi 0.13.0; exact-session Workers and lifecycle guards |
+| Host | 0.9.0; API v4, Events v3, Bridge v3, `terminal.attach` |
+| Android | App 0.18.0+45; Android 7.0 or newer |
+| TSPi compatibility | TSPi 0.15.0; terminal attach, exact-session Workers and lifecycle guards |
 | iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
 
 These are source versions. See [release records](docs/artifacts.md) for published

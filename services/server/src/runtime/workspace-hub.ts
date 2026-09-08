@@ -25,6 +25,8 @@ import type {
   PromptInput,
   PurgeInput,
   RenameInput,
+  ModelSelectionInput,
+  PhoneModel,
   RuntimeState,
   SessionCapability,
   SessionActivation,
@@ -58,6 +60,12 @@ interface WorkspaceRecord {
   sessions: Map<string, SessionRecord>;
 }
 
+interface PromptCommand {
+  digest: string;
+  result: Promise<void>;
+  status: "pending" | "accepted" | "rejected" | "unknown";
+}
+
 interface SessionRecord {
   workspaceId: string;
   sessionId: string;
@@ -70,12 +78,13 @@ interface SessionRecord {
   runtime?: SessionRuntimeSnapshot;
   snapshotEventId?: string;
   activeAgentRunId?: string;
-  messageCommands: Map<string, { digest: string; result: Promise<void> }>;
+  messageCommands: Map<string, PromptCommand>;
   pendingPrompts: number;
   unstartedPrompts: Set<string>;
   observedPrompts: Set<string>;
   activating?: boolean;
   switching?: boolean;
+  ownedWorker?: boolean;
 }
 
 interface PendingActivation {
@@ -176,10 +185,13 @@ export class WorkspaceHub {
   async createWorkspace(input: CreateWorkspaceInput): Promise<WorkspaceCreationResult> {
     return this.#serializeMutation(async () => {
       const registered = await this.#registry.list();
-      const workspaceId = nextWorkspaceId([
+      const workspaceId = input.workspaceId ?? nextWorkspaceId([
         ...registered.map((workspace) => workspace.id),
         ...this.#management.workspaceIds(),
       ]);
+      if (this.#management.workspaceIds().includes(workspaceId)) {
+        throw new HttpError(409, "workspace_exists", "Workspace identity is already reserved");
+      }
       const sessionId = "session_1";
       const workspace = await this.#registry.create(workspaceId);
       try {
@@ -201,6 +213,59 @@ export class WorkspaceHub {
         session: this.#sessionSummary(session),
       };
     });
+  }
+
+  async models(): Promise<PhoneModel[]> {
+    return this.#workers.models();
+  }
+
+  async setModel(workspaceId: string, sessionId: string, input: ModelSelectionInput): Promise<SessionSummary> {
+    const session = await this.#connectedSession(workspaceId, sessionId);
+    this.#assertRevision(session, input.sessionRevision);
+    if (!session.snapshot?.modelControl || !this.#workers.owns(workspaceId, sessionId)) {
+      throw new HttpError(409, "model_control_unavailable", "Reopen with an updated Host to select this conversation's model");
+    }
+    if (!this.#isIdleOwnedRuntime(session) || session.activating || session.switching
+      || this.#guardedWorkspaces.has(workspaceId) || this.#closing || session.accessMode !== "controller") {
+      throw new HttpError(409, "session_not_ready", "Model selection requires an idle Controller with no pending messages");
+    }
+    const connection = session.connection;
+    session.switching = true;
+    this.#publishState(session);
+    let modelConfirmed = false;
+    try {
+      const model = await this.#workers.setModel(workspaceId, sessionId, input.provider, input.modelId);
+      modelConfirmed = true;
+      if (session.connection !== connection || !isLive(session)) {
+        throw new HttpError(409, "model_change_unconfirmed", "Refresh to confirm the actual model before sending");
+      }
+      // RPC receipts and bridge snapshots use different streams. The exact RPC
+      // receipt is authoritative even when its snapshot arrives a little later.
+      session.runtime = { schemaVersion: "ts-phone-session-runtime/1",
+        model: { provider: model.provider, id: model.id }, updatedAt: new Date().toISOString() };
+      if (session.snapshot) {
+        session.snapshot.model = `${model.provider}/${model.id}`;
+        session.snapshot.runtime = session.runtime;
+        delete session.snapshot.promptProblem;
+      }
+      await this.#management.rememberSessionModel(workspaceId,
+        this.#records.get(workspaceId)!.workspace.name, sessionId, `${model.provider}/${model.id}`,
+        this.#sessionDefaults(session));
+    } catch (error) {
+      if (modelConfirmed) {
+        session.state = "recovery_required";
+        throw new HttpError(409, "model_change_unconfirmed", "The model changed but its session preference could not be confirmed; inspect before sending");
+      }
+      if ((error instanceof RuntimeError && ["command_ambiguous", "bridge_disconnected"].includes(error.code))
+        || (error instanceof HttpError && error.code === "model_change_unconfirmed")) {
+        session.state = "recovery_required";
+      }
+      throw error;
+    } finally {
+      delete session.switching;
+      this.#publishState(session);
+    }
+    return this.#sessionSummary(session);
   }
 
   async createSession(workspaceId: string, input: CreateSessionInput): Promise<SessionSummary> {
@@ -721,6 +786,7 @@ export class WorkspaceHub {
     const session = existing || this.#createSession(workspace, registration.sessionId, registration.accessMode);
     session.journal.reset();
     session.accessMode = registration.accessMode;
+    session.ownedWorker = Boolean(owned);
     session.state = "connecting";
     delete session.snapshot;
     delete session.snapshotEventId;
@@ -759,6 +825,11 @@ export class WorkspaceHub {
       };
     }
     if (!session.persisted) {
+      if (this.#management.session(workspaceId, sessionId) && request.before === undefined
+        && request.after === undefined && request.edge === undefined) {
+        return { sessionId, sessionRevision: session.journal.epoch, activeAgentRunId: null,
+          messages: [], hasMore: false, lastEventId: session.journal.latestId };
+      }
       if (request.before !== undefined) {
         throw new HttpError(
           409,
@@ -766,7 +837,7 @@ export class WorkspaceHub {
           "Earlier session history is not available on disk",
         );
       }
-      throw new HttpError(409, "session_offline", "Start this TSPi session with --phone before using it");
+      throw new HttpError(409, "session_offline", "No persisted conversation history is available");
     }
     const page = await this.#registry.readPersistedSessionMessages(
       workspace.workspace,
@@ -833,13 +904,16 @@ export class WorkspaceHub {
     const connection = session.connection!;
     session.pendingPrompts += 1;
     session.unstartedPrompts.add(input.clientMessageId);
+    const receipt: PromptCommand = {
+      digest, result: Promise.resolve(), status: "pending",
+    };
     const command = (this.#workers.owns(workspaceId, sessionId)
       ? this.#workers.prompt(workspaceId, sessionId, input.message, session.state === "running").then(() => {
         if (session.connection !== connection) {
           throw new RuntimeError("command_ambiguous", "Session changed while waiting for Pi prompt acknowledgement");
         }
         session.journal.publish("input", {
-          type: "input", source: "rpc", origin: "phone", preflightAccepted: true,
+          type: "input", source: "rpc", origin: input.clientKind ?? "phone", preflightAccepted: true,
           text: input.message, clientMessageId: input.clientMessageId,
         }, { instanceEpoch: connection.instanceEpoch, sessionGeneration: connection.sessionGeneration });
       })
@@ -852,7 +926,10 @@ export class WorkspaceHub {
       sessionGeneration: connection.sessionGeneration,
       clientMessageId: input.clientMessageId,
       message: input.message,
-    })).catch((error) => {
+      clientKind: input.clientKind ?? "phone",
+    })).then(() => { receipt.status = "accepted"; }).catch((error) => {
+      receipt.status = error instanceof RuntimeError && ["command_ambiguous", "bridge_disconnected"].includes(error.code)
+        ? "unknown" : "rejected";
       session.unstartedPrompts.delete(input.clientMessageId);
       session.observedPrompts.delete(input.clientMessageId);
       if (error instanceof RuntimeError && (error.code === "command_ambiguous" || error.code === "bridge_disconnected")) {
@@ -861,9 +938,21 @@ export class WorkspaceHub {
       }
       throw error;
     }).finally(() => { session.pendingPrompts -= 1; });
-    session.messageCommands.set(input.clientMessageId, { digest, result: command });
+    receipt.result = command;
+    session.messageCommands.set(input.clientMessageId, receipt);
     this.#trimMessageCommands(session.messageCommands);
     return command;
+  }
+
+  async promptReceipt(workspaceId: string, sessionId: string, messageId: string, revision: string) {
+    const workspace = await this.#loadWorkspace(workspaceId);
+    await this.#reconcileSessions(workspace);
+    const session = workspace.sessions.get(sessionId);
+    if (!session) throw new HttpError(404, "session_not_found", "TSPi session was not found");
+    // These receipts are scoped to this live journal, not durable evidence of
+    // non-delivery. An absent or old receipt must never authorize replay.
+    return { clientMessageId: messageId, sessionRevision: session.journal.epoch,
+      status: revision === session.journal.epoch ? session.messageCommands.get(messageId)?.status ?? "unknown" : "unknown" };
   }
 
   async abort(workspaceId: string, sessionId: string, input: AbortInput): Promise<void> {
@@ -921,6 +1010,17 @@ export class WorkspaceHub {
       approvalId,
       approved: input.approved,
     });
+  }
+
+  async pendingApprovals(workspaceId: string, sessionId: string) {
+    const journal = await this.journal(workspaceId, sessionId);
+    return [...this.#approvals.values()].filter((pending) =>
+      pending.connection.workspaceId === workspaceId && pending.connection.sessionId === sessionId
+      && !pending.connection.closed && pending.sessionRevision === journal.epoch
+      && Date.parse(pending.request.expiresAt) > Date.now()).slice(0, 100).map(({ request, sessionRevision }) => ({
+        id: request.approvalId, sessionRevision, toolName: request.toolName,
+        preview: request.preview, expiresAt: request.expiresAt,
+      }));
   }
 
   async journal(workspaceId: string, sessionId: string): Promise<EventJournal> {
@@ -1714,6 +1814,10 @@ function capabilitiesForSession(
   if (activeBranch && isLive(session)) {
     if (canPrompt(session)) capabilities.push("command.prompt");
     capabilities.push("command.abort", "interaction.approval");
+    if (session.ownedWorker && session.snapshot?.modelControl && session.accessMode === "controller"
+      && !session.switching && !session.activating) {
+      capabilities.push("command.model");
+    }
   }
   return capabilities;
 }

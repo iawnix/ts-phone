@@ -11,13 +11,27 @@ summary lists only; selecting a project opens its conversation list, even when
 there is just one conversation. The sidebar switches conversations in the
 current project and returns home. Archive and recently deleted are list menus;
 Settings is on the home toolbar. The sidebar stays visible on wide screens.
-New conversations inherit the selected model configuration and belong to the
-current workspace. Advanced creation options remain in project management.
+New conversations use the Host default model and belong to the current
+workspace. Advanced creation can select another model explicitly.
 
 Opening history is read-only and does not start a Pi Worker. **Continue
 conversation** explicitly activates an offline managed session. Draft text stays
 editable while activation is pending; it is never sent automatically. Sending
 and stopping still require a current server-confirmed session and event stream.
+
+The chat header contains Back, a bounded title, workspace/status and More.
+Tap the title for the full name, rename and runtime details. More contains
+the sidebar, message synchronization and jump-to-start; new conversations live
+in the sidebar/list. Running activity stays in the timeline, not above the keyboard.
+
+The composer shows the current model and a picker above the system keyboard.
+Only idle Host-managed Controllers advertise model switching. Changes wait for
+Pi's exact receipt, preserve the draft/selection, and never change global Pi
+defaults. Pending messages, running work and approvals block switching. A lost
+receipt requires state reconciliation before sending; the app does not retry
+the change automatically. External CLI sessions show their model without a
+working switch control. The picker reads the Host's available-model catalog;
+credentials remain on the Host. Advanced creation uses the same picker.
 
 History starts with the latest 50 items. Earlier pages load on demand, with the
 existing explicit load-all action available for an audit. A bounded in-memory

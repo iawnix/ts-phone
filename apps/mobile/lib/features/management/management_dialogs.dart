@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/workspace.dart';
+import '../../models/phone_model.dart';
+import '../../data/ts_phone_api.dart';
+import '../chat/model_picker.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
@@ -33,14 +36,16 @@ Future<String?> showNameEditor(
   ),
 );
 
-Future<SessionDraft?> showSessionCreator(BuildContext context) =>
-    showModalBottomSheet<SessionDraft>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) => const _SessionCreatorSheet(),
-    );
+Future<SessionDraft?> showSessionCreator(
+  BuildContext context, {
+  TsPhoneModelGateway? models,
+}) => showModalBottomSheet<SessionDraft>(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  showDragHandle: true,
+  builder: (context) => _SessionCreatorSheet(models: models),
+);
 
 class _NameEditorSheet extends StatefulWidget {
   const _NameEditorSheet({
@@ -107,7 +112,8 @@ class _NameEditorSheetState extends State<_NameEditorSheet> {
 }
 
 class _SessionCreatorSheet extends StatefulWidget {
-  const _SessionCreatorSheet();
+  const _SessionCreatorSheet({this.models});
+  final TsPhoneModelGateway? models;
 
   @override
   State<_SessionCreatorSheet> createState() => _SessionCreatorSheetState();
@@ -115,13 +121,12 @@ class _SessionCreatorSheet extends StatefulWidget {
 
 class _SessionCreatorSheetState extends State<_SessionCreatorSheet> {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _modelController = TextEditingController();
+  PhoneModel? _model;
   SessionAccessMode _accessMode = SessionAccessMode.controller;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _modelController.dispose();
     super.dispose();
   }
 
@@ -131,7 +136,7 @@ class _SessionCreatorSheetState extends State<_SessionCreatorSheet> {
       SessionDraft(
         accessMode: _accessMode,
         name: _optionalText(_nameController.text),
-        model: _optionalText(_modelController.text),
+        model: _model?.reference,
       ),
     );
   }
@@ -174,11 +179,34 @@ class _SessionCreatorSheetState extends State<_SessionCreatorSheet> {
             ),
           ),
           const SizedBox(height: TsPhoneSpacing.small),
-          TextField(
-            controller: _modelController,
-            maxLength: 200,
-            autocorrect: false,
-            decoration: InputDecoration(labelText: context.l10n.modelOptional),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.tune_rounded),
+            title: Text(
+              _model?.name ?? context.l10n.hostDefaultModel,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: _model == null ? null : Text(_model!.provider),
+            trailing: _model == null
+                ? const Icon(Icons.chevron_right_rounded)
+                : IconButton(
+                    onPressed: () => setState(() => _model = null),
+                    tooltip: context.l10n.hostDefaultModel,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+            onTap: widget.models == null
+                ? null
+                : () async {
+                    final model = await showModelPicker(
+                      context,
+                      gateway: widget.models!,
+                      selected: _model?.reference,
+                    );
+                    if (mounted && model != null) {
+                      setState(() => _model = model);
+                    }
+                  },
           ),
           const SizedBox(height: TsPhoneSpacing.medium),
           FilledButton.icon(

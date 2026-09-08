@@ -2,7 +2,7 @@
 
 ## Current Source
 
-Mobile `0.17.1+44` opens a work home with recent conversations and projects,
+Mobile `0.18.0+45` opens a work home with recent conversations and projects,
 with explicit navigation, a session sidebar and a single expanding text
 composer. Cold start requests summary lists only. History opens without starting a
 Worker, requests the latest 50 items first, and retains the explicit load-all
@@ -12,7 +12,13 @@ Menus, typography, settings rows and technical details use one visual hierarchy.
 Empty assistant records have explicit output notices; consecutive activity
 records fold without hiding failures or removing history.
 
-This patch keeps pending prompt receipts across page navigation, reuses the
+This release adds the composer model picker, bounded session titles, and one
+set of conversation controls. Host `0.9.0` serves the Phone app and the TSPi
+`0.15.0` thin terminal through the same authenticated session APIs, including
+bounded approval and prompt-receipt queries. Provider credentials remain with
+the Worker. Terminal detach does not stop generation or remote calculations.
+
+It keeps pending prompt receipts across page navigation, reuses the
 original request identity for an explicit uncertain retry, and preserves newer
 draft edits when a late response arrives. Native back and the toolbar share
 the same route stack; back from an approval panel defers the decision. Model
@@ -22,9 +28,9 @@ narrow write permission; see `deployment.md`.
 
 Continue research now explicitly requests Controller access to the original
 conversation, without a visible CLI. Read-only assistant remains a separate
-choice. Server `0.8.0` checks launch identity and model readiness, confirms idle
+choice. Server `0.9.0` checks launch identity and model readiness, confirms idle
 session switches, and refuses to stop busy or externally owned runtimes. TSPi
-`0.14.0` acquires exact-session writer guards before Pi opens history. Activation
+`0.15.0` acquires exact-session writer guards before Pi opens history. Activation
 preserves drafts and uses a separate 90-second wait budget. Activation receipts
 are bounded in-memory state, not durable crash recovery. API v4, Events v3, and
 Bridge v3 remain unchanged; explicit activation is capability-negotiated.
