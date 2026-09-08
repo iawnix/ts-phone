@@ -166,7 +166,7 @@ ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/runtime-cache
 ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/session-host
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
 ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
-ReadWritePaths=-/home/iaw/.pi/agent
+ReadWritePaths=-%h/.pi/agent
 ~~~
 
 `ProtectHome=read-only` applies to TSPi child processes too. The explicit paths
@@ -176,10 +176,14 @@ service activation; its guards must remain writable for Worker children.
 Source testing outside the installer must prepare this directory explicitly.
 Pi also locks `auth.json` and `models-store.json` when reading them. The service
 must allow writing to the actual Pi agent directory, not just reading the
-credential file. The standard directory is `/home/iaw/.pi/agent`; when using
-`PI_CODING_AGENT_DIR`, set it in the Host environment and replace this one
-`ReadWritePaths` entry with the selected directory. TUI, Workers and subagents
-must use the same selection. Do not copy credentials into each workspace.
+credential file. The standard directory is `~/.pi/agent` for the user running
+the Host. In a user service, `%h` expands to that user's Home; do not write
+literal `~` or `$HOME` in `ReadWritePaths`, which is not a shell command.
+When using `PI_CODING_AGENT_DIR`, set it in the Host environment and replace
+this one `ReadWritePaths` entry with the selected absolute directory. Changing
+the environment variable does not update systemd's filesystem allowlist.
+TUI, Workers and subagents must use the same selection. Do not copy credentials
+into each workspace.
 Prepare a private directory before activation; preserve existing credentials.
 Workers use `PI_OFFLINE=1` to avoid startup catalog/package downloads. Model
 requests and required provider authentication still use the network.
