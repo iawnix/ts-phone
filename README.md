@@ -17,7 +17,7 @@ TSPi; it is not a general-purpose Pi client or a research runtime by itself.
 - Browse live and persisted Pi sessions, including earlier conversation branches.
 - Create, rename, archive, restore, and delete projects and conversations.
 - Follow messages, tool calls, research activity, failures, and run status over SSE.
-- Send from Phone or terminal into one workspace queue; choose the model for the next message.
+- Send from Phone or terminal into one workspace queue; choose the model for new and waiting messages.
 - See the active model and Pi's context-window estimate when the Bridge reports them.
 - Use an English or Chinese interface with light and dark themes, large text, and reduced motion.
 

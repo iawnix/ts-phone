@@ -306,6 +306,14 @@ class ChatController extends ChangeNotifier {
   bool get queueEnabled =>
       queueGateway != null && _capabilities.contains('command.queue');
   List<QueuedCommand> get queuedCommands => _queuedCommands;
+  List<QueuedCommand> get pendingCommands => _queuedCommands
+      .where((command) => command.isPending)
+      .toList(growable: false);
+  List<QueuedCommand> get recentCommandResults => _queuedCommands
+      .where((command) => command.isTerminal)
+      .toList(growable: false);
+  int get pendingCommandCount =>
+      _queuedCommands.where((command) => command.isPending).length;
   String? get queueProblem => _queueProblem;
   bool get loadingEarlierMessages => _loadingEarlierMessages;
   bool get loadingAllHistory => _loadingAllHistory;

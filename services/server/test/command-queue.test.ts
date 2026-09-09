@@ -49,6 +49,25 @@ test("queued commands can be cancelled; acknowledged dispatch cannot", async () 
   } finally { await queue.close(); }
 });
 
+test("retargeting changes only queued commands and preserves active execution models", async () => {
+  const queue = await CommandQueue.open(await mkdtemp(join(tmpdir(), "ts-phone-queue-")));
+  let ready = false;
+  queue.connect({ready: () => ready, changed: () => {}, dispatch: async () => {}});
+  try {
+    await queue.enqueue("ws", "session", input("running"), "test/old");
+    await queue.enqueue("ws", "session", input("waiting"), "test/old");
+    ready = true;
+    queue.wake("ws");
+    await until(() => queue.find("ws", "session", "running")?.status === "running");
+    assert.equal(await queue.retargetQueued("ws", "session", "test/new"), 1);
+    assert.equal(queue.find("ws", "session", "running")?.model, "test/old");
+    assert.equal(queue.find("ws", "session", "waiting")?.model, "test/new");
+    queue.settle("ws", "session", "running", {status: "completed"});
+    await until(() => queue.find("ws", "session", "waiting")?.status === "running");
+    assert.equal(queue.find("ws", "session", "waiting")?.model, "test/new");
+  } finally { await queue.close(); }
+});
+
 test("restart preserves queued work and durable deduplication but never replays an uncertain command", async () => {
   const dir = await mkdtemp(join(tmpdir(), "ts-phone-queue-"));
   const first = await CommandQueue.open(dir);

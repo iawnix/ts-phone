@@ -74,4 +74,16 @@ class QueuedCommand {
   final String? preview;
   final String? model;
   final String? problem;
+
+  /// Requests in these states still occupy a workspace lane. Terminal
+  /// receipts are history and must not be counted as pending work.
+  bool get isPending => switch (status) {
+    CommandStatus.queued ||
+    CommandStatus.starting ||
+    CommandStatus.running ||
+    CommandStatus.unknown => true,
+    _ => false,
+  };
+
+  bool get isTerminal => !isPending;
 }

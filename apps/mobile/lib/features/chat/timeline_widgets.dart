@@ -495,6 +495,7 @@ Widget _timelineItemView(SessionTimelineItem item) => switch (item) {
   TimelineMessageItem(:final message) => ChatMessageView(
     key: ValueKey('timeline-message-${item.id}'),
     message: message,
+    animate: false,
   ),
   TimelineActivityItem(:final activity) => TimelineActivityView(
     key: ValueKey('timeline-activity-${item.id}'),

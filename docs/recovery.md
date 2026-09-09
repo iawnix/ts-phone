@@ -147,7 +147,9 @@ its Workers, not external CLIs.
 The request list shows waiting, starting, running and interrupted requests.
 Waiting requests may be cancelled. Stopping generation is a separate action;
 neither cancels remote jobs. Requests run even after the submitting client
-disconnects. Model selection affects future admissions, not existing requests.
+disconnects. A next-turn model selection updates future admissions and retargets
+requests that are still queued for that conversation. Requests already starting,
+running or marked unknown keep the model recorded at execution time.
 
 A lost admission response is reconciled through the exact message ID. Only
 `durable:true` confirms the Host saved a queue request; missing data or a legacy

@@ -25,13 +25,16 @@ the sidebar, message synchronization and jump-to-start; new conversations live
 in the sidebar/list. Running activity stays in the timeline, not above the keyboard.
 
 The composer shows the current model and a picker above the system keyboard.
-Only idle Host-managed Controllers advertise model switching. Changes wait for
-Pi's exact receipt, preserve the draft/selection, and never change global Pi
-defaults. Pending messages, running work and approvals block switching. A lost
-receipt requires state reconciliation before sending; the app does not retry
-the change automatically. External CLI sessions show their model without a
-working switch control. The picker reads the Host's available-model catalog;
-credentials remain on the Host. Advanced creation uses the same picker.
+Only Host-managed Controllers advertise model switching. Immediate changes wait
+for Pi's exact receipt, preserve the draft/selection, and never change global Pi
+defaults; pending messages, running work and approvals block that mode. Queue
+capable conversations can choose a next-turn model while a turn runs, and the
+Host retargets messages that are still waiting. A lost receipt requires state
+reconciliation before sending; the app does not retry the change automatically.
+External CLI sessions show their model without a working switch control. The
+picker reads the Host's available-model catalog; credentials remain on the Host.
+Advanced creation uses the same picker. A request already running keeps the
+model it started with and remains visible as such in request history.
 
 History starts with the latest 50 items. Earlier pages load on demand, with the
 existing explicit load-all action available for an audit. A bounded in-memory

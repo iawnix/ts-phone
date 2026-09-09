@@ -1033,6 +1033,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get commandQueuePending => 'Pending requests';
+
+  @override
+  String get commandQueueRecent => 'Recent results';
+
+  @override
   String get commandQueueEmpty => 'No pending requests';
 
   @override
@@ -1072,7 +1078,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Confirm that you have checked this request\'s conversation and outputs. This releases later requests without repeating this one or claiming that it succeeded. Its uncertain runtime must already be stopped.';
 
   @override
-  String get modelNextTurn => 'Model for the next message';
+  String get modelNextTurn => 'Model for new and waiting messages';
 
   @override
   String get filterConversations => 'Filter conversations';

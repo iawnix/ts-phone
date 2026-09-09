@@ -372,8 +372,10 @@ identities, display names and context limits, never credentials/provider URLs.
 With `command.queue`, `POST .../sessions/:sessionId/model` and `nextTurn:true`
 validate and persist a catalog model for future message admission. It works
 while generating and with inactive history, without starting a Worker or
-changing its current model. The admitted request snapshots that preference;
-dispatch applies it through Pi's exact model RPC before sending the prompt.
+changing its current model. Waiting requests for that conversation are
+retargeted to the new model; a request that has started keeps its original
+model as an immutable execution record. Dispatch applies the selected model
+through Pi's exact model RPC before sending the prompt.
 Runtime details continue to describe the actual running model, while the
 composer displays `nextModel`.
 

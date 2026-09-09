@@ -967,6 +967,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get commandQueuePending => '待处理请求';
+
+  @override
+  String get commandQueueRecent => '最近结果';
+
+  @override
   String get commandQueueEmpty => '没有等待的请求';
 
   @override
@@ -1006,7 +1012,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '请确认已检查这条请求的会话历史与输出。确认后仅放行后续请求，不会重发本条，也不会将其记为执行成功。原有不确定状态的进程必须已经停止。';
 
   @override
-  String get modelNextTurn => '下一条消息使用的模型';
+  String get modelNextTurn => '新消息及等待中消息使用的模型';
 
   @override
   String get filterConversations => '筛选会话';

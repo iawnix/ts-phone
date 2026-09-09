@@ -3,7 +3,8 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderBox, ScrollDirection;
+import 'package:flutter/rendering.dart'
+    show RenderBox, ScrollCacheExtent, ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
@@ -1296,7 +1297,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     ),
                   ),
                 if (_controller.queueEnabled &&
-                    (_controller.queuedCommands.isNotEmpty ||
+                    (_controller.pendingCommandCount > 0 ||
+                        _controller.recentCommandResults.isNotEmpty ||
                         _controller.queueProblem != null))
                   Align(
                     alignment: Alignment.centerLeft,
@@ -1305,9 +1307,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       onPressed: () => showCommandQueue(context, _controller),
                       icon: const Icon(Icons.playlist_play_rounded, size: 22),
                       label: Text(
-                        context.l10n.commandQueueCount(
-                          _controller.queuedCommands.length,
-                        ),
+                        _controller.pendingCommandCount > 0
+                            ? context.l10n.commandQueueCount(
+                                _controller.pendingCommandCount,
+                              )
+                            : context.l10n.commandQueue,
                       ),
                     ),
                   ),
@@ -2160,6 +2164,7 @@ class _MessageTimeline extends StatelessWidget {
                 'chat-message-${controller.messageKeyAt(messageIndex)}',
               ),
               message: messages[messageIndex],
+              animate: false,
             );
           },
         );
@@ -2242,6 +2247,11 @@ class _MessageTimeline extends StatelessWidget {
           key: const ValueKey<String>('chat-message-list'),
           controller: scrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          // Keep a small off-screen working set. Older pages remain available
+          // through the cursor controls without forcing Flutter to retain and
+          // repaint a large speculative cache during long conversations.
+          scrollCacheExtent: ScrollCacheExtent.pixels(180),
+          addAutomaticKeepAlives: false,
           padding: EdgeInsets.fromLTRB(0, 8, 0, bottomContentInset + 8),
           itemCount:
               itemCount +

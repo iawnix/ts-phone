@@ -137,6 +137,30 @@ export class CommandQueue {
     return result;
   }
 
+  /**
+   * Move only commands that have not started to a newly selected model.
+   *
+   * A queued command is still an intent, so changing the next-turn model
+   * should change the model that will actually receive that intent. Once a
+   * command has started, its model is part of the execution record and must
+   * remain immutable for auditability.
+   */
+  async retargetQueued(workspaceId: string, sessionId: string, model: string): Promise<number> {
+    const changed = await this.#mutate((next) => {
+      let count = 0;
+      for (const command of next) {
+        if (command.workspaceId !== workspaceId || command.sessionId !== sessionId || command.status !== "queued") continue;
+        if (command.model === model) continue;
+        command.model = model;
+        command.updatedAt = new Date().toISOString();
+        count += 1;
+      }
+      return count;
+    });
+    if (changed > 0) this.#hooks?.changed(workspaceId);
+    return changed;
+  }
+
   async cancel(workspaceId: string, sessionId: string, id: string): Promise<CommandReceipt> {
     const result = await this.#mutate((next) => {
       const command = requireCommand(next, workspaceId, sessionId, id);
@@ -230,14 +254,16 @@ export class CommandQueue {
       if (!command || !this.#hooks!.ready(command)) return;
       const started = await this.#mutate((next) => {
         const current = requireCommand(next, workspaceId, command.sessionId, command.clientMessageId);
-        if (current.status !== "queued" || this.#closed || !this.#hooks!.ready(current)) return false;
+        if (current.status !== "queued" || this.#closed || !this.#hooks!.ready(current)) return undefined;
         update(current, "starting");
-        return true;
+        // Dispatch exactly the record frozen by this transition. A queued
+        // model change may have replaced the earlier lane snapshot.
+        return { ...current };
       });
       if (!started) continue;
       this.#hooks!.changed(workspaceId);
       try {
-        await this.#hooks!.dispatch({ ...command });
+        await this.#hooks!.dispatch(started);
         await this.#mutate((next) => {
           const current = requireCommand(next, workspaceId, command.sessionId, command.clientMessageId);
           if (current.status === "starting") update(current, "running");

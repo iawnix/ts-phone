@@ -65,8 +65,8 @@ test("queued sends start inactive conversations and transfer execution only afte
   } finally { await f.application.close(); }
 });
 
-test("model preference is read-only for the runtime and is frozen separately on each queued send", async () => {
-  const f = await fixture({modelControl: true, turnDelayMs: 150});
+test("next-turn model preference retargets waiting sends while preserving the running send", async () => {
+  const f = await fixture({modelControl: true, turnDelayMs: 4000});
   try {
     const created = await f.hub.createWorkspace({name: "Next-turn models"});
     const id = created.workspace.id;
@@ -76,10 +76,11 @@ test("model preference is read-only for the runtime and is frozen separately on 
     await f.hub.enqueue(id, s.sessionId, {sessionRevision: s.sessionRevision, clientMessageId: "first-model", message: "first"});
     await waitFor(async () => (await f.hub.listSessions(id))[0]?.runtimeState === "running");
     const running = (await f.hub.listSessions(id))[0]!;
+    await f.hub.enqueue(id, s.sessionId, {sessionRevision: running.sessionRevision, clientMessageId: "second-model", message: "second"});
     const selected = await f.hub.setModel(id, s.sessionId, {sessionRevision: running.sessionRevision, provider: "test", modelId: "fake-model", nextTurn: true});
     assert.equal(selected.nextModel, "test/fake-model");
     assert.equal(selected.model, "test/second");
-    await f.hub.enqueue(id, s.sessionId, {sessionRevision: running.sessionRevision, clientMessageId: "second-model", message: "second"});
+    assert.equal(f.hub.commandQueue?.find(id, s.sessionId, "second-model")?.model, "test/fake-model");
     await waitFor(async () => (await f.hub.promptReceipt(id, s.sessionId, "second-model", running.sessionRevision)).status === "completed");
     const prompts = (await readFile(`${f.config.tspiPath}.prompts`, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
     assert.deepEqual(prompts.map((p) => p.model), ["second", "fake-model"]);

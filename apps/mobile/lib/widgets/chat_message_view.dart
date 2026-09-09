@@ -12,17 +12,24 @@ import 'activity_label.dart';
 import 'ts_phone_brand_mark.dart';
 
 class ChatMessageView extends StatelessWidget {
-  const ChatMessageView({super.key, required this.message});
+  const ChatMessageView({
+    super.key,
+    required this.message,
+    this.animate = true,
+  });
 
   final ChatMessage message;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == ChatRole.user;
     final hasNarrative = message.text.trim().isNotEmpty;
     if (!isUser && !hasNarrative && message.tools.isEmpty) {
-      return _OutputNotice(
-        state: message.outputState ?? AssistantOutputState.empty,
+      return RepaintBoundary(
+        child: _OutputNotice(
+          state: message.outputState ?? AssistantOutputState.empty,
+        ),
       );
     }
     final content = Column(
@@ -37,10 +44,7 @@ class ChatMessageView extends StatelessWidget {
           _OutputNotice(state: message.outputState!),
       ],
     );
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.standard),
-      curve: Curves.easeOut,
+    final frame = RepaintBoundary(
       child: _MessageFrame(
         isUser: isUser,
         origin: message.origin,
@@ -49,6 +53,13 @@ class ChatMessageView extends StatelessWidget {
         showAssistantAttribution: false,
         child: content,
       ),
+    );
+    if (!animate) return frame;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.standard),
+      curve: Curves.easeOut,
+      child: frame,
       builder: (context, value, child) => Opacity(
         opacity: value,
         child: Transform.translate(

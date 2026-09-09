@@ -85,9 +85,10 @@ class _CommandQueueSheetState extends State<_CommandQueueSheet> {
                     code: controller.queueProblem,
                   ),
                 ));
-      final commands = controller.queuedCommands;
+      final pending = controller.pendingCommands;
+      final recent = controller.recentCommandResults;
       return SizedBox(
-        height: math.min(560, MediaQuery.sizeOf(context).height * .7),
+        height: math.min(620, MediaQuery.sizeOf(context).height * .78),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -107,84 +108,50 @@ class _CommandQueueSheetState extends State<_CommandQueueSheet> {
                 ),
               ),
             Expanded(
-              child: commands.isEmpty
+              child: pending.isEmpty && recent.isEmpty
                   ? Center(child: Text(l10n.commandQueueEmpty))
-                  : ListView.separated(
+                  : ListView(
                       padding: const EdgeInsets.only(bottom: 24),
-                      itemCount: commands.length,
-                      separatorBuilder: (_, _) =>
-                          const Divider(height: 1, indent: 20, endIndent: 20),
-                      itemBuilder: (context, index) {
-                        final command = commands[index];
-                        final label = switch (command.status) {
-                          CommandStatus.queued => l10n.commandQueued(
-                            command.position ?? index + 1,
+                      children: <Widget>[
+                        if (pending.isNotEmpty) ...<Widget>[
+                          _QueueSectionHeader(
+                            icon: Icons.hourglass_top_rounded,
+                            label: l10n.commandQueuePending,
+                            count: pending.length,
                           ),
-                          CommandStatus.starting => l10n.commandStarting,
-                          CommandStatus.running => l10n.commandRunning,
-                          CommandStatus.completed => l10n.commandCompleted,
-                          CommandStatus.failed => l10n.commandFailed,
-                          CommandStatus.cancelled => l10n.commandCancelled,
-                          CommandStatus.unknown => l10n.commandUnknown,
-                          CommandStatus.acknowledged =>
-                            l10n.commandAcknowledged,
-                        };
-                        final icon = switch (command.status) {
-                          CommandStatus.queued => Icons.schedule_outlined,
-                          CommandStatus.starting ||
-                          CommandStatus.running => Icons.play_arrow_outlined,
-                          CommandStatus.unknown ||
-                          CommandStatus.failed => Icons.error_outline_rounded,
-                          _ => Icons.check_rounded,
-                        };
-                        return ListTile(
-                          key: ValueKey(
-                            'command-${command.sessionId}-${command.id}',
+                          for (var index = 0; index < pending.length; index++)
+                            _commandTile(
+                              context,
+                              pending[index],
+                              controller,
+                              colors,
+                              index,
+                            ),
+                        ] else
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                            child: Text(
+                              l10n.commandQueueEmpty,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.onSurfaceVariant),
+                            ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 6,
+                        if (recent.isNotEmpty) ...<Widget>[
+                          _QueueSectionHeader(
+                            icon: Icons.history_rounded,
+                            label: l10n.commandQueueRecent,
+                            count: recent.length,
                           ),
-                          leading: Icon(icon, color: colors.onSurfaceVariant),
-                          title: Text(
-                            command.preview ?? label,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            [
-                              label,
-                              if (command.model != null) command.model!,
-                              if (command.sessionId != null &&
-                                  command.sessionId != controller.sessionId)
-                                command.sessionId!,
-                              if (command.problem != null)
-                                describeTsPhoneProblem(
-                                  TsPhoneApiException(
-                                    'Command failed',
-                                    code: command.problem,
-                                  ),
-                                ).localizedMessage(l10n),
-                            ].join('\n'),
-                          ),
-                          trailing:
-                              command.status == CommandStatus.queued ||
-                                  command.status == CommandStatus.unknown
-                              ? IconButton(
-                                  onPressed: _busy ? null : () => _act(command),
-                                  tooltip:
-                                      command.status == CommandStatus.unknown
-                                      ? l10n.acknowledgeRequest
-                                      : l10n.cancelQueuedRequest,
-                                  icon: Icon(
-                                    command.status == CommandStatus.unknown
-                                        ? Icons.fact_check_outlined
-                                        : Icons.close_rounded,
-                                  ),
-                                )
-                              : null,
-                        );
-                      },
+                          for (var index = 0; index < recent.length; index++)
+                            _commandTile(
+                              context,
+                              recent[index],
+                              controller,
+                              colors,
+                              index,
+                            ),
+                        ],
+                      ],
                     ),
             ),
           ],
@@ -192,4 +159,129 @@ class _CommandQueueSheetState extends State<_CommandQueueSheet> {
       );
     },
   );
+
+  Widget _commandTile(
+    BuildContext context,
+    QueuedCommand command,
+    ChatController controller,
+    ColorScheme colors,
+    int index,
+  ) {
+    final label = switch (command.status) {
+      CommandStatus.queued => context.l10n.commandQueued(
+        command.position ?? index + 1,
+      ),
+      CommandStatus.starting => context.l10n.commandStarting,
+      CommandStatus.running => context.l10n.commandRunning,
+      CommandStatus.completed => context.l10n.commandCompleted,
+      CommandStatus.failed => context.l10n.commandFailed,
+      CommandStatus.cancelled => context.l10n.commandCancelled,
+      CommandStatus.unknown => context.l10n.commandUnknown,
+      CommandStatus.acknowledged => context.l10n.commandAcknowledged,
+    };
+    final icon = switch (command.status) {
+      CommandStatus.queued => Icons.schedule_outlined,
+      CommandStatus.starting ||
+      CommandStatus.running => Icons.play_arrow_outlined,
+      CommandStatus.unknown ||
+      CommandStatus.failed => Icons.error_outline_rounded,
+      _ => Icons.check_rounded,
+    };
+    final details = <String>[
+      label,
+      if (command.model != null) command.model!,
+      if (command.sessionId != null &&
+          command.sessionId != controller.sessionId)
+        command.sessionId!,
+      if (command.problem != null)
+        describeTsPhoneProblem(
+          TsPhoneApiException('Command failed', code: command.problem),
+        ).localizedMessage(context.l10n),
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        ListTile(
+          key: ValueKey('command-${command.sessionId}-${command.id}'),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 5,
+          ),
+          leading: Icon(
+            icon,
+            color: command.status == CommandStatus.failed
+                ? colors.error
+                : colors.onSurfaceVariant,
+          ),
+          title: Text(
+            command.preview ?? label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            details.join('\n'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing:
+              command.status == CommandStatus.queued ||
+                  command.status == CommandStatus.unknown
+              ? IconButton(
+                  onPressed: _busy ? null : () => _act(command),
+                  tooltip: command.status == CommandStatus.unknown
+                      ? context.l10n.acknowledgeRequest
+                      : context.l10n.cancelQueuedRequest,
+                  icon: Icon(
+                    command.status == CommandStatus.unknown
+                        ? Icons.fact_check_outlined
+                        : Icons.close_rounded,
+                  ),
+                )
+              : null,
+        ),
+        const Divider(height: 1, indent: 20, endIndent: 20),
+      ],
+    );
+  }
+}
+
+class _QueueSectionHeader extends StatelessWidget {
+  const _QueueSectionHeader({
+    required this.icon,
+    required this.label,
+    required this.count,
+  });
+
+  final IconData icon;
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 17, color: colors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Text(
+            '$count',
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
 }

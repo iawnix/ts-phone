@@ -242,8 +242,13 @@ export class WorkspaceHub {
       if (!this.#queueSupported(session) || session.activating || this.#closing) {
         throw new HttpError(409, "session_not_ready", "Conversation changed while selecting its next-turn model");
       }
+      const reference = `${model.provider}/${model.id}`;
+      // A queued intent has not started yet, so it follows the newly selected
+      // next-turn model. Running/unknown receipts stay bound to their original
+      // model and remain an immutable execution record.
+      await this.commandQueue?.retargetQueued(workspaceId, sessionId, reference);
       await this.#management.rememberSessionModel(workspaceId, this.#workspaceName(workspace), sessionId,
-        `${model.provider}/${model.id}`, this.#sessionDefaults(session));
+        reference, this.#sessionDefaults(session));
       this.#publishState(session);
       return this.#sessionSummary(session);
     });

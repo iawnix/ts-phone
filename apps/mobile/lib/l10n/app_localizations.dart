@@ -1904,6 +1904,18 @@ abstract class AppLocalizations {
   /// **'Requests · {count}'**
   String commandQueueCount(int count);
 
+  /// No description provided for @commandQueuePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending requests'**
+  String get commandQueuePending;
+
+  /// No description provided for @commandQueueRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent results'**
+  String get commandQueueRecent;
+
   /// No description provided for @commandQueueEmpty.
   ///
   /// In en, this message translates to:
@@ -1979,7 +1991,7 @@ abstract class AppLocalizations {
   /// No description provided for @modelNextTurn.
   ///
   /// In en, this message translates to:
-  /// **'Model for the next message'**
+  /// **'Model for new and waiting messages'**
   String get modelNextTurn;
 
   /// No description provided for @filterConversations.
