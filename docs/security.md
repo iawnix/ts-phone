@@ -23,6 +23,9 @@ environment variables, model credentials, or raw Pi RPC. It does expose fixed
 project/session lifecycle actions. With `TS_PHONE_TSPI` configured, a valid
 Bearer token can create a workspace directory, start or stop Host-owned TSPi
 Workers, archive or trash resources, and request permanent deletion.
+Queue admission is also controller authorization: Host may start this
+conversation after earlier work finishes, even if the submitting client has
+disconnected. Browsing alone never starts a Worker or requests a write lock.
 
 The Host validates names, IDs, lifecycle revisions, and the fixed TSPi
 entrypoint; these checks do not make the token low privilege. A valid token can
@@ -42,7 +45,7 @@ this allowlist. All other tools fail closed. The broker also
 rejects any approval request from an observer.
 
 Permanent project deletion additionally requires an exact-ID confirmation and
-a current TSPi preflight showing no active Worker, remote calculation, pending
+a current TSPi preflight showing no active Worker, queued request, remote calculation, pending
 approval, or unresolved remote effect. Any preflight or operational-integrity
 failure blocks the action. A manually launched Root Agent also blocks deletion,
 even without a Bridge connection. Host mutations retain TSPi's writer lock
@@ -74,14 +77,27 @@ The TSPi launcher and broker enforce complementary controls:
 With `TS_PHONE_TSPI` configured, the Host verifies a Bridge's PID and mode against
 the launcher's held OS guards. Host-owned launches additionally bind a private
 launch ID; unknown IDs cannot masquerade as external CLIs. Saved preferences do
-not grant live authority. Busy, queued or external runtimes cannot be silently
-stopped, and idle switches require the source session revision. Without a fixed
+not grant live authority. The normal clients share one workspace execution
+queue; the dispatcher may transfer an idle Host-owned Controller using its
+current revision. It never stops a busy, uncertain or external runtime. Legacy
+activation remains explicitly revision-fenced. Without a fixed
 launcher, manual Bridge-only transport retains its local-account trust boundary
 but cannot provide guarded Host activation or deletion.
 
 The local service account is
 inside the trust boundary: a malicious process running as that same Unix user
 can access workspace files and local capabilities independently of TS Phone.
+
+`commands.json` is private operational state, mode 0600 inside the owner-only
+Host state directory. Pending requests include their full message; terminal
+receipts retain a digest and at most 240 characters of preview, never provider
+credentials. Do not commit, log or publicly distribute this store. Atomic writes
+and fsync confirm admission, not exactly-once execution across a process crash.
+An uncertain command blocks its workspace until explicit acknowledgement after
+inspection and runtime shutdown. Cancellation applies only before dispatch and
+cannot cancel a remote calculation. Storage damage fails closed.
+Permanent conversation or project deletion also removes its terminal command
+receipts and previews. Archive and Recently Deleted retain them for restoration.
 
 ## Disk History Boundary
 
@@ -125,8 +141,9 @@ or the iOS Keychain. Possession grants the complete phone API. Current limits:
 
 Because controller Tool calls do not require a second confirmation, disclosure
 of the shared Bearer token can lead to full controller actions in every live
-controller session. Observer sessions remain the appropriate mode for
-read-only access.
+controller session. An explicitly started standalone Observer still restricts
+its own tools, but is not a read-only credential: the shared token can enqueue
+a Controller request. Separate low-privilege accounts are not implemented.
 
 Rotate auth.token and re-pair all devices after suspected disclosure. Never put
 tokens in Nginx, FRP, screenshots, shell history, chat, or source control.

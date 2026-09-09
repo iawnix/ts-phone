@@ -6,6 +6,8 @@ import '../../models/session_timeline.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/chat_message_view.dart';
 import '../../widgets/presentation.dart';
+import '../../widgets/text_detail_view.dart';
+import '../../navigation/adaptive_page_route.dart';
 import 'chat_controller.dart';
 
 enum TimelineViewFilter { all, messages, activities }
@@ -507,15 +509,18 @@ class _ActivityRun extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final failed = items.any(
-      (item) => switch (item) {
-        TimelineActivityItem(:final activity) =>
-          activity.status == TimelineActivityStatus.failed,
-        TimelineMessageItem(:final message) =>
-          message.outputState == AssistantOutputState.failed ||
-              message.tools.any((tool) => tool.isError),
-      },
-    );
+    final failedCount = items
+        .where(
+          (item) => switch (item) {
+            TimelineActivityItem(:final activity) =>
+              activity.status == TimelineActivityStatus.failed,
+            TimelineMessageItem(:final message) =>
+              message.outputState == AssistantOutputState.failed ||
+                  message.tools.any((tool) => tool.isError),
+          },
+        )
+        .length;
+    final failed = failedCount > 0;
     final stopped = items.any(
       (item) =>
           item is TimelineMessageItem &&
@@ -539,13 +544,34 @@ class _ActivityRun extends StatelessWidget {
       ),
       subtitle: failed
           ? Text(
-              context.l10n.timelineFailed,
+              context.l10n.activityFailureCount(failedCount),
               style: TextStyle(color: colors.error),
             )
           : stopped
           ? Text(context.l10n.messageGenerationAborted)
           : null,
-      children: [for (final item in items) _timelineItemView(item)],
+      children: [
+        for (final item in items.take(8)) _timelineItemView(item),
+        if (items.length > 8)
+          TextButton.icon(
+            icon: const Icon(Icons.list_alt_outlined, size: 18),
+            label: Text(context.l10n.viewAllActivities(items.length)),
+            onPressed: () => pushTsPhonePage<void>(
+              context: context,
+              builder: (context) => Scaffold(
+                appBar: AppBar(
+                  title: Text(context.l10n.activityRecords(items.length)),
+                ),
+                body: SafeArea(
+                  child: ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (_, index) => _timelineItemView(items[index]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -645,17 +671,11 @@ class TimelineActivityView extends StatelessWidget {
                       tilePadding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
                       childrenPadding: const EdgeInsets.fromLTRB(42, 0, 12, 10),
                       title: summary,
-                      trailing: Icon(
-                        Icons.expand_more_rounded,
-                        color: colors.onSurfaceVariant,
-                      ),
                       children: <Widget>[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: SelectableText(
-                            details.join('\n'),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                        TextDetailPreview(
+                          text: details.join('\n'),
+                          title: primaryDetail,
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),

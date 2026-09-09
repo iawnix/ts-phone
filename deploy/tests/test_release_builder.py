@@ -41,6 +41,7 @@ from release_builder import (  # noqa: E402
     validate_mobile_build_attestation,
     validate_apk_badging,
     validate_protocol_documents,
+    validate_lifecycle_definition,
     verify_apk,
     verify_clean_captured_source_tree,
     write_mobile_build_attestation,
@@ -707,6 +708,18 @@ class ReleaseBuilderTests(unittest.TestCase):
             (root / "packages" / "protocol" / "events.schema.json").write_text("{}\n", encoding="utf-8")
             with self.assertRaisesRegex(ComponentReleaseError, "events protocol schema"):
                 validate_protocol_documents(root, "0.4.1")
+
+    def test_lifecycle_outcome_metadata_remains_bounded_and_private(self) -> None:
+        source = (DEPLOY.parent / "packages" / "protocol" / "events.schema.json").read_text(encoding="utf-8")
+        for field, replacement in (
+            ("attempt", {"type": "integer"}),
+            ("outcome", {"type": "object"}),
+            ("errorBody", {"type": "string"}),
+        ):
+            document = json.loads(source)
+            document["$defs"]["agentRunEvent"]["properties"][field] = replacement
+            with self.assertRaisesRegex(ComponentReleaseError, "lifecycle"):
+                validate_lifecycle_definition(document, "events")
 
     def test_protocol_validation_rejects_a_semantically_empty_bridge_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

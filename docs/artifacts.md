@@ -2,7 +2,7 @@
 
 ## Current Source
 
-Mobile `0.18.1+46` opens a work home with recent conversations and projects,
+Mobile `0.18.2+47` opens a work home with recent conversations and projects,
 with explicit navigation, a session sidebar and a single expanding text
 composer. Cold start requests summary lists only. History opens without starting a
 Worker, requests the latest 50 items first, and retains the explicit load-all
@@ -12,8 +12,15 @@ Menus, typography, settings rows and technical details use one visual hierarchy.
 Empty assistant records have explicit output notices; consecutive activity
 records fold without hiding failures or removing history.
 
-This release adds the composer model picker, bounded session titles, and one
-set of conversation controls. Host `0.9.0` serves the Phone app and the TSPi
+History navigation now supersedes stale page replies and cancels the old HTTP
+event stream without blocking the tail read. Long output uses bounded previews
+and a separate full-output page; render failures remain reported but occupy a
+bounded visible error row. Project and conversation lifecycle lists are separate,
+with explicit current, archived, and recently deleted selections.
+
+The composer selects a model for future messages, even while generating or
+viewing inactive history. The model-list path now has exactly one API prefix.
+Host `0.9.1` serves the Phone app and the TSPi
 `0.15.0` thin terminal through the same authenticated session APIs, including
 bounded approval and prompt-receipt queries. Provider credentials remain with
 the Worker. Terminal detach does not stop generation or remote calculations.
@@ -29,14 +36,17 @@ storage failures now have a distinct diagnostic instead of appearing as missing
 models or credentials. Host deployment must include the selected Pi directory's
 narrow write permission; see `deployment.md`.
 
-Continue research now explicitly requests Controller access to the original
-conversation, without a visible CLI. Read-only assistant remains a separate
-choice. Server `0.9.0` checks launch identity and model readiness, confirms idle
-session switches, and refuses to stop busy or externally owned runtimes. TSPi
+Normal conversations no longer require Continue or a read-only/research mode
+choice. Send persists a request in the Host workspace queue; several clients
+can read and submit while only one turn executes per workspace. The request
+list supports cancellation before dispatch and explicit acknowledgement after
+inspecting an uncertain outcome. Restart never replays in-flight requests.
+Server `0.9.1` checks launch identity and model readiness, transfers only idle
+Host-owned execution, and refuses to stop busy or external runtimes. TSPi
 `0.15.0` acquires exact-session writer guards before Pi opens history. Activation
 preserves drafts and uses a separate 90-second wait budget. Activation receipts
-are bounded in-memory state, not durable crash recovery. API v4, Events v3, and
-Bridge v3 remain unchanged; explicit activation is capability-negotiated.
+are bounded in-memory state; command.queue receipts are separate durable state.
+API v4, Events v3, and Bridge v3 remain unchanged; queue use is capability-negotiated.
 
 Build with `apps/mobile/tool/build_release_android.sh --allow-dirty` while
 reviewing an uncommitted change, or omit the flag after commit. Local artifacts

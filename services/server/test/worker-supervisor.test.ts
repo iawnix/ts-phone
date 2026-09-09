@@ -161,7 +161,10 @@ test("concurrent starts after capability probing share exactly one owned process
   const supervisor = new WorkerSupervisor(executable, 1000, join(root, "socket"), join(root, "secret"));
   const request = { workspaceId: "ts_001", sessionId: "session_1", accessMode: "controller" as const, launchId: "one-launch" };
   try {
-    const [left, right] = await Promise.all([supervisor.start(request), supervisor.start(request)]);
+    const first = supervisor.start(request);
+    await assert.rejects(() => supervisor.start({ ...request, launchId: "different-launch" }),
+      (error: unknown) => error instanceof HttpError && error.code === "worker_identity_conflict");
+    const [left, right] = await Promise.all([first, supervisor.start(request)]);
     assert.equal(left.exit, right.exit);
     assert.deepEqual(supervisor.request(request.workspaceId, request.sessionId), request);
     await assert.rejects(() => supervisor.start({ ...request, launchId: "different-launch" }),

@@ -6,7 +6,7 @@
 
 TS Phone is the mobile companion for [TSPi](https://github.com/iawnix/TSPi).
 It lets you browse transition-state research workspaces, follow Pi sessions,
-and continue a live conversation from your phone.
+and continue a conversation from your phone without keeping a terminal open.
 
 This repository contains the Flutter app, a small TypeScript broker, the shared
 protocol definitions, and component release tooling. TS Phone runs alongside
@@ -17,6 +17,7 @@ TSPi; it is not a general-purpose Pi client or a research runtime by itself.
 - Browse live and persisted Pi sessions, including earlier conversation branches.
 - Create, rename, archive, restore, and delete projects and conversations.
 - Follow messages, tool calls, research activity, failures, and run status over SSE.
+- Send from Phone or terminal into one workspace queue; choose the model for the next message.
 - See the active model and Pi's context-window estimate when the Bridge reports them.
 - Use an English or Chinese interface with light and dark themes, large text, and reduced motion.
 
@@ -40,17 +41,13 @@ TSPi/Pi process <-> TSPi Bridge
 
 TSPi owns scientific state and Pi session files. The Host handles phone
 authentication, project/session metadata, live routing, persisted history, and
-the lifecycle of TSPi Workers it starts. It never stores a second copy of a
-conversation.
+the lifecycle of TSPi Workers it starts. Pi JSONL is the conversation history;
+the Host separately persists pending requests and bounded delivery receipts.
 
-A workspace can have one live controller and multiple observers. TSPi owns the
-single-writer lock and observer tool policy. The broker takes the session mode
-from its local Bridge and refuses a second controller.
-
-| Mode | Session | Tool access |
-| --- | --- | --- |
-| Controller | The workspace's main live Pi session | The same registered tools as a local controller turn |
-| Observer | An independent Pi session | TSPi's allowlisted read and inspection tools |
+Several clients may view a project at once. Messages execute in arrival order,
+one Agent turn per workspace. Host starts the requested conversation when its
+turn arrives; switching views does not interrupt research. Different workspaces
+can execute independently. TSPi's single-writer lock remains the final guard.
 
 ## Requirements
 
@@ -95,9 +92,12 @@ TS_PHONE_STATE_DIR=/absolute/path/to/ts-phone-dev/state npm run ctl -- token
 
 The app opens to recent conversations and projects. Creating a conversation or
 reading history does not start a Worker. With `TS_PHONE_TSPI` configured, choose
-Continue research to start or rejoin the same session without a visible CLI.
-Read-only assistant is a separate menu choice. Idle Host-owned runtime switches
-require confirmation; busy or external runtimes are never silently stopped.
+the next-message model and send normally. The Host saves the request before
+execution and waits for the workspace's current turn to finish. The app shows
+waiting, running, or interrupted requests and allows waiting requests to be
+cancelled. Ordinary conversations have no read-only/research mode selector.
+Explicit standalone Observer sessions remain supported, but are not required
+for viewing. External/native Pi runtimes are never stopped by the queue.
 The configured launcher must advertise `tspi-session-guard/1`. A manually started
 phone session remains supported for diagnostics:
 
@@ -159,11 +159,12 @@ Android signing and component packaging are maintainer workflows documented in
 
 Treat the API token as remote controller access. It can create projects and
 sessions, start TSPi Workers, submit prompts, change lifecycle state, and request
-permanent deletion. In controller mode, phone turns have the same registered
-tool authority as local controller turns. Use an observer for read-only tools.
+permanent deletion. Queued phone turns have the same registered tool authority
+as local Controller turns. This is a trusted single-user interface, not a
+low-privilege read-only account.
 
 Project deletion is fail-closed: TSPi must report no active Worker, remote
-calculation, pending approval, or unresolved remote effect. Recently Deleted is
+calculation, pending approval, queued request, or unresolved remote effect. Recently Deleted is
 manual retention, not a timed cleanup service. Permanent deletion requires the
 exact resource ID and cannot be undone.
 
@@ -179,8 +180,8 @@ from another device.
 
 | Component | Current status |
 | --- | --- |
-| Host | 0.9.0; API v4, Events v3, Bridge v3, `terminal.attach` |
-| Android | App 0.18.0+45; Android 7.0 or newer |
+| Host | 0.9.1; API v4, Events v3, Bridge v3, `terminal.attach` |
+| Android | App 0.18.3+48; Android 7.0 or newer |
 | TSPi compatibility | TSPi 0.15.0; terminal attach, exact-session Workers and lifecycle guards |
 | iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
 

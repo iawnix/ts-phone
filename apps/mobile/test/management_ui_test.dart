@@ -208,7 +208,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('session creation preserves access mode name and model', (
+  testWidgets('session creation uses ordinary research with name and model', (
     tester,
   ) async {
     final gateway = _ManagementGateway();
@@ -226,7 +226,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey<String>('create-session')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Read-only session'));
+    expect(find.text('Read-only Q&A'), findsNothing);
     await tester.enterText(
       find.widgetWithText(TextField, 'Session name (optional)'),
       'Independent review',
@@ -241,7 +241,7 @@ void main() {
     expect(gateway.createdSessions, hasLength(1));
     expect(
       gateway.createdSessions.single.accessMode,
-      SessionAccessMode.observer,
+      SessionAccessMode.controller,
     );
     expect(gateway.createdSessions.single.name, 'Independent review');
     expect(gateway.createdSessions.single.model, 'cpa/gpt-5.6-sol');

@@ -1,3 +1,5 @@
+import 'queued_command.dart';
+
 enum RuntimeState {
   offline,
   connecting,
@@ -281,6 +283,9 @@ class SessionSummary {
     required this.accessMode,
     this.sessionName,
     this.model,
+    this.nextModel,
+    this.commands = const [],
+    this.queueProblem,
     this.promptProblem,
     this.runtime,
     this.activeAgentRunId,
@@ -352,6 +357,9 @@ class SessionSummary {
       sessionRevision: sessionRevision,
       sessionName: json['sessionName'] as String?,
       model: json['model'] as String?,
+      nextModel: json['nextModel'] as String?,
+      commands: QueuedCommand.parseList(json['commands']),
+      queueProblem: json['queueProblem'] as String?,
       promptProblem: json['promptProblem'] as String?,
       runtime: rawRuntime == null
           ? null
@@ -394,6 +402,9 @@ class SessionSummary {
   final String sessionRevision;
   final String? sessionName;
   final String? model;
+  final String? nextModel;
+  final List<QueuedCommand> commands;
+  final String? queueProblem;
   final String? promptProblem;
   final SessionRuntimeSnapshot? runtime;
   final String? activeAgentRunId;
@@ -463,6 +474,7 @@ class WorkspaceDeletionPreflight {
     required this.pendingApprovals,
     required this.unresolvedRemoteEffects,
     required this.canDelete,
+    this.pendingCommands = 0,
   });
 
   factory WorkspaceDeletionPreflight.fromJson(Map<String, Object?> json) {
@@ -472,6 +484,7 @@ class WorkspaceDeletionPreflight {
     final remoteCalculations = json['remoteCalculations'];
     final pendingApprovals = json['pendingApprovals'];
     final unresolvedRemoteEffects = json['unresolvedRemoteEffects'];
+    final pendingCommands = json['pendingCommands'] ?? 0;
     final canDelete = json['canDelete'];
     if (workspaceId is! String ||
         managementRevision is! String ||
@@ -479,6 +492,7 @@ class WorkspaceDeletionPreflight {
         !_isCount(remoteCalculations) ||
         !_isCount(pendingApprovals) ||
         !_isCount(unresolvedRemoteEffects) ||
+        !_isCount(pendingCommands) ||
         canDelete is! bool) {
       throw const FormatException('Workspace deletion preflight is invalid');
     }
@@ -489,6 +503,7 @@ class WorkspaceDeletionPreflight {
       remoteCalculations: remoteCalculations as int,
       pendingApprovals: pendingApprovals as int,
       unresolvedRemoteEffects: unresolvedRemoteEffects as int,
+      pendingCommands: pendingCommands as int,
       canDelete: canDelete,
     );
   }
@@ -499,6 +514,7 @@ class WorkspaceDeletionPreflight {
   final int remoteCalculations;
   final int pendingApprovals;
   final int unresolvedRemoteEffects;
+  final int pendingCommands;
   final bool canDelete;
 }
 

@@ -30,6 +30,172 @@ async function fixture(options: Parameters<typeof writeFakeTspi>[3] = {}) {
   return { root, config, application, hub: application.hub, address, token };
 }
 
+async function waitFor(check: () => Promise<boolean>) {
+  const end = Date.now() + 8_000;
+  while (!await check()) {
+    if (Date.now() > end) throw new Error("Host did not reach expected queue state");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+test("queued sends start inactive conversations and transfer execution only after the previous turn settles", async () => {
+  const f = await fixture({modelControl: true, turnDelayMs: 150});
+  try {
+    const created = await f.hub.createWorkspace({name: "Queued research"});
+    const id = created.workspace.id;
+    const a = created.session;
+    const b = await f.hub.createSession(id, {accessMode: "controller", name: "Second question"});
+    assert.ok(a.capabilities.includes("command.queue"));
+    await f.hub.getMessages(id, a.sessionId, {limit: 20});
+    await assert.rejects(readFile(`${f.config.tspiPath}.starts`), {code: "ENOENT"});
+    const send = (s: typeof a, clientMessageId: string) => f.hub.enqueue(id, s.sessionId,
+      {sessionRevision: s.sessionRevision, clientMessageId, message: clientMessageId, clientKind: "phone"});
+    assert.equal((await send(a, "one")).status, "queued");
+    assert.equal((await send(b, "two")).status, "queued");
+    await assert.rejects(f.hub.archiveWorkspace(id, {managementRevision: created.workspace.managementRevision}), {code: "queue_requests_active"});
+    await waitFor(async () => (await f.hub.promptReceipt(id, b.sessionId, "two", b.sessionRevision)).status === "completed");
+    const prompts = (await readFile(`${f.config.tspiPath}.prompts`, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const settled = (await readFile(`${f.config.tspiPath}.settled`, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(prompts.map((p) => p.message), ["one", "two"]);
+    assert.deepEqual(prompts.map((p) => p.sessionId), [a.sessionId, b.sessionId]);
+    assert.ok(prompts[1].at >= settled[0].at);
+    assert.ok(prompts.every((p) => p.followUp === undefined));
+    assert.equal((await send(a, "one")).status, "completed");
+    assert.equal(f.application.hub.commandQueue?.hasPending(id), false);
+  } finally { await f.application.close(); }
+});
+
+test("model preference is read-only for the runtime and is frozen separately on each queued send", async () => {
+  const f = await fixture({modelControl: true, turnDelayMs: 150});
+  try {
+    const created = await f.hub.createWorkspace({name: "Next-turn models"});
+    const id = created.workspace.id;
+    const s = created.session;
+    await f.hub.setModel(id, s.sessionId, {sessionRevision: s.sessionRevision, provider: "test", modelId: "second", nextTurn: true});
+    await assert.rejects(readFile(`${f.config.tspiPath}.starts`), {code: "ENOENT"});
+    await f.hub.enqueue(id, s.sessionId, {sessionRevision: s.sessionRevision, clientMessageId: "first-model", message: "first"});
+    await waitFor(async () => (await f.hub.listSessions(id))[0]?.runtimeState === "running");
+    const running = (await f.hub.listSessions(id))[0]!;
+    const selected = await f.hub.setModel(id, s.sessionId, {sessionRevision: running.sessionRevision, provider: "test", modelId: "fake-model", nextTurn: true});
+    assert.equal(selected.nextModel, "test/fake-model");
+    assert.equal(selected.model, "test/second");
+    await f.hub.enqueue(id, s.sessionId, {sessionRevision: running.sessionRevision, clientMessageId: "second-model", message: "second"});
+    await waitFor(async () => (await f.hub.promptReceipt(id, s.sessionId, "second-model", running.sessionRevision)).status === "completed");
+    const prompts = (await readFile(`${f.config.tspiPath}.prompts`, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(prompts.map((p) => p.model), ["second", "fake-model"]);
+  } finally { await f.application.close(); }
+});
+
+test("Pi retry starts keep the queue lane until final success, failure or cancellation", async () => {
+  for (const outcome of ["completed", "failed", "cancelled"] as const) {
+    const f = await fixture({modelControl: true, turnDelayMs: 240, retryOutcome: outcome});
+    try {
+      const {workspace, session} = await f.hub.createWorkspace({name: "Retry lifecycle"});
+      const send = (id: string) => f.hub.enqueue(workspace.id, session.sessionId,
+        {sessionRevision: session.sessionRevision, clientMessageId: id, message: id});
+      await send("retry");
+      await send("next");
+      const journal = await f.hub.journal(workspace.id, session.sessionId);
+      await waitFor(async () => journal.since(undefined).filter((e) => e.type === "agent_start").length >= 2);
+      assert.equal(f.hub.commandQueue?.find(workspace.id, session.sessionId, "next")?.status, "queued");
+      assert.equal(f.hub.commandQueue?.hasUnknown(workspace.id), false);
+      await waitFor(async () => f.hub.commandQueue?.find(workspace.id, session.sessionId, "next")?.status === "completed");
+      const first = f.hub.commandQueue?.find(workspace.id, session.sessionId, "retry");
+      assert.equal(first?.status, outcome);
+      assert.equal(first?.problem, outcome === "failed" ? "provider_unavailable" : undefined);
+      const starts = journal.since(undefined).filter((e) => e.type === "agent_start").map((e) => e.payload as any);
+      assert.equal(starts[0].agentRunId, starts[1].agentRunId);
+      assert.notEqual(starts[1].agentRunId, starts[2].agentRunId);
+      assert.equal((await f.hub.listSessions(workspace.id))[0]?.queueProblem, undefined);
+      const prompts = (await readFile(`${f.config.tspiPath}.prompts`, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+      const settlements = (await readFile(`${f.config.tspiPath}.settled`, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+      assert.deepEqual(prompts.map((p) => p.message), ["retry", "next"]);
+      assert.ok(prompts[1].at >= settlements[0].at);
+    } finally { await f.application.close(); }
+  }
+});
+
+test("HTTP queue validates authentication, identity, cancellation, and explicit recovery confirmation", async () => {
+  const f = await fixture({modelControl: true, turnDelayMs: 1200});
+  const headers = {authorization: `Bearer ${f.token}`, "content-type": "application/json"};
+  try {
+    const created = await f.hub.createWorkspace({name: "HTTP queue"});
+    const id = created.workspace.id;
+    const first = created.session;
+    const waiting = await f.hub.createSession(id, {accessMode: "controller"});
+    const base = `http://127.0.0.1:${f.address.port}/api/v4/workspaces/${id}/sessions`;
+    const post = (path: string, body: unknown, auth = true) => fetch(`${base}/${path}`, {
+      method: "POST", headers: auth ? headers : {"content-type": "application/json"}, body: JSON.stringify(body),
+    });
+    const data = {sessionRevision: first.sessionRevision, clientMessageId: "http-1", message: "first"};
+    assert.equal((await post(`${first.sessionId}/commands`, data, false)).status, 401);
+    assert.equal((await post(`${first.sessionId}/commands`, {...data, unexpected: true})).status, 400);
+    assert.equal((await post(`${first.sessionId}/commands`, data)).status, 202);
+    await waitFor(async () => (await f.hub.listSessions(id)).find((s) => s.sessionId === first.sessionId)?.runtimeState === "running");
+    assert.equal((await post(`${waiting.sessionId}/commands`, {...data, sessionRevision: waiting.sessionRevision, clientMessageId: "http-2"})).status, 202);
+    assert.equal((await post(`${first.sessionId}/commands`, data)).status, 202);
+    assert.equal((await post(`${first.sessionId}/commands`, {...data, message: "different"})).status, 409);
+    const preflight = await f.hub.workspaceDeletionPreflight(id);
+    assert.equal(preflight.canDelete, false);
+    assert.equal(preflight.pendingCommands, 2);
+    assert.equal((await post(`${waiting.sessionId}/commands/http-2/cancel`, {}, false)).status, 401);
+    assert.equal((await post(`${first.sessionId}/commands/http-2/cancel`, {})).status, 404);
+    assert.equal((await post(`${waiting.sessionId}/commands/http-2/cancel`, {})).status, 200);
+    assert.equal((await post(`${first.sessionId}/commands/http-1/cancel`, {})).status, 409);
+    assert.equal((await post(`${first.sessionId}/commands/http-1/acknowledge`, {})).status, 400);
+    assert.equal((await post(`${first.sessionId}/commands/http-1/acknowledge`, {confirmation: "wrong"})).status, 400);
+    assert.equal((await post(`${first.sessionId}/commands/http-1/acknowledge`, {confirmation: "http-1"})).status, 409);
+    const response = await fetch(`${base}/${waiting.sessionId}/commands/http-2?sessionRevision=${waiting.sessionRevision}`, {headers});
+    const body = await response.json() as any;
+    assert.equal(body.data.durable, true);
+    assert.equal(body.data.status, "cancelled");
+    assert.equal(body.data.message, undefined);
+    assert.equal(body.data.preview, undefined);
+  } finally { await f.application.close(); }
+});
+
+test("queue waits for an external Controller without stopping it and blocks inactive-project deletion", async () => {
+  const f = await fixture({modelControl: true, turnDelayMs: 40});
+  let bridge: Awaited<ReturnType<typeof connectFakeBridge>> | undefined;
+  try {
+    const created = await f.hub.createWorkspace({name: "External queue owner"});
+    const id = created.workspace.id;
+    bridge = await connectFakeBridge(f.config, id, join(f.config.workspaceRoot, id),
+      {sessionId: created.session.sessionId, accessMode: "controller"});
+    const next = await f.hub.createSession(id, {accessMode: "controller"});
+    await f.hub.enqueue(id, next.sessionId, {sessionRevision: next.sessionRevision, message: "after external exit", clientMessageId: "after-cli"});
+    assert.equal((await f.hub.listSessions(id)).find((s) => s.sessionId === next.sessionId)?.queueProblem, "external_controller");
+    await assert.rejects(readFile(`${f.config.tspiPath}.starts`), {code: "ENOENT"});
+    await assert.rejects(f.hub.archiveSession(id, next.sessionId, {managementRevision: next.managementRevision}), {code: "queue_requests_active"});
+    await bridge.close();
+    bridge = undefined;
+    await waitFor(async () => (await f.hub.promptReceipt(id, next.sessionId, "after-cli", next.sessionRevision)).status === "completed");
+    const lines = (await readFile(`${f.config.tspiPath}.starts`, "utf8")).trim().split("\n");
+    assert.equal(lines.length, 1);
+    assert.equal(JSON.parse(lines[0]!).sessionId, next.sessionId);
+  } finally { await bridge?.close(); await f.application.close(); }
+});
+
+test("restart exposes an uncertain execution and acknowledgement never replays it", async () => {
+  const f = await fixture({modelControl: true, turnDelayMs: 5000});
+  const created = await f.hub.createWorkspace({name: "Restart queue"});
+  const id = created.workspace.id;
+  const s = created.session;
+  await f.hub.enqueue(id, s.sessionId, {sessionRevision: s.sessionRevision, clientMessageId: "interrupted", message: "only once"});
+  await waitFor(async () => (await f.hub.listSessions(id))[0]?.runtimeState === "running");
+  await f.application.close();
+  const restarted = await createTsPhoneHttpServer(f.config);
+  try {
+    await restarted.listen();
+    assert.equal((await restarted.hub.promptReceipt(id, s.sessionId, "interrupted", s.sessionRevision)).status, "unknown");
+    assert.equal((await restarted.hub.listSessions(id))[0]?.queueProblem, "queue_recovery_required");
+    const acknowledged = await restarted.hub.acknowledgeCommand(id, s.sessionId, "interrupted");
+    assert.equal(acknowledged.status, "acknowledged");
+    assert.equal((await restarted.hub.listSessions(id))[0]?.queueProblem, undefined);
+    assert.equal((await readFile(`${f.config.tspiPath}.prompts`, "utf8")).trim().split("\n").length, 1);
+  } finally { await restarted.close(); }
+});
+
 test("terminal and Phone attach to one Worker and reconcile exact prompt receipts", async () => {
   const f = await fixture();
   const base = `http://127.0.0.1:${f.address.port}/api/v4`;
@@ -127,6 +293,47 @@ test("model selection is exact, persisted, and excludes prompt and lifecycle rac
   } finally { await f.application.close(); }
 });
 
+test("offline model preferences never activate a worker and only accept catalog models", async () => {
+  const f = await fixture({modelControl: true});
+  try {
+    const created = await f.hub.createWorkspace({name: "Model preference"});
+    const id = created.workspace.id;
+    assert.ok(created.session.capabilities.includes("session.model_preference"));
+    const input = {sessionRevision: created.session.sessionRevision, provider: "test", modelId: "fake-model"};
+    await assert.rejects(f.hub.setModel(id, created.session.sessionId, {...input, modelId: "missing"}), {code: "model_unavailable"});
+    const selected = await f.hub.setModel(id, created.session.sessionId, input);
+    assert.equal(selected.model, "test/fake-model");
+    assert.equal(selected.runtimeState, "offline");
+    assert.equal(selected.currentAccessMode, null);
+    assert.equal(selected.canPrompt, false);
+    const journal = await f.hub.journal(id, selected.sessionId);
+    const state = journal.since(undefined).filter((event) => event.type === "session_state").at(-1)!;
+    assert.equal(state.payload?.model, "test/fake-model");
+    assert.ok((state.payload?.capabilities as string[]).includes("session.model_preference"));
+    await assert.rejects(readFile(`${f.config.tspiPath}.starts`), {code: "ENOENT"});
+    const store = await ManagementStore.open(f.config.stateDir);
+    assert.equal(store.session(id, selected.sessionId)?.model, "test/fake-model");
+    await assert.rejects(f.hub.setModel(id, selected.sessionId, {...input, sessionRevision: "old"}), {code: "session_resync_required"});
+    await f.hub.archiveSession(id, selected.sessionId, {managementRevision: selected.managementRevision});
+    await assert.rejects(f.hub.setModel(id, selected.sessionId, input), {code: "session_not_ready"});
+  } finally { await f.application.close(); }
+});
+
+test("idle Observer model changes preserve Observer authority", async () => {
+  const f = await fixture({modelControl: true});
+  try {
+    const created = await f.hub.createWorkspace({name: "Read-only model"});
+    const active = await f.hub.activateSession(created.workspace.id, created.session.sessionId,
+      {managementRevision: created.session.managementRevision, accessMode: "observer"});
+    assert.ok(active.capabilities.includes("command.model"));
+    const selected = await f.hub.setModel(created.workspace.id, active.sessionId,
+      {sessionRevision: active.sessionRevision, provider: "test", modelId: "second"});
+    assert.equal(selected.currentAccessMode, "observer");
+    assert.equal(selected.accessMode, "observer");
+    assert.equal(selected.model, "test/second");
+  } finally { await f.application.close(); }
+});
+
 test("model HTTP input is exact and unmanaged model control stays unavailable", async () => {
   const f = await fixture();
   try {
@@ -173,6 +380,10 @@ test("explicit activation resumes legacy Observer history without replacing it",
     await writeFile(path, original);
     const history = (await f.hub.listSessions(created.workspace.id)).find((s) => s.sessionId === "historical-session")!;
     assert.equal(history.accessMode, "observer");
+    assert.ok(!history.capabilities.includes("session.model_preference"));
+    await assert.rejects(f.hub.setModel(created.workspace.id, history.sessionId,
+      {sessionRevision: history.sessionRevision, provider: "test", modelId: "fake-model"}),
+      {code: "session_not_ready"});
     const result = await f.hub.activateSession(created.workspace.id, history.sessionId, {
       managementRevision: history.managementRevision, accessMode: "controller", requestId: "restore-history",
     });

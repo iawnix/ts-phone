@@ -66,6 +66,15 @@ extension ConnectionValidationLocalizations on ConnectionValidationReason {
 
 extension TsPhoneProblemLocalizations on TsPhoneProblem {
   String localizedMessage(AppLocalizations l10n) => switch (code) {
+    TsPhoneProblemCode.apiRouteMissing => l10n.problemApiRouteMissing,
+    TsPhoneProblemCode.queueStorageUnavailable => l10n.problemQueueStorage,
+    TsPhoneProblemCode.queueCapacity => l10n.problemQueueCapacity,
+    TsPhoneProblemCode.queueRecovery => l10n.problemQueueRecovery,
+    TsPhoneProblemCode.providerUnavailable => l10n.problemProviderUnavailable,
+    TsPhoneProblemCode.providerRateLimited => l10n.problemProviderRateLimited,
+    TsPhoneProblemCode.providerAuthFailed => l10n.problemProviderAuthFailed,
+    TsPhoneProblemCode.providerError => l10n.problemProviderError,
+    TsPhoneProblemCode.generationIncomplete => l10n.problemGenerationIncomplete,
     TsPhoneProblemCode.incompatible => l10n.problemIncompatible,
     TsPhoneProblemCode.modelUnavailable => l10n.problemModelUnavailable,
     TsPhoneProblemCode.modelAuthMissing => l10n.problemModelAuthMissing,

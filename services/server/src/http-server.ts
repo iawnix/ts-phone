@@ -6,6 +6,7 @@ import { HttpError, RuntimeError } from "./errors.js";
 import { ManagementStore } from "./management-store.js";
 import { WorkspaceHub } from "./runtime/workspace-hub.js";
 import { WorkerSupervisor } from "./runtime/worker-supervisor.js";
+import { CommandQueue } from "./runtime/command-queue.js";
 import { WORKSPACE_NAME_PATTERN } from "./workspace-registry.js";
 import { assertBearerAuthorization, ensureBearerToken, ensureBridgeSecret } from "./security.js";
 import {
@@ -48,7 +49,8 @@ export async function createTsPhoneHttpServer(config: ServerConfig): Promise<TsP
     config.bridgeSocketPath,
     config.bridgeSecretPath,
   );
-  const hub = new WorkspaceHub(config, bridgeSecret, management, workers);
+  const queue = config.tspiPath ? await CommandQueue.open(config.stateDir) : undefined;
+  const hub = new WorkspaceHub(config, bridgeSecret, management, workers, undefined, queue);
   const bridgeServer = new BridgeIpcServer(config, (socket, registration) => hub.attachBridge(socket, registration));
   const server = createServer((request, response) => {
     void handleRequest(config, hub, token, request, response).catch((error) => sendError(response, error));
@@ -75,6 +77,7 @@ export async function createTsPhoneHttpServer(config: ServerConfig): Promise<TsP
               return;
             }
             resolve(address);
+            void hub.resumeQueue();
           });
         });
       } catch (error) {
@@ -202,6 +205,25 @@ async function handleRequest(
     validateRevision(revision);
     sendData(response, 200, await hub.promptReceipt(workspaceId, sessionId, messageId, revision));
     return;
+  }
+  if (sessionResource === "commands" && method === "POST") {
+    const input = await readJsonBody(request, config.maxBodyBytes);
+    if (segments.length === 7) {
+      sendData(response, 202, await hub.enqueue(workspaceId, sessionId, validatePrompt(input)));
+      return;
+    }
+    const id = segments[7] ?? "";
+    if (!/^[A-Za-z0-9._:-]{1,160}$/.test(id)) throw new HttpError(400, "invalid_command_id", "Invalid command identity");
+    if (segments.length === 9 && segments[8] === "cancel" && isObject(input) && Object.keys(input).length === 0) {
+      sendData(response, 200, await hub.cancelCommand(workspaceId, sessionId, id));
+      return;
+    }
+    if (segments.length === 9 && segments[8] === "acknowledge" && isObject(input)
+      && Object.keys(input).length === 1 && input.confirmation === id) {
+      sendData(response, 200, await hub.acknowledgeCommand(workspaceId, sessionId, id));
+      return;
+    }
+    throw new HttpError(400, "invalid_command_action", "Command action or confirmation is invalid");
   }
   if (sessionResource === "model" && segments.length === 7 && method === "POST") {
     const input = validateModelSelection(await readJsonBody(request, config.maxBodyBytes));
@@ -565,14 +587,16 @@ function validateApproval(value: unknown): ApprovalInput {
 }
 
 function validateModelSelection(value: unknown): ModelSelectionInput {
-  if (!isObject(value) || Object.keys(value).length !== 3 || typeof value.sessionRevision !== "string"
+  if (!isObject(value) || Object.keys(value).some((key) => !["sessionRevision", "provider", "modelId", "nextTurn"].includes(key))
+    || (value.nextTurn !== undefined && value.nextTurn !== true) || typeof value.sessionRevision !== "string"
     || typeof value.provider !== "string" || typeof value.modelId !== "string"
     || !value.provider.trim() || !value.modelId.trim() || value.provider.length > 160 || value.modelId.length > 240
     || /[\u0000-\u001f]/.test(value.provider + value.modelId)) {
     throw new HttpError(400, "invalid_model_selection", "sessionRevision, provider, and modelId are required");
   }
   validateRevision(value.sessionRevision);
-  return { sessionRevision: value.sessionRevision, provider: value.provider, modelId: value.modelId };
+  return { sessionRevision: value.sessionRevision, provider: value.provider, modelId: value.modelId,
+    ...(value.nextTurn === true ? {nextTurn: true} : {}) };
 }
 
 function validateAbort(value: unknown): AbortInput {
@@ -627,7 +651,24 @@ async function streamEvents(
     if (!writeSse(response, event.type, event.id, event)) close();
   });
   request.once("close", close);
-  for (const event of journal.since(lastEventId)) {
+  // A reconnect cursor is only useful while the bounded journal still has a
+  // contiguous window after it. When the cursor is absent or has fallen out
+  // of that window, send one current baseline first and then the events that
+  // followed it. This mirrors the shared-session behavior of pi-web while
+  // keeping Pi JSONL as the durable conversation source of truth.
+  const replay = journal.replay(lastEventId);
+  const baseline = journal.latestBaseline;
+  const useBaseline = Boolean(baseline && (!lastEventId || replay.needsSnapshot));
+  if (useBaseline && baseline) {
+    if (!writeSse(response, baseline.type, baseline.id, baseline)) {
+      close();
+      return;
+    }
+  }
+  const events = useBaseline && baseline
+    ? journal.since(baseline.id)
+    : journal.since(lastEventId);
+  for (const event of events) {
     if (!writeSse(response, event.type, event.id, event)) {
       close();
       return;

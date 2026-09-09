@@ -43,6 +43,7 @@ final class SessionViewState {
       hasActiveAgentRun: controller.activeAgentRunId != null,
       commandInFlight: controller.commandInFlight,
       canRefresh: controller.canRefresh,
+      canQueue: controller.queueEnabled,
     );
   }
 
@@ -71,14 +72,17 @@ SessionViewState resolveSessionViewState({
   required bool hasActiveAgentRun,
   required bool commandInFlight,
   required bool canRefresh,
+  bool canQueue = false,
 }) {
   final phase = _resolvePhase(
-    runtimeState: runtimeState,
+    runtimeState: canQueue && runtimeState == RuntimeState.offline
+        ? RuntimeState.idle
+        : runtimeState,
     eventConnectionState: eventConnectionState,
     isSynchronizing: isSynchronizing,
     problem: problem,
     recoveredSession: recoveredSession,
-    historyOnly: historyOnly,
+    historyOnly: historyOnly && !canQueue,
     viewingInactiveBranch: viewingInactiveBranch,
   );
   final notice = switch (phase) {
@@ -87,14 +91,16 @@ SessionViewState resolveSessionViewState({
     SessionUiPhase.offline => SessionNoticeKind.offline,
     _ => null,
   };
-  final isHistorical = historyOnly || viewingInactiveBranch;
+  final isHistorical = (historyOnly && !canQueue) || viewingInactiveBranch;
   return SessionViewState(
     phase: phase,
     notice: notice,
     canCompose:
         canSend &&
         !commandInFlight &&
-        (phase == SessionUiPhase.ready || phase == SessionUiPhase.running),
+        (canQueue ||
+            phase == SessionUiPhase.ready ||
+            phase == SessionUiPhase.running),
     // ChatController routes abort through the same live-command guard as
     // prompt. Keep the affordance in lock-step with that guard so a
     // read-only, stale, or disconnected session never exposes a no-op stop

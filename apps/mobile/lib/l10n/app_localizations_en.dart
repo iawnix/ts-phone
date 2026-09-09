@@ -150,6 +150,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'The TSPi host could not verify the model configuration.';
 
   @override
+  String get problemProviderUnavailable =>
+      'The model service is temporarily unavailable and this generation failed. You can send again later; tool actions already performed remain recorded.';
+
+  @override
+  String get problemProviderRateLimited =>
+      'The model service rejected this generation due to rate or quota limits. Try later or check the service quota.';
+
+  @override
+  String get problemProviderAuthFailed =>
+      'The model service rejected authentication. Check the Host\'s upstream credentials; this is separate from your phone connection.';
+
+  @override
+  String get problemProviderError =>
+      'The model service returned an error and this generation failed. Details remain in the Host\'s session history.';
+
+  @override
+  String get problemGenerationIncomplete =>
+      'Execution ended without a confirmed complete reply. Review the conversation\'s output and tool results.';
+
+  @override
   String get problemModelStorageUnavailable =>
       'TSPi cannot access its model credentials or cache. Check the host service\'s Pi directory permissions.';
 
@@ -233,7 +253,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get workspaces => 'Projects';
 
   @override
-  String get activeItems => 'Active';
+  String get activeItems => 'Current';
 
   @override
   String get archivedItems => 'Archived';
@@ -504,10 +524,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runtimeCompactRecovery => 'Recover';
 
   @override
-  String get accessController => 'Controller';
+  String get accessController => 'Research';
 
   @override
-  String get accessObserver => 'Read-only session';
+  String get accessObserver => 'Read-only Q&A';
 
   @override
   String get historySession => 'History session';
@@ -989,6 +1009,72 @@ class AppLocalizationsEn extends AppLocalizations {
   String get problemRequestFailed => 'The server request failed';
 
   @override
+  String get problemApiRouteMissing =>
+      'The requested API endpoint does not exist. Check that the app and Host are up to date.';
+
+  @override
+  String get problemQueueStorage =>
+      'Host could not confirm request storage. Check its state directory before retrying.';
+
+  @override
+  String get problemQueueCapacity =>
+      'The request queue or its receipt storage is full. Finish pending requests or check Host storage.';
+
+  @override
+  String get problemQueueRecovery =>
+      'A previous request has an uncertain outcome. Review its history and outputs before continuing the queue.';
+
+  @override
+  String get commandQueue => 'Requests';
+
+  @override
+  String commandQueueCount(int count) {
+    return 'Requests · $count';
+  }
+
+  @override
+  String get commandQueueEmpty => 'No pending requests';
+
+  @override
+  String commandQueued(int position) {
+    return 'Waiting · $position';
+  }
+
+  @override
+  String get commandStarting => 'Preparing';
+
+  @override
+  String get commandRunning => 'In progress';
+
+  @override
+  String get commandCompleted => 'Finished';
+
+  @override
+  String get commandFailed => 'Not completed';
+
+  @override
+  String get commandUnknown => 'Needs verification';
+
+  @override
+  String get commandCancelled => 'Cancelled';
+
+  @override
+  String get commandAcknowledged => 'Reviewed';
+
+  @override
+  String get cancelQueuedRequest => 'Cancel waiting request';
+
+  @override
+  String get acknowledgeRequest => 'Confirm review';
+
+  @override
+  String get acknowledgeRequestBody =>
+      'Confirm that you have checked this request\'s conversation and outputs. This releases later requests without repeating this one or claiming that it succeeded. Its uncertain runtime must already be stopped.';
+
+  @override
+  String get modelNextTurn => 'Model for the next message';
+
+  @override
   String get filterConversations => 'Filter conversations';
 
   @override
@@ -1001,10 +1087,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get switchProject => 'Switch project';
 
   @override
-  String get continueSession => 'Continue research';
+  String get continueSession => 'Continue conversation';
 
   @override
-  String get readOnlyAssistant => 'Read-only assistant';
+  String get readOnlyAssistant => 'Read-only Q&A';
+
+  @override
+  String get sessionMode => 'Conversation mode';
+
+  @override
+  String get workspaceReadOnly => 'Workspace access: read-only';
+
+  @override
+  String get workspaceReadWrite => 'Workspace access: read and write';
+
+  @override
+  String switchAssistantMode(String mode) {
+    return 'Switch to $mode?';
+  }
+
+  @override
+  String get switchAssistantModeBody =>
+      'The idle assistant will restart in this conversation. History and submitted calculations stay intact. If startup fails, you can start the conversation again.';
 
   @override
   String get activationUpgradeRequired =>
@@ -1027,7 +1131,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'This workspace is open in a terminal. Continue that conversation or close it before switching.';
 
   @override
-  String get activationSwitchTitle => 'Switch the running conversation?';
+  String get activationSwitchTitle => 'Continue research in this conversation?';
 
   @override
   String activationSwitchBody(String name) {
@@ -1127,7 +1231,71 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelSelectionUnavailable =>
-      'Model selection is available in an idle Host conversation';
+      'Wait for synchronization and pending messages to finish before switching models.';
+
+  @override
+  String get modelSelectionBusy =>
+      'The assistant is busy. Switch models after this response finishes.';
+
+  @override
+  String get modelSelectionHostRequired =>
+      'Only Host-managed conversations can switch models here.';
+
+  @override
+  String get modelSelectionStartRequired =>
+      'Continue this conversation before changing its model.';
+
+  @override
+  String get modelPreference => 'Model for the next conversation start';
+
+  @override
+  String get viewFullOutput => 'View full output';
+
+  @override
+  String get copyOutput => 'Copy full output';
+
+  @override
+  String get outputCopied => 'Output copied';
+
+  @override
+  String get outputCopyFailed => 'Could not copy output';
+
+  @override
+  String get contentDisplayFailed => 'This content could not be displayed.';
+
+  @override
+  String activityFailureCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count failed activities',
+      one: '1 failed activity',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String viewAllActivities(int count) {
+    return 'View all $count activities';
+  }
+
+  @override
+  String get projectViews => 'Project lists';
+
+  @override
+  String get sessionViews => 'Conversation lists';
+
+  @override
+  String get archivedProjects => 'Archived projects';
+
+  @override
+  String get deletedProjects => 'Recently deleted projects';
+
+  @override
+  String get archivedSessions => 'Archived conversations';
+
+  @override
+  String get deletedSessions => 'Recently deleted conversations';
 
   @override
   String get chatReady => 'Ready';

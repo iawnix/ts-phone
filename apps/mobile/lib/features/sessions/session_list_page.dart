@@ -377,9 +377,29 @@ class _SessionListPageState extends State<SessionListPage>
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(
-          onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+          onPressed: _lifecycleState != LifecycleState.active
+              ? () => _selectLifecycle(LifecycleState.active)
+              : widget.onBack ?? () => Navigator.of(context).maybePop(),
         ),
-        title: Text(widget.workspace.name),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.workspace.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (_lifecycleState != LifecycleState.active)
+              Text(
+                _lifecycleState == LifecycleState.archived
+                    ? l10n.archivedSessions
+                    : l10n.deletedSessions,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+          ],
+        ),
         actions: <Widget>[
           if (_managementApi != null &&
               _lifecycleState == LifecycleState.active)
@@ -438,19 +458,12 @@ class _SessionListPageState extends State<SessionListPage>
                 children: [
                   Expanded(
                     child: Text(
-                      _lifecycleState == LifecycleState.active
-                          ? widget.workspace.name
-                          : _lifecycleState == LifecycleState.archived
-                          ? l10n.archivedItems
-                          : l10n.recentlyDeleted,
+                      widget.workspace.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
-                  if (_managementApi != null)
-                    LifecycleSwitcher(
-                      value: _lifecycleState,
-                      onChanged: _selectLifecycle,
-                    ),
                 ],
               ),
             ),
@@ -558,6 +571,14 @@ class _SessionListPageState extends State<SessionListPage>
                       ),
               ),
             ),
+            if (_managementApi != null) ...[
+              const Divider(height: 1),
+              LifecycleSwitcher(
+                value: _lifecycleState,
+                onChanged: _selectLifecycle,
+                vertical: true,
+              ),
+            ],
             ?widget.sidebarFooter,
           ],
         ),
@@ -727,16 +748,20 @@ class _SessionTile extends StatelessWidget {
       RuntimeState.recoveryRequired => status.error,
       RuntimeState.offline => colors.onSurfaceVariant,
     };
-    final accessIcon = session.historyOnly
+    final queued = session.hasCapability('command.queue');
+    final accessIcon = queued
+        ? Icons.chat_bubble_outline_rounded
+        : session.historyOnly
         ? Icons.history_rounded
         : switch (session.accessMode) {
             SessionAccessMode.controller => Icons.admin_panel_settings_outlined,
             SessionAccessMode.observer => Icons.visibility_outlined,
           };
     final accessLabel = <String>[
-      session.historyOnly
-          ? l10n.historySession
-          : session.accessMode.localizedLabel(l10n),
+      if (!queued)
+        session.historyOnly
+            ? l10n.historySession
+            : session.accessMode.localizedLabel(l10n),
       if (session.displayModel != null) session.displayModel!,
     ].join(' · ');
     return TsStatusListTile(
@@ -748,7 +773,9 @@ class _SessionTile extends StatelessWidget {
               label: session.runtimeState.localizedCompactLabel(l10n),
             )
           : TsInlineStatus(
-              label: session.runtimeState.localizedCompactLabel(l10n),
+              label: queued && session.runtimeState == RuntimeState.offline
+                  ? l10n.chatReady
+                  : session.runtimeState.localizedCompactLabel(l10n),
               color: stateColor,
               pulsing:
                   session.runtimeState == RuntimeState.running ||

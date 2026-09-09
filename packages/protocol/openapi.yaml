@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TS Phone API
-  version: 0.9.0
+  version: 0.9.1
 servers:
   - url: https://tsphone.iawnix.xyz
 security:
@@ -208,7 +208,7 @@ paths:
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/model:
     post:
       operationId: selectModel
-      description: Requires command.model, the exact live revision, and an idle managed Controller with no pending messages or approvals. Changes only this conversation, not shared Pi defaults. Wait for confirmation; never replay an ambiguous change automatically.
+      description: With command.queue and nextTurn=true, saves a catalog-validated preference for future submissions, including inactive or generating conversations. Each admitted request freezes its selected model; this never changes running or already queued work. Without nextTurn, legacy selection requires an idle Host Worker or a new empty conversation. Never changes shared Pi defaults. Refresh after an unconfirmed response.
       parameters:
         - $ref: "#/components/parameters/workspaceId"
         - $ref: "#/components/parameters/sessionId"
@@ -223,6 +223,7 @@ paths:
                 sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
                 provider: { type: string, minLength: 1, maxLength: 160 }
                 modelId: { type: string, minLength: 1, maxLength: 240 }
+                nextTurn: { const: true }
               additionalProperties: false
       responses:
         "200": { $ref: "#/components/responses/Success" }
@@ -344,7 +345,7 @@ paths:
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/commands/{clientMessageId}:
     get:
       operationId: getPromptReceipt
-      description: Read-only receipt within this Host journal generation. Unknown after expiry, restart, or revision change is not permission to resend.
+      description: Read-only lookup. Queued requests return durable=true and survive Host restart; unknown means execution cannot be confirmed and must not be replayed. Legacy direct prompts return a generation-scoped receipt without durable=true. An absent receipt never proves non-delivery.
       parameters:
         - $ref: "#/components/parameters/workspaceId"
         - $ref: "#/components/parameters/sessionId"
@@ -367,16 +368,88 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [clientMessageId, sessionRevision, status]
-                        properties:
-                          clientMessageId: { $ref: "#/components/schemas/BoundedId" }
-                          sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
-                          status: { enum: [pending, accepted, rejected, unknown] }
-                        additionalProperties: false
+                        oneOf:
+                          - $ref: "#/components/schemas/CommandReceipt"
+                          - type: object
+                            required: [clientMessageId, sessionRevision, status]
+                            properties:
+                              clientMessageId: { $ref: "#/components/schemas/BoundedId" }
+                              sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+                              status: { enum: [pending, accepted, rejected, unknown] }
+                            additionalProperties: false
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/commands:
+    post:
+      operationId: enqueueMessage
+      description: Requires command.queue. Persists admission before dispatch, with FIFO execution per workspace. Starts the target Worker when idle; does not interrupt active work or stop external processes. Equal message IDs and content deduplicate across restart. A 202 confirms admission, not execution or scientific success.
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientMessageId, sessionRevision, message]
+              properties:
+                clientMessageId: { $ref: "#/components/schemas/BoundedId" }
+                sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+                message: { type: string, minLength: 1, maxLength: 65536 }
+                clientKind: { enum: [phone, terminal] }
+              additionalProperties: false
+      responses:
+        "202": { $ref: "#/components/responses/CommandReceiptResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+        "503": { description: Host cannot confirm durable storage; inspect before retrying }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/commands/{clientMessageId}/cancel:
+    post:
+      operationId: cancelQueuedMessage
+      description: Cancels only a request still queued; repeat cancellation is idempotent. Does not abort a running Agent or cancel remote calculations.
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+        - $ref: "#/components/parameters/clientMessageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        "200": { $ref: "#/components/responses/CommandReceiptResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
+  /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/commands/{clientMessageId}/acknowledge:
+    post:
+      operationId: acknowledgeUnknownMessage
+      description: After inspecting history and stopping the uncertain runtime, acknowledge an unknown outcome to release its workspace lane. Requires exact-ID confirmation. Does not certify success and never resends the message.
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/sessionId"
+        - $ref: "#/components/parameters/clientMessageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties:
+                confirmation: { $ref: "#/components/schemas/BoundedId" }
+              additionalProperties: false
+      responses:
+        "200": { $ref: "#/components/responses/CommandReceiptResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SessionConflict" }
   /api/v4/workspaces/{workspaceId}/sessions/{sessionId}/abort:
     post:
       operationId: abortGeneration
@@ -459,7 +532,7 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Session-scoped SSE stream with 15-second heartbeats
+          description: Session-scoped SSE stream with 15-second heartbeats. A new connection starts at the latest session snapshot; when Last-Event-ID is older than the bounded journal, the snapshot is sent before newer events. Pi JSONL remains the durable history source.
           content:
             text/event-stream:
               schema: { type: string }
@@ -531,6 +604,11 @@ components:
       type: http
       scheme: bearer
   parameters:
+    clientMessageId:
+      name: clientMessageId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/BoundedId" }
     historyAfter:
       name: after
       in: query
@@ -614,10 +692,12 @@ components:
         - activity.subagents
         - activity.research
         - command.prompt
+        - command.queue
         - command.abort
         - command.model
         - interaction.approval
         - session.activate_mode
+        - session.model_preference
     PhoneModel:
       type: object
       required: [provider, id, name, contextWindow]
@@ -626,6 +706,22 @@ components:
         id: { type: string, minLength: 1, maxLength: 240 }
         name: { type: string, minLength: 1, maxLength: 240 }
         contextWindow: { type: integer, minimum: 1 }
+      additionalProperties: false
+    CommandReceipt:
+      type: object
+      required: [clientMessageId, status, createdAt, updatedAt]
+      properties:
+        clientMessageId: { $ref: "#/components/schemas/BoundedId" }
+        status: { enum: [queued, starting, running, completed, failed, cancelled, unknown, acknowledged] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        model: { type: string, maxLength: 401 }
+        problem: { type: string, maxLength: 80 }
+        sessionRevision: { $ref: "#/components/schemas/SessionRevision" }
+        durable: { const: true }
+        sessionId: { $ref: "#/components/schemas/BoundedId" }
+        position: { type: integer, minimum: 1, maximum: 32 }
+        preview: { type: string, maxLength: 240 }
       additionalProperties: false
     Workspace:
       type: object
@@ -652,6 +748,15 @@ components:
         activeAgentRunId: { $ref: "#/components/schemas/ActiveAgentRunId" }
         sessionName: { type: string }
         model: { type: string }
+        nextModel:
+          type: string
+          description: Preference frozen on the next admission; independent of the running model
+        commands:
+          type: array
+          maxItems: 35
+          description: Workspace-wide unfinished requests followed by up to three recent failures in this conversation
+          items: { $ref: "#/components/schemas/CommandReceipt" }
+        queueProblem: { type: string }
         promptProblem:
           enum: [model_unavailable, model_auth_missing, model_storage_unavailable, model_check_failed]
           description: Local model readiness failure; independent of Phone Bearer authentication
@@ -669,7 +774,7 @@ components:
           description: A validated workspace-local Pi JSONL history exists
         historyOnly:
           type: boolean
-          description: The session is currently a read-only disk-history view
+          description: No live Worker; command.queue can still permit a queued send
         canPrompt:
           type: boolean
           description: The active session has a live Bridge and no known local model readiness failure
@@ -731,6 +836,7 @@ components:
         remoteCalculations: { type: integer, minimum: 0 }
         pendingApprovals: { type: integer, minimum: 0 }
         unresolvedRemoteEffects: { type: integer, minimum: 0 }
+        pendingCommands: { type: integer, minimum: 0, maximum: 32 }
         canDelete: { type: boolean }
       additionalProperties: false
     SessionRuntime:
@@ -898,6 +1004,16 @@ components:
           items: { $ref: "#/components/schemas/SessionCapability" }
       additionalProperties: false
   responses:
+    CommandReceiptResponse:
+      description: Durable admission or action receipt; not proof of model execution or scientific success
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Envelope"
+              - type: object
+                properties:
+                  data: { $ref: "#/components/schemas/CommandReceipt" }
     Success:
       description: Authenticated request succeeded
       content:

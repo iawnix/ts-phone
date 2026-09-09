@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/features/chat/timeline_widgets.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
@@ -7,6 +8,8 @@ import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 import 'package:ts_phone/widgets/chat_message_view.dart';
 import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
+import 'package:ts_phone/widgets/content_display_error.dart';
+import 'package:ts_phone/widgets/text_detail_view.dart';
 
 Widget presentation(Widget child) => MaterialApp(
   theme: TsPhoneTheme.light(),
@@ -17,6 +20,76 @@ Widget presentation(Widget child) => MaterialApp(
 );
 
 void main() {
+  testWidgets(
+    'framework failures remain reported and cannot fill a history page',
+    (tester) async {
+      final original = ErrorWidget.builder;
+      ErrorWidget.builder = (_) => const ContentDisplayError();
+      try {
+        await tester.pumpWidget(
+          presentation(
+            Column(
+              children: [
+                Builder(
+                  builder: (_) => throw StateError('fixture-render-failure'),
+                ),
+                const Text('Next history item'),
+              ],
+            ),
+          ),
+        );
+        expect(tester.takeException(), isStateError);
+        expect(
+          find.text('This content could not be displayed.'),
+          findsOneWidget,
+        );
+        expect(tester.getSize(find.byType(ContentDisplayError)).height, 88);
+        expect(
+          tester.getRect(find.text('Next history item')).bottom,
+          lessThan(200),
+        );
+      } finally {
+        ErrorWidget.builder = original;
+      }
+    },
+  );
+
+  testWidgets('full output copy retains text beyond the bounded preview', (
+    tester,
+  ) async {
+    final text = List.generate(2000, (index) => 'Output $index').join('\n');
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(
+      presentation(TextDetailPreview(text: text, title: 'Output')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byType(TextDetailPreview)).height,
+      lessThan(500),
+    );
+    await tester.tap(find.byTooltip('View full output'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Copy full output'));
+    await tester.pumpAndSettle();
+    expect(copied, text);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a stopped activity is not relabeled as a failure', (
     tester,
   ) async {
@@ -130,7 +203,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('2 activity records'), findsOneWidget);
-      expect(find.text('Failed'), findsOneWidget);
+      expect(find.text('1 failed activity'), findsOneWidget);
       expect(find.text('Generation failed'), findsNothing);
       expect(find.text('Turn 1'), findsNothing);
       await tester.tap(find.text('2 activity records'));

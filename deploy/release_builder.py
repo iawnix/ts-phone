@@ -1373,8 +1373,19 @@ def validate_lifecycle_definition(document: dict[str, Any], label: str) -> None:
     if schema_required(lifecycle) != LIFECYCLE_FIELDS:
         raise ComponentReleaseError(f"{label} protocol schema does not bind lifecycle event identity")
     properties = lifecycle.get("properties")
-    if not isinstance(properties, dict) or set(properties) != LIFECYCLE_FIELDS:
+    if not isinstance(properties, dict) or not LIFECYCLE_FIELDS <= set(properties) <= LIFECYCLE_FIELDS | {"attempt", "outcome"}:
         raise ComponentReleaseError(f"{label} protocol schema has invalid lifecycle event fields")
+    if "attempt" in properties and properties["attempt"] != {"type": "integer", "minimum": 1}:
+        raise ComponentReleaseError(f"{label} lifecycle payload has invalid attempt metadata")
+    if "outcome" in properties and properties["outcome"] != {
+        "type": "object", "required": ["status"], "additionalProperties": False,
+        "properties": {
+            "status": {"enum": ["completed", "failed", "cancelled"]},
+            "problem": {"enum": ["provider_unavailable", "provider_rate_limited", "provider_auth_failed", "provider_error", "generation_incomplete"]},
+            "httpStatus": {"type": "integer", "minimum": 400, "maximum": 599},
+        },
+    }:
+        raise ComponentReleaseError(f"{label} lifecycle payload has invalid outcome metadata")
     if lifecycle.get("additionalProperties") is not False:
         raise ComponentReleaseError(f"{label} lifecycle payload must reject unknown fields")
     type_schema = properties.get("type")

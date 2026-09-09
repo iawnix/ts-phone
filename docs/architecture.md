@@ -9,6 +9,8 @@ TS Phone separates scientific state, conversation history, and transport state:
 4. TS Phone `management.json` owns display names, model/access preferences, and
    project/session lifecycle state. It contains neither scientific records nor
    conversation messages.
+5. Host `commands.json` owns pending requests and bounded execution receipts.
+   It is an execution journal, not a second Pi conversation or science ledger.
 
 The phone API has no field for an arbitrary filesystem path, process command,
 environment override, or raw Pi RPC record. Natural-language messages can still
@@ -21,6 +23,38 @@ ts-phone-bridge extension.
 Flutter -> HTTPS/SSE -> TS Phone Host -> WorkerSupervisor -> TSPi/Pi
                                   \---- Unix socket <---- Bridge
 ~~~
+
+## Shared Session Broker
+
+The Host is the single writer for a managed workspace. Phone, Web, and the
+terminal are clients of the same authenticated HTTP/SSE service; none of them
+opens or writes a Pi session JSONL file directly. A session is addressed by
+`workspaceId + sessionId`, and the Host keeps one live Worker handle for that
+identity. Concurrent activation requests with the same launch identity share
+one in-flight start promise. A different launch identity is rejected while the
+start is pending, so two clients cannot pass the asynchronous launcher and
+capability checks and create two Workers.
+
+Clients may read the same session and subscribe to its event journal at the
+same time. Prompt delivery is durable and idempotent: the Host stores the
+`clientMessageId` and message digest before returning a receipt, then dispatches
+one FIFO workspace lane. A repeated identity returns the original receipt;
+missing HTTP responses are reconciled instead of resent. The lane remains
+occupied until the Worker publishes `agent_settled`, and an interrupted
+`starting`/`running` request becomes `unknown` after a Host restart.
+
+SSE subscribers share the session journal. Each subscriber receives the same
+bounded event envelopes and can reconnect with `Last-Event-ID`. An initial
+connection starts from the latest session snapshot (or lightweight state
+baseline when no snapshot exists); a cursor that falls out of the bounded
+window receives that baseline first, followed by newer events.
+The journal is a delivery cache, while Pi's JSONL remains the conversation
+source of truth.
+The registry, start promises, and journal are process-local by design; the
+installation/workspace guards and durable command store provide the boundary
+against a second Host process and preserve recovery across restarts. Multiple
+Node workers or independent containers must not share one installation unless
+a future distributed broker is introduced.
 
 ## Release Ownership
 
@@ -69,7 +103,7 @@ counts at the Host. Recently Deleted has no background expiry: data remains
 until explicit restoration or permanent deletion. Session deletion quarantines
 only its validated Pi JSONL. Project
 deletion quarantines the complete workspace and first runs TSPi's read-only
-scientific preflight. Active Workers, remote calculations, pending approvals,
+scientific preflight. Active Workers, queued requests, remote calculations, pending approvals,
 unresolved remote effects, or unverifiable operational state block deletion.
 This includes a manually started Root Agent that has never connected a Bridge.
 The Host verifies the absolute workspace path in the private TSPi reply.
@@ -135,8 +169,8 @@ is attributed to the submitting client; generic Worker turn events are
 New managed conversations return an empty message page before any Worker or
 JSONL exists. `GET .../approvals` recovers pending, unexpired confirmations on
 reconnect. `GET .../commands/:clientMessageId?sessionRevision=...` reads the
-existing in-memory prompt receipt. An unknown receipt, including after a
-Host journal change, never proves non-delivery. Terminal detach closes only
+durable queue receipt first, falling back to a legacy in-memory prompt receipt.
+An absent receipt never proves non-delivery. Terminal detach closes only
 its connections; generation abort and Worker lifecycle remain distinct.
 
 Observers are not passive mirrors. They can receive phone or local prompts and
@@ -144,7 +178,68 @@ use a strict read-only tool allowlist. They cannot modify the scientific
 workspace, submit computation, render, report, notify, or invoke shell. This
 allows parallel inspection while keeping a single writer.
 
-## Session Activation
+## Workspace Execution Queue
+
+An active Host-manageable conversation advertises `command.queue`, even without
+a running Worker. The normal Phone and terminal send action uses
+`POST .../sessions/:id/commands`. Viewing needs no execution lock; authenticated
+clients submit requests to one FIFO lane per workspace. Different workspaces
+have independent lanes. This is not a device permission or a focus lease.
+
+Admission persists the message, selected model, target session and client message
+ID before returning 202. The same ID and content returns the existing receipt,
+including after restart; reusing an ID with different text is rejected. Changing
+the next-message model does not alter any already admitted request. Host starts
+the exact session as Controller at dispatch, stopping only an idle verified
+Host-owned source. External owners, active turns, pending prompts, approvals,
+lifecycle changes, or uncertain processes hold the lane. Legacy direct prompt,
+model, activation and deletion actions cannot bypass pending queue work.
+
+The lane remains occupied after a Pi RPC acknowledgement and is released only
+by `agent_settled`. Pi emits `agent_start` again on automatic retry, compaction
+and continuation. The bridge preserves the outer `agentRunId`, origin and turn
+ID until settled; `attempt` counts these starts, not individual model/tool calls.
+An abort targets that same run even during retry backoff. The Host still rejects
+a genuinely overlapping run with a different ID.
+
+The final settled outcome completes only its bound command ID. A final normal
+assistant stop produces `completed`; exhausted provider errors or truncated
+output produce `failed`; abort produces `cancelled`. Intermediate failures do
+not release the lane, and later success replaces their outcome. Completion does
+not certify a scientific claim or every tool action. Known preflight failures
+also become `failed`. Safe provider categories are stored in receipts; the
+settled journal event includes an HTTP status when available, while private Pi
+history retains the original error. No provider response body is copied into
+the receipt. A legacy settled event without an outcome is recorded as
+`failed/generation_unconfirmed`, never certified as successful. Lost execution
+acknowledgement or Worker disconnect becomes
+`unknown`; it blocks that workspace rather than replaying the prompt. Host
+restart converts `starting`/`running` receipts to `unknown`, while never-started
+`queued` requests remain eligible. Explicit acknowledgement after history/output
+inspection and process shutdown releases the lane without declaring success.
+
+The owner-only store uses atomic replacement plus file/directory fsync, rejects
+unsafe or malformed input, and caps storage at 16 MiB, 10,000 receipts and 32
+unfinished requests per workspace. It drops full message text after terminal
+states and retains at most a 240-character preview per receipt. Disk-write
+failure suspends dispatch; capacity never silently evicts a deduplication record.
+Permanent resource deletion removes its terminal
+receipts before deleting quarantined files and restores the receipts if deletion
+fails. It retains unrelated workspaces' requests.
+
+State events and summaries expose all unfinished workspace requests plus the
+last three failures in the selected conversation. Pending requests block
+archive/trash/purge, including deletion preflight when no Worker is live.
+
+Before each Host Worker turn, TSPi reads a fresh bounded frontier summary into
+the ephemeral system prompt. It does not append a duplicate context message to
+Pi history. The research kernel still owns revisions and validates explicit
+scientific changes; the execution queue never chooses a chemical next step.
+
+## Explicit Session Activation
+
+Activation remains a compatibility and standalone diagnostic API. Queue-capable
+clients do not require users to activate or choose Research/Read-only modes.
 
 The `session.activate_mode` capability adds explicit Controller/Observer
 activation to the existing endpoint. Stored `accessMode` is a preference, not
@@ -199,10 +294,13 @@ The installed `TSPi`, `TSPhoneServer`, and `TSPhoneCtl` aliases share the Packag
 dispatcher and private installation dotenv reader. Component `bin/` entrypoints
 remain standalone development tools and are not production suite launchers.
 
-ChatController owns fresh activation metadata, including foreground refresh and
-state events. Continue research requests Controller explicitly; Read-only
-assistant is a menu action. A conflicting conversation can be opened directly,
-or a permitted idle switch confirmed. Activation preserves the draft and never
+ChatController owns fresh session metadata, including foreground refresh and
+state events. On an older Host without `command.queue`, Continue conversation starts only an inactive conversation in
+its configured mode. The Conversation mode sheet identifies Research (workspace
+read/write) and Read-only Q&A; selecting the current live mode does nothing.
+Changing a live mode asks to restart that idle assistant in the same conversation.
+A conflicting conversation can be opened directly, or a permitted idle switch
+confirmed separately. Activation preserves the draft and never
 sends it. An older Host without the capability shows an upgrade requirement.
 Activation has a separate 90-second client request budget to cover compatibility,
 source shutdown, readiness, and cleanup with the default Host limits. Ordinary
@@ -271,17 +369,30 @@ message projection without exposing provider error bodies.
 `GET /api/v4/models` runs the fixed TSPi `--phone-models` entrypoint without
 bootstrapping a workspace or starting a Worker. It returns only available model
 identities, display names and context limits, never credentials/provider URLs.
-`POST .../sessions/:sessionId/model` binds the live revision and requires an idle
-Host-owned Controller with `command.model`, no queued prompts and no pending
+With `command.queue`, `POST .../sessions/:sessionId/model` and `nextTurn:true`
+validate and persist a catalog model for future message admission. It works
+while generating and with inactive history, without starting a Worker or
+changing its current model. The admitted request snapshots that preference;
+dispatch applies it through Pi's exact model RPC before sending the prompt.
+Runtime details continue to describe the actual running model, while the
+composer displays `nextModel`.
+
+Without `nextTurn`, the compatibility endpoint binds the live revision and requires an idle
+Host-owned assistant with `command.model`, no queued prompts and no pending
 approvals. Selection reserves the existing switching guard, excluding prompt,
 activation and lifecycle mutations until Pi confirms the exact model.
+Observer sessions keep Observer authority when changing models. An inactive
+new conversation without saved Pi history advertises `session.model_preference`:
+the same endpoint can validate and save a catalog model without starting a Worker.
+Existing histories must be resumed before a legacy immediate model change.
 
 The managed TSPi Worker uses official Pi SDK/RPC with in-memory preference
 storage initialized using Pi's global/project merge rules. Authentication still
 uses `PI_CODING_AGENT_DIR` (default `~/.pi/agent`); model selection never writes
 shared settings. Pi history records the model change. The Host also records the
 confirmed preference for empty conversations, which Pi may not yet flush to
-disk. Existing saved history has priority over startup preferences.
+disk. Saved history has priority over startup defaults; an explicitly selected
+queued model is applied afterward and recorded by Pi as a new model change.
 
 RPC receipts and Bridge snapshots are separate streams. A successful exact RPC
 receipt confirms the switch; it does not need a snapshot to arrive first.
@@ -318,7 +429,18 @@ download of the whole session. Later pages load explicitly. Live content never
 fills gaps in that history window or takes over its scroll position. Jump to
 latest reads a fresh tail checkpoint before resuming live following. Failed
 navigation retains the previous window; an in-flight result for an obsolete
-session revision cannot replace it.
+session revision or superseded navigation cannot replace it. A latest request
+supersedes pagination and follows any pending background synchronization with an
+explicit tail reset. Cancelling SSE aborts its HTTP request, including an idle
+stream or pending response headers. History reads do not await transport cleanup;
+event generations fence old data and reconnection waits for cleanup.
+
+Expanded activity and terminal output use a ten-line, 1,600-character preview.
+Full output opens a separate lazy line view with whole-output copy. A group
+previews at most eight activities and provides a full list separately. These are
+display bounds, not changes to persisted history. Framework render failures keep
+their exception reporting and use a bounded visible error placeholder rather
+than Flutter's unbounded release error surface.
 
 Prepending history preserves the visible message position. The page uses the
 list's extent for the initial offset and corrects it against the same rendered

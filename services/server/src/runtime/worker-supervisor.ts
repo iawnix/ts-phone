@@ -41,12 +41,21 @@ interface WorkerRecord {
   rpc: WorkerRpc;
 }
 
+interface PendingWorkerStart {
+  request: WorkerStartRequest;
+  result: Promise<WorkerLaunch>;
+}
+
 export class WorkerSupervisor {
   readonly #tspiPath: string | undefined;
   readonly #shutdownTimeoutMs: number;
   readonly #bridgeSocketPath: string;
   readonly #bridgeSecretPath: string;
   readonly #workers = new Map<string, WorkerRecord>();
+  // A capability probe and process spawn both await external work. Keep the
+  // admission promise visible so two clients cannot pass those awaits and
+  // launch two Workers for the same session.
+  readonly #starting = new Map<string, PendingWorkerStart>();
   #closing = false;
   onRuntimeError: ((request: WorkerStartRequest, error: HttpError) => void) | undefined;
 
@@ -105,17 +114,34 @@ export class WorkerSupervisor {
   }
 
   async start(request: WorkerStartRequest): Promise<WorkerLaunch> {
-    const executable = await this.#executable();
-    await this.#checkGuardContract(executable);
-    if (this.#closing) throw new HttpError(503, "host_stopping", "TSPi Host is stopping");
     const key = workerKey(request.workspaceId, request.sessionId);
     const existing = this.#workers.get(key);
     if (existing) {
-      if (existing.request.accessMode !== request.accessMode || existing.request.launchId !== request.launchId) {
+      if (!sameWorkerStartRequest(existing.request, request)) {
         throw new HttpError(409, "worker_identity_conflict", "A different TSPi runtime already owns this conversation");
       }
       return { exit: existing.exit };
     }
+    const pending = this.#starting.get(key);
+    if (pending) {
+      if (!sameWorkerStartRequest(pending.request, request)) {
+        throw new HttpError(409, "worker_identity_conflict", "A different TSPi runtime is already starting this conversation");
+      }
+      return pending.result;
+    }
+    let result: Promise<WorkerLaunch>;
+    result = this.#startOnce(request).finally(() => {
+      if (this.#starting.get(key)?.result === result) this.#starting.delete(key);
+    });
+    this.#starting.set(key, { request: { ...request }, result });
+    return result;
+  }
+
+  async #startOnce(request: WorkerStartRequest): Promise<WorkerLaunch> {
+    const executable = await this.#executable();
+    await this.#checkGuardContract(executable);
+    if (this.#closing) throw new HttpError(503, "host_stopping", "TSPi Host is stopping");
+    const key = workerKey(request.workspaceId, request.sessionId);
     const arguments_ = [
       "--workspace", request.workspaceId,
       "--phone-worker",
@@ -274,6 +300,15 @@ class BoundedText {
 
 function workerKey(workspaceId: string, sessionId: string): string {
   return `${workspaceId}\u0000${sessionId}`;
+}
+
+function sameWorkerStartRequest(left: WorkerStartRequest, right: WorkerStartRequest): boolean {
+  return left.workspaceId === right.workspaceId
+    && left.sessionId === right.sessionId
+    && left.accessMode === right.accessMode
+    && left.launchId === right.launchId
+    && left.name === right.name
+    && left.model === right.model;
 }
 
 function delay(milliseconds: number): Promise<void> {

@@ -122,6 +122,43 @@ ChatController controllerFor(
 void main() {
   setUpAll(shell.loadPreviewFonts);
   test(
+    'offline model preference does not activate a conversation or fabricate runtime state',
+    () async {
+      SessionSummary offline(PhoneModel model) => SessionSummary(
+        sessionId: 'session-test',
+        sessionRevision: revision,
+        runtimeState: RuntimeState.offline,
+        isStreaming: false,
+        accessMode: SessionAccessMode.observer,
+        canPrompt: false,
+        canActivate: true,
+        model: model.reference,
+        capabilities: const {'session.model_preference'},
+      );
+      final api = ModelGateway()..selection = Completer<SessionSummary>();
+      final controller = ChatController(
+        api: api,
+        workspaceId: 'ts_001',
+        sessionId: 'session-test',
+        initialSession: offline(first),
+        initialSessionRevision: revision,
+        initialRuntimeState: RuntimeState.offline,
+        accessMode: SessionAccessMode.observer,
+      );
+      addTearDown(controller.dispose);
+      expect(controller.canSelectModel, isTrue);
+      final selecting = controller.selectModel(second);
+      api.selection!.complete(offline(second));
+      await selecting;
+      expect(controller.selectedModelReference, second.reference);
+      expect(controller.sessionRuntime, isNull);
+      expect(controller.canSend, isFalse);
+      expect(controller.accessMode, SessionAccessMode.observer);
+      expect(api.sendCalls, 0);
+      expect(api.messageSnapshotCalls, 0);
+    },
+  );
+  test(
     'model changes wait for Host acknowledgement without reloading history',
     () async {
       final api = ModelGateway()..selection = Completer<SessionSummary>();
@@ -161,6 +198,8 @@ void main() {
       snapshot.complete(api.snapshot);
       await pending;
       expect(controller.canSend, isFalse);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.eventConnectionCount, 2);
       api.addEvent('session_state', {
         'state': 'idle',
         'canPrompt': true,
@@ -177,14 +216,14 @@ void main() {
   );
 
   test(
-    'observer, running, and disconnected sessions cannot select a model',
+    'idle observers can select models while running and disconnected sessions cannot',
     () async {
       final api = ModelGateway();
       final controller = controllerFor(api, access: SessionAccessMode.observer);
       addTearDown(controller.dispose);
       await controller.initialize();
-      expect(controller.canSelectModel, isFalse);
-      controller.accessMode = SessionAccessMode.controller;
+      expect(controller.canSelectModel, isTrue);
+      expect(controller.accessMode, SessionAccessMode.observer);
       api.addEvent('session_state', {
         'state': 'running',
         'activeAgentRunId': 'run_1',

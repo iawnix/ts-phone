@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/ts_phone_theme.dart';
 import '../theme/ts_visual_accessibility.dart';
+import '../l10n/app_localizations_extensions.dart';
+import 'text_detail_view.dart';
 
 enum TsInfoTone { neutral, info, warning, error }
 
@@ -1132,11 +1134,11 @@ class TsTerminalBlock extends StatelessWidget {
                 ],
               ),
             ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+          Padding(
             padding: const EdgeInsets.all(TsPhoneSpacing.medium),
-            child: SelectableText(
-              body,
+            child: TextDetailPreview(
+              text: body,
+              title: title ?? context.l10n.toolResult,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: terminal.terminalForeground,
                 fontFamily: 'monospace',

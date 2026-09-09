@@ -15,6 +15,7 @@ class ChatComposer extends StatelessWidget {
     this.modelLabel,
     this.modelHint,
     this.onSelectModel,
+    this.canSelectModel = true,
     this.onAbort,
     this.aborting = false,
   });
@@ -30,6 +31,7 @@ class ChatComposer extends StatelessWidget {
   final String? modelLabel;
   final String? modelHint;
   final VoidCallback? onSelectModel;
+  final bool canSelectModel;
   final VoidCallback? onAbort;
   final bool aborting;
 
@@ -105,11 +107,13 @@ class ChatComposer extends StatelessWidget {
                                   ).textTheme.labelMedium,
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 16,
-                              ),
+                              if (canSelectModel) ...[
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 16,
+                                ),
+                              ],
                             ],
                           ),
                         ),

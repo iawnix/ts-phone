@@ -146,6 +146,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemModelCheckFailed => 'TSPi 主机无法核验模型配置。';
 
   @override
+  String get problemProviderUnavailable =>
+      '模型服务暂时不可用，本次生成已失败。可稍后重新发送；已执行的工具操作仍保留。';
+
+  @override
+  String get problemProviderRateLimited =>
+      '模型服务限制了请求频率或额度，本次生成已失败。请稍后再试或检查服务额度。';
+
+  @override
+  String get problemProviderAuthFailed => '模型服务拒绝了认证。请检查主机使用的上游凭据；这不是手机连接认证失败。';
+
+  @override
+  String get problemProviderError => '模型服务返回错误，本次生成已失败。详细原因保留在主机的会话记录中。';
+
+  @override
+  String get problemGenerationIncomplete =>
+      '本次执行已经结束，但没有确认完整回复。请查看会话中的输出和工具结果。';
+
+  @override
   String get problemModelStorageUnavailable =>
       'TSPi 无法访问模型认证或缓存，请检查主机服务对 Pi 目录的读写权限。';
 
@@ -469,10 +487,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get runtimeCompactRecovery => '待恢复';
 
   @override
-  String get accessController => '主会话';
+  String get accessController => '研究模式';
 
   @override
-  String get accessObserver => '只读会话';
+  String get accessObserver => '只读问答';
 
   @override
   String get historySession => '历史会话';
@@ -929,6 +947,68 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemRequestFailed => '服务器请求失败';
 
   @override
+  String get problemApiRouteMissing => '请求的接口不存在，请检查 App 与 Host 是否为配套版本。';
+
+  @override
+  String get problemQueueStorage => 'Host 无法确认请求是否已保存，请先检查其状态目录，不要重复发送。';
+
+  @override
+  String get problemQueueCapacity => '等待请求或回执存储已满，请先处理等待项，或检查 Host 存储。';
+
+  @override
+  String get problemQueueRecovery => '前一请求的执行结果不明，请核验会话历史和输出后再继续队列。';
+
+  @override
+  String get commandQueue => '请求队列';
+
+  @override
+  String commandQueueCount(int count) {
+    return '请求队列 · $count';
+  }
+
+  @override
+  String get commandQueueEmpty => '没有等待的请求';
+
+  @override
+  String commandQueued(int position) {
+    return '等待中 · 第 $position 位';
+  }
+
+  @override
+  String get commandStarting => '准备中';
+
+  @override
+  String get commandRunning => '执行中';
+
+  @override
+  String get commandCompleted => '已结束';
+
+  @override
+  String get commandFailed => '未完成';
+
+  @override
+  String get commandUnknown => '待核验';
+
+  @override
+  String get commandCancelled => '已取消';
+
+  @override
+  String get commandAcknowledged => '已核验';
+
+  @override
+  String get cancelQueuedRequest => '取消等待的请求';
+
+  @override
+  String get acknowledgeRequest => '确认已核验';
+
+  @override
+  String get acknowledgeRequestBody =>
+      '请确认已检查这条请求的会话历史与输出。确认后仅放行后续请求，不会重发本条，也不会将其记为执行成功。原有不确定状态的进程必须已经停止。';
+
+  @override
+  String get modelNextTurn => '下一条消息使用的模型';
+
+  @override
   String get filterConversations => '筛选会话';
 
   @override
@@ -941,10 +1021,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get switchProject => '切换项目';
 
   @override
-  String get continueSession => '继续研究';
+  String get continueSession => '继续对话';
 
   @override
-  String get readOnlyAssistant => '只读助手';
+  String get readOnlyAssistant => '只读问答';
+
+  @override
+  String get sessionMode => '会话模式';
+
+  @override
+  String get workspaceReadOnly => '工作区权限：只读';
+
+  @override
+  String get workspaceReadWrite => '工作区权限：读写';
+
+  @override
+  String switchAssistantMode(String mode) {
+    return '切换为$mode？';
+  }
+
+  @override
+  String get switchAssistantModeBody =>
+      '将在此会话中重启空闲助手，保留历史和已提交的计算。若启动失败，可重新启动此会话。';
 
   @override
   String get activationUpgradeRequired => '请更新 TSPi Host 以选择会话模式。仍可浏览历史记录。';
@@ -965,7 +1063,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get activationExternalOwner => '此工作区正在终端中打开。请继续该会话，或关闭终端会话后再切换。';
 
   @override
-  String get activationSwitchTitle => '切换运行中的会话？';
+  String get activationSwitchTitle => '在此会话继续研究？';
 
   @override
   String activationSwitchBody(String name) {
@@ -1063,7 +1161,62 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hostDefaultModel => '使用 Host 默认模型';
 
   @override
-  String get modelSelectionUnavailable => '会话由 Host 运行且空闲时可切换模型';
+  String get modelSelectionUnavailable => '同步和待处理消息结束后可切换模型。';
+
+  @override
+  String get modelSelectionBusy => '助手正在处理消息，请在本轮回复结束后切换模型。';
+
+  @override
+  String get modelSelectionHostRequired => '此处仅支持切换 Host 托管会话的模型。';
+
+  @override
+  String get modelSelectionStartRequired => '请先继续此对话，再切换模型。';
+
+  @override
+  String get modelPreference => '下次启动此会话使用的模型';
+
+  @override
+  String get viewFullOutput => '查看完整输出';
+
+  @override
+  String get copyOutput => '复制完整输出';
+
+  @override
+  String get outputCopied => '已复制输出';
+
+  @override
+  String get outputCopyFailed => '未能复制输出';
+
+  @override
+  String get contentDisplayFailed => '此条内容显示失败。';
+
+  @override
+  String activityFailureCount(int count) {
+    return '$count 项活动失败';
+  }
+
+  @override
+  String viewAllActivities(int count) {
+    return '查看全部 $count 项活动';
+  }
+
+  @override
+  String get projectViews => '项目列表';
+
+  @override
+  String get sessionViews => '会话列表';
+
+  @override
+  String get archivedProjects => '已归档项目';
+
+  @override
+  String get deletedProjects => '最近删除的项目';
+
+  @override
+  String get archivedSessions => '已归档会话';
+
+  @override
+  String get deletedSessions => '最近删除的会话';
 
   @override
   String get chatReady => '就绪';

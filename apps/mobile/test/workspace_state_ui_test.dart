@@ -166,8 +166,8 @@ void main() {
     final compactStatus = tester.widget<Semantics>(
       find.byKey(const ValueKey<String>('chat-session-status')),
     );
-    expect(compactStatus.properties.label, '就绪');
-    expect(find.text('就绪'), findsOneWidget);
+    expect(compactStatus.properties.label, '研究模式');
+    expect(find.text('研究模式'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_outline_rounded), findsOneWidget);
     expect(find.text('测试会话'), findsOneWidget);
     final appBarRect = tester.getRect(find.byType(AppBar));
@@ -333,7 +333,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Ready'), findsOneWidget);
+    expect(find.text('Research'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byType(AppBar),
@@ -623,7 +623,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('就绪'), findsOneWidget);
+    expect(find.text('只读问答'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('chat-composer')), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
     expect(
@@ -874,8 +874,8 @@ void main() {
 
     expect(find.text('测试会话'), findsOneWidget);
     expect(find.text('观察会话'), findsOneWidget);
-    expect(find.text('主会话'), findsOneWidget);
-    expect(find.text('只读会话 · test/observer'), findsOneWidget);
+    expect(find.text('研究模式'), findsOneWidget);
+    expect(find.text('只读问答 · test/observer'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_rounded), findsNWidgets(2));
     expect(find.byType(TsStatusListTile), findsNWidgets(2));
     expect(tester.takeException(), isNull);

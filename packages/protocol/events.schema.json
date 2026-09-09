@@ -61,6 +61,9 @@
               "runtimeOwner": { "enum": ["host", "external", null] },
               "canActivate": { "type": "boolean" },
               "managementRevision": { "type": "string" },
+              "nextModel": { "type": "string" },
+              "queueProblem": { "type": ["string", "null"] },
+              "commands": { "type": "array", "maxItems": 35, "items": { "type": "object" } },
               "activation": { "$ref": "#/$defs/sessionActivation" }
             }
           }
@@ -135,6 +138,17 @@
         "agentRunId": {
           "type": "string",
           "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+        },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "outcome": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["completed", "failed", "cancelled"] },
+            "problem": { "enum": ["provider_unavailable", "provider_rate_limited", "provider_auth_failed", "provider_error", "generation_incomplete"] },
+            "httpStatus": { "type": "integer", "minimum": 400, "maximum": 599 }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

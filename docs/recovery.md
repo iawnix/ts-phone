@@ -17,6 +17,12 @@ A bridge reconnect changes sessionRevision. Mobile clients must discard the old
 stream cursor, fetch the new session snapshot, and wait for the new SSE stream
 before enabling prompt, abort, or approval actions.
 
+SSE history is intentionally bounded. A fresh connection, or a reconnect whose
+`Last-Event-ID` has fallen outside that window, receives the latest session
+snapshot before newer events. Clients must treat that snapshot as a replacement
+of the live view and continue from its event ID; they must not replay the
+missing prompt or infer delivery from a cursor gap.
+
 An abort conflict is not an ambiguous command outcome. `agent_not_running`
 means the observed run already settled; `agent_run_stale` means another run is
 now active. In both cases refresh the session snapshot and do not retry the old
@@ -30,17 +36,18 @@ of its broker records. The mobile workspace and session lists refresh whenever
 the app returns to the foreground; while they remain open, pull to refresh or
 use the refresh action.
 
-Offline history can be read and manually refreshed, but it cannot accept a
-prompt, abort request, or approval response. Opening history does not start a
-Worker. Use Continue research to request Controller for the same session; any local draft
-still requires an explicit send after activation. The latest 50 items load first.
+Opening offline history does not start a Worker. With `command.queue`, Send
+persists a request and the Host starts the conversation when its workspace is
+idle. No Continue or mode selection is needed. Older bridge-only Hosts retain
+explicit activation; offline history on those Hosts cannot accept a prompt,
+abort or approval. The latest 50 items load first.
 Use the visible page or load-all controls for older history; the loaded/total counter distinguishes a partial client view
 from missing server history. A matching Bridge reconnect resets the session
 revision and replaces the disk-only capability state with its live controller
 or observer state.
 
-Pi branches are recovered from the JSONL parent graph. The current leaf can be
-interactive only with a live Bridge. Selecting another leaf intentionally makes
+Pi branches are recovered from the JSONL parent graph. The current leaf can
+receive queued requests without a live Worker. Selecting another leaf intentionally makes
 the composer read-only; switch back to the active branch before sending.
 
 Project and conversation names, access/model preferences, lifecycle states, and
@@ -50,32 +57,34 @@ automatically emptied; restore an item or permanently delete it from the app.
 
 Permanent deletion first moves the target to a same-filesystem quarantine. If
 metadata removal or quarantine deletion fails, the Host attempts to restore the
-remaining files at the original path and exact management snapshot. Recursive
+remaining files at the original path, exact management snapshot, and terminal
+command receipts. Recursive
 removal is irreversible; inspect remaining files after any purge failure, even
 if metadata has been restored to Recently Deleted. A
 `purge_recovery_failed` response means compensation itself was incomplete: stop
-the Host, preserve `.ts-phone-purge-*` paths and `management.json`, and reconcile
-both before restarting. Do not create a replacement project with the same ID.
+the Host, preserve `.ts-phone-purge-*` paths, `management.json` and `commands.json`,
+and reconcile them before restarting. A process interruption during permanent
+deletion also requires inspection. Do not create a replacement project with the same ID.
 
 Reconciliation never deletes files and never removes a live bridge. If any
 session history is malformed or unreadable, cleanup stops and retains existing
 broker records so storage damage cannot be mistaken for an intentional delete.
 
-The app can activate an offline managed session when `TS_PHONE_TSPI` is
-configured. For manual recovery, restart a controller with:
+The app can continue an offline managed session when `TS_PHONE_TSPI` is
+configured. The ordinary terminal attaches to the same Host with:
 
 ~~~bash
 ./TSPi --workspace <workspace> --phone
 ~~~
 
-If another process holds the workspace Root lock or the same session writer
-guard, this command fails without downgrading access. Open its conversation or
-close that process after the run settles. An explicit
-`--phone --phone-access observer` opens a separate read-only assistant.
+This opens a client, not another Pi process. If an external process holds the
+workspace Root lock, queued work waits; inspect and close that process normally
+after it settles. Native diagnostics use `--standalone --phone`; add
+`--phone-access observer` only for an explicitly restricted separate assistant.
 
 The app can continue an existing session without a terminal when Session Host
-and the guard-compatible launcher are installed. An idle mode/session switch
-requires confirmation of the current source revision. External CLIs, pending
+and the guard-compatible launcher are installed. The dispatcher transfers only
+idle Host-owned execution to the next queued conversation. External CLIs, pending
 inputs, active runs and uncertain Workers block switching. A failed new start
 does not restart a source that was explicitly stopped. History is retained.
 If compatibility checks fail before the source is stopped, the existing runtime
@@ -100,8 +109,8 @@ session keeps its request ID and receipt until the request completes. Confirmed
 rejections restore the submitted draft only if it has not been edited since;
 uncertain requests remain separate from the draft. An explicit retry first
 synchronizes and reuses the original ID and session revision. This in-memory
-state survives page navigation, not app process termination; after an app or
-Host restart inspect history before deciding whether another prompt is needed.
+state survives page navigation, not app process termination. Host queue receipts
+survive both. An absent receipt never authorizes automatic resend.
 
 Back from an approval panel defers the decision. Use **Pending approvals** in
 the chat to reopen it; only the explicit approve/reject controls send a decision.
@@ -129,6 +138,41 @@ do not infer failure, create another session, or automatically replay the reques
 Guard checks use Linux `/proc` and owner-only installation operational state.
 Stop/reopen replaces managed in-process new/resume/fork. Reopening preserves
 the original Pi context and does not copy history or replay prompts/jobs.
-Phone prompt receipts remain bounded and in memory: a Host restart cannot
-prove an unconfirmed command's delivery. Durable receipts and orphan adoption
-are not implemented. Normal Host shutdown stops its Workers, not external CLIs.
+Legacy direct prompt receipts remain bounded and in memory. Queue receipts are
+durable; orphan process adoption is not implemented. Normal Host shutdown stops
+its Workers, not external CLIs.
+
+## Queued Requests
+
+The request list shows waiting, starting, running and interrupted requests.
+Waiting requests may be cancelled. Stopping generation is a separate action;
+neither cancels remote jobs. Requests run even after the submitting client
+disconnects. Model selection affects future admissions, not existing requests.
+
+A lost admission response is reconciled through the exact message ID. Only
+`durable:true` confirms the Host saved a queue request; missing data or a legacy
+unknown receipt does not. An explicit retry keeps the same message ID and body.
+
+Automatic Pi retries remain part of the same running request. If retries are
+exhausted, a confirmed provider failure appears as Failed with a model-service
+reason, and the next queued request may run. Upstream HTTP 503 is distinct from
+missing local API credentials and from an uncertain delivery. Already executed
+tools remain recorded even when the final response fails; check those results
+before asking the Agent to repeat work. A failed receipt is not replayed by
+reusing its ID. A deliberate new send receives a new ID.
+
+After Host restart, never-started requests remain queued. Requests previously
+starting/running become `unknown`; later work in that workspace pauses. Inspect
+the Pi history and relevant outputs, confirm the uncertain Worker has stopped,
+then use Confirm review in the request list or `/queue` in the terminal.
+Acknowledgement releases later requests without repeating the interrupted
+request or recording it as successful. Other workspaces remain independent.
+
+`queue_storage_unavailable` requires repairing the private Host state store;
+dispatch is suspended. Preserve `commands.json` while inspecting disk space,
+ownership and permissions. `queue_capacity_exceeded` means the 32 unfinished
+requests, 10,000 receipts or 16 MiB store limit was reached. Waiting requests can
+be cancelled to release unfinished capacity; restarting does not erase durable
+receipts. There is no automatic history eviction or receipt-reset action.
+Explicit permanent deletion of a conversation or project removes its terminal
+receipts along with the resource; archiving or moving to Recently Deleted does not.

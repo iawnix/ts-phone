@@ -6,6 +6,7 @@ import test from "node:test";
 import type { ServerConfig } from "../src/config.js";
 import { HttpError } from "../src/errors.js";
 import { ManagementStore } from "../src/management-store.js";
+import { CommandQueue } from "../src/runtime/command-queue.js";
 import { WorkspaceHub } from "../src/runtime/workspace-hub.js";
 import { WorkerSupervisor } from "../src/runtime/worker-supervisor.js";
 import { writeFakeTspi } from "./fake-tspi.js";
@@ -99,12 +100,14 @@ test("an unbridged Root Agent blocks project trash and permanent deletion", asyn
 test("failed project purge restores both workspace data and management metadata", async () => {
   const fixture = await createLifecycleFixture("project-purge-recovery");
   const registry = new DeleteFailingRegistry(fixture.workspaceRoot);
+  const queue = await cancelledCommandQueue(fixture.config.stateDir);
   const hub = new WorkspaceHub(
     fixture.config,
     "bridge-secret",
     fixture.management,
     fixture.workers,
     registry,
+    queue,
   );
   try {
     const created = await hub.createWorkspace({ name: "Recoverable project" });
@@ -124,6 +127,7 @@ test("failed project purge restores both workspace data and management metadata"
     const recovered = fixture.management.workspace(created.workspace.id);
     assert.equal(recovered?.lifecycleState, "trashed");
     assert.equal(recovered?.managementRevision, trashed.managementRevision);
+    assert.equal(queue.find(created.workspace.id, created.session.sessionId, "cancelled-request")?.status, "cancelled");
     assert.deepEqual(
       (await hub.listWorkspaces("trashed")).map((workspace) => workspace.id),
       [created.workspace.id],
@@ -135,6 +139,7 @@ test("failed project purge restores both workspace data and management metadata"
     });
     await assert.rejects(() => access(join(fixture.workspaceRoot, created.workspace.id)));
     assert.equal(fixture.management.workspace(created.workspace.id), undefined);
+    assert.equal(queue.find(created.workspace.id, created.session.sessionId, "cancelled-request"), undefined);
   } finally {
     await hub.close();
   }
@@ -143,12 +148,14 @@ test("failed project purge restores both workspace data and management metadata"
 test("failed conversation purge restores both Pi history and management metadata", async () => {
   const fixture = await createLifecycleFixture("session-purge-recovery");
   const registry = new DeleteFailingRegistry(fixture.workspaceRoot);
+  const queue = await cancelledCommandQueue(fixture.config.stateDir);
   const hub = new WorkspaceHub(
     fixture.config,
     "bridge-secret",
     fixture.management,
     fixture.workers,
     registry,
+    queue,
   );
   try {
     const created = await hub.createWorkspace({ name: "Recoverable session" });
@@ -189,6 +196,7 @@ test("failed conversation purge restores both Pi history and management metadata
     );
     assert.equal(recovered?.lifecycleState, "trashed");
     assert.equal(recovered?.managementRevision, trashed.managementRevision);
+    assert.equal(queue.find(created.workspace.id, created.session.sessionId, "cancelled-request")?.status, "cancelled");
     assert.deepEqual(
       (await hub.listSessions(created.workspace.id, "trashed"))
         .map((session) => session.sessionId),
@@ -204,10 +212,20 @@ test("failed conversation purge restores both Pi history and management metadata
       fixture.management.session(created.workspace.id, created.session.sessionId),
       undefined,
     );
+    assert.equal(queue.find(created.workspace.id, created.session.sessionId, "cancelled-request"), undefined);
   } finally {
     await hub.close();
   }
 });
+
+async function cancelledCommandQueue(stateDir: string): Promise<CommandQueue> {
+  const queue = await CommandQueue.open(stateDir);
+  await queue.enqueue("ts_001", "session_1", {
+    sessionRevision: "revision", clientMessageId: "cancelled-request", message: "Private request preview",
+  });
+  await queue.cancel("ts_001", "session_1", "cancelled-request");
+  return queue;
+}
 
 class DeleteFailingRegistry extends WorkspaceRegistry {
   #shouldFail = true;

@@ -27,6 +27,7 @@ import 'session_notice.dart';
 import 'session_view_state.dart';
 import 'timeline_widgets.dart';
 import 'model_picker.dart';
+import 'command_queue_sheet.dart';
 import '../management/management_dialogs.dart';
 
 enum _ChatScrollMode { following, reading }
@@ -81,6 +82,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _scrollingToStart = false;
   bool _scrollingToLatest = false;
   bool _preservingReadingPosition = false;
+  int _navigationGeneration = 0;
   bool _showJumpToStart = false;
   bool _showJumpToLatest = false;
   bool _drainingUiRequests = false;
@@ -249,7 +251,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.axis != Axis.vertical) return false;
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
     final userStarted =
         notification is ScrollStartNotification &&
         notification.dragDetails != null;
@@ -286,7 +290,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _handleScrollMetricsNotification(
     ScrollMetricsNotification notification,
   ) {
-    if (notification.metrics.axis != Axis.vertical ||
+    if (notification.depth != 0 ||
+        notification.metrics.axis != Axis.vertical ||
         _scrollMode != _ChatScrollMode.following ||
         _scrollingToLatest ||
         !_scroll.hasClients) {
@@ -339,20 +344,31 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Future<void> _jumpToLatest() async {
-    if (_scrollingToStart || _scrollingToLatest || _preservingReadingPosition) {
-      return;
-    }
+    if (_scrollingToLatest) return;
+    final needsTailRead =
+        _controller.viewingHistoryWindow ||
+        _controller.historyNavigationInProgress ||
+        _controller.loadingEarlierMessages;
+    final generation = ++_navigationGeneration;
     ActionFeedback.selection();
     setState(() {
-      _showJumpToLatest = false;
+      _showJumpToLatest = true;
       _scrollingToLatest = true;
+      _scrollingToStart = false;
+      _preservingReadingPosition = false;
     });
     try {
-      if (_controller.viewingHistoryWindow) {
-        if (!await _controller.returnToLatest() || !mounted) return;
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
+      final loaded = !needsTailRead || await _controller.returnToLatest();
+      if (!mounted || generation != _navigationGeneration) return;
+      if (!loaded) {
+        _showActionMessage(
+          _controller.problem?.localizedMessage(context.l10n) ??
+              context.l10n.problemRequestFailed,
+        );
+        return;
       }
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || generation != _navigationGeneration) return;
       _setScrollMode(_ChatScrollMode.following);
       if (_scroll.hasClients) {
         final target = _scroll.position.maxScrollExtent;
@@ -367,7 +383,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         }
       }
     } finally {
-      if (mounted) {
+      if (mounted && generation == _navigationGeneration) {
         setState(() => _scrollingToLatest = false);
         if (_scroll.hasClients) {
           _updateTimelineNavigationVisibility(_scroll.position);
@@ -384,15 +400,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       return;
     }
     ActionFeedback.selection();
+    final generation = ++_navigationGeneration;
     _setScrollMode(_ChatScrollMode.reading);
     setState(() {
       _showJumpToStart = false;
       _scrollingToStart = true;
     });
     try {
-      if (!await _controller.jumpToStart() || !mounted) return;
+      if (!await _controller.jumpToStart() ||
+          !mounted ||
+          generation != _navigationGeneration) {
+        return;
+      }
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
+      if (!mounted || generation != _navigationGeneration) return;
       if (_scroll.hasClients) {
         final target = _scroll.position.minScrollExtent;
         if (MediaQuery.disableAnimationsOf(context)) {
@@ -406,7 +427,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         }
       }
     } finally {
-      if (mounted) {
+      if (mounted && generation == _navigationGeneration) {
         setState(() => _scrollingToStart = false);
         if (_scroll.hasClients) {
           _updateTimelineNavigationVisibility(_scroll.position);
@@ -451,17 +472,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Future<void> _preserveReadingPosition(Future<void> Function() load) async {
     if (_preservingReadingPosition) return;
+    final generation = _navigationGeneration;
     setState(() => _preservingReadingPosition = true);
     try {
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
-      await _prependAtReadingPosition(load);
+      if (!mounted || generation != _navigationGeneration) return;
+      await _prependAtReadingPosition(load, generation);
     } finally {
-      if (mounted) setState(() => _preservingReadingPosition = false);
+      if (mounted && generation == _navigationGeneration) {
+        setState(() => _preservingReadingPosition = false);
+      }
     }
   }
 
-  Future<void> _prependAtReadingPosition(Future<void> Function() load) async {
+  Future<void> _prependAtReadingPosition(
+    Future<void> Function() load,
+    int generation,
+  ) async {
     _setScrollMode(_ChatScrollMode.reading);
     final oldPixels = _scroll.hasClients ? _scroll.position.pixels : null;
     final oldMaxExtent = _scroll.hasClients
@@ -476,12 +503,14 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         .firstOrNull;
     await load();
     if (!mounted ||
+        generation != _navigationGeneration ||
         !_scroll.hasClients ||
         _scroll.position.pixels != oldPixels) {
       return;
     }
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted ||
+        generation != _navigationGeneration ||
         !_scroll.hasClients ||
         oldPixels == null ||
         oldMaxExtent == null) {
@@ -498,7 +527,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     // message after the coarse jump has laid out its new position.
     if (anchor != null) {
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted || !_scroll.hasClients) return;
+      if (!mounted ||
+          !_scroll.hasClients ||
+          generation != _navigationGeneration) {
+        return;
+      }
       final current = _laidOutHistoryRows()
           .where((row) => row.key == anchor.key)
           .firstOrNull;
@@ -566,14 +599,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool get _canActivate =>
       _controller.api is TsPhoneManagementGateway &&
       !_controller.viewingInactiveBranch &&
-      (_controller.canActivate ||
-          (_controller.supportsModeActivation &&
-              _controller.accessMode == SessionAccessMode.observer &&
-              _controller.runtimeState.isAvailable));
+      _controller.canActivate;
 
-  Future<void> _activateSession({
-    SessionAccessMode mode = SessionAccessMode.controller,
-  }) async {
+  Future<void> _activateSession({SessionAccessMode? mode}) async {
+    mode ??= _controller.accessMode;
     if (_activating || _controller.viewingInactiveBranch) return;
     setState(() => _activating = true);
     try {
@@ -603,15 +632,28 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         return;
       }
       if (needsSwitch) {
+        final sameSession = conflict.sessionId == current.sessionId;
         final action = await showDialog<String>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(context.l10n.activationSwitchTitle),
+            title: Text(
+              sameSession
+                  ? context.l10n.switchAssistantMode(
+                      mode!.localizedLabel(context.l10n),
+                    )
+                  : context.l10n.activationSwitchTitle,
+            ),
             content: Text(
               conflict.switchable
-                  ? context.l10n.activationSwitchBody(
-                      conflict.sessionName ?? context.l10n.unnamedConversation,
-                    )
+                  ? sameSession
+                        ? context.l10n.switchAssistantModeBody
+                        : context.l10n.activationSwitchBody(
+                            (conflict.sessionName ??
+                                    context.l10n.unnamedConversation)
+                                .characters
+                                .take(60)
+                                .toString(),
+                          )
                   : '${conflict.sessionName ?? context.l10n.unnamedConversation}\n\n${conflict.owner == 'external' ? context.l10n.activationExternalOwner : context.l10n.problemResourcesBusy}',
             ),
             actions: [
@@ -840,7 +882,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               }
             : null,
         runtime: _controller.sessionRuntime,
-        configuredModel: widget.session.modelRef,
+        configuredModel: _controller.selectedModelReference,
+        queueEnabled: _controller.queueEnabled,
         workspaceName: widget.workspace.name,
         accessMode: _controller.accessMode,
         runtimeState: _controller.runtimeState,
@@ -878,15 +921,17 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Future<void> _chooseModel() async {
     final gateway = _controller.modelGateway;
-    if (gateway == null || !_controller.canSelectModel) return;
+    if (gateway == null || !_controller.canSelectModel) {
+      _showActionMessage(_modelSelectionHint);
+      return;
+    }
     final hadFocus = _composerFocus.hasFocus;
     final selection = _composer.selection;
     _composerFocus.unfocus();
-    final model = _controller.sessionRuntime?.model;
     await showModelPicker(
       context,
       gateway: gateway,
-      selected: model == null ? null : '${model.provider}/${model.id}',
+      selected: _controller.selectedModelReference,
       onSelect: _controller.selectModel,
       canSelect: () => _controller.canSelectModel,
       state: _controller,
@@ -894,6 +939,72 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     if (!mounted) return;
     _composer.selection = selection;
     if (hadFocus) _composerFocus.requestFocus();
+  }
+
+  String get _modelSelectionHint =>
+      _controller.queueEnabled && _controller.canSelectModel
+      ? context.l10n.modelNextTurn
+      : _controller.canSelectModel
+      ? _controller.selectingModelPreference
+            ? context.l10n.modelPreference
+            : context.l10n.chooseModel
+      : _controller.runtimeState == RuntimeState.running ||
+            _controller.commandInFlight
+      ? context.l10n.modelSelectionBusy
+      : _controller.runtimeState == RuntimeState.offline &&
+            _controller.canActivate
+      ? context.l10n.modelSelectionStartRequired
+      : _controller.runtimeState == RuntimeState.offline ||
+            _controller.runtimeOwner == 'external'
+      ? context.l10n.modelSelectionHostRequired
+      : context.l10n.modelSelectionUnavailable;
+
+  Future<void> _chooseMode() async {
+    if (_activating) return;
+    final selected = await showModalBottomSheet<SessionAccessMode>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              context.l10n.sessionMode,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          for (final mode in SessionAccessMode.values)
+            ListTile(
+              key: ValueKey('session-mode-${mode.name}'),
+              leading: Icon(
+                mode == SessionAccessMode.observer
+                    ? Icons.visibility_outlined
+                    : Icons.science_outlined,
+              ),
+              title: Text(mode.localizedLabel(context.l10n)),
+              subtitle: Text(
+                mode == SessionAccessMode.observer
+                    ? context.l10n.workspaceReadOnly
+                    : context.l10n.workspaceReadWrite,
+              ),
+              trailing: _controller.accessMode == mode
+                  ? const Icon(Icons.check_rounded)
+                  : null,
+              onTap: () => Navigator.of(context).pop(mode),
+            ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+    if (!mounted ||
+        selected == null ||
+        (_controller.runtimeState.isAvailable &&
+            selected == _controller.accessMode)) {
+      return;
+    }
+    await _activateSession(mode: selected);
   }
 
   void _queueUiRequest(ExtensionUiRequest request) {
@@ -982,6 +1093,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 state: viewState,
                 canActivate: _canActivate,
                 workspace: widget.workspace.name,
+                accessMode: _controller.accessMode,
+                queueEnabled: _controller.queueEnabled,
               ),
             ),
             actions: <Widget>[
@@ -996,10 +1109,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     unawaited(_sync());
                   } else if (action == 'sidebar') {
                     widget.onOpenNavigation?.call();
-                  } else if (action == 'observer') {
-                    unawaited(
-                      _activateSession(mode: SessionAccessMode.observer),
-                    );
+                  } else if (action == 'mode') {
+                    unawaited(_chooseMode());
                   } else {
                     _showSessionDetails();
                   }
@@ -1017,22 +1128,17 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         ],
                       ),
                     ),
-                  if (_controller.supportsModeActivation &&
+                  if (!_controller.queueEnabled &&
+                      _controller.supportsModeActivation &&
                       !_controller.viewingInactiveBranch)
                     PopupMenuItem(
-                      value: 'observer',
-                      enabled:
-                          !_activating &&
-                          (_controller.canActivate ||
-                              _controller.activation?.modes.contains(
-                                    SessionAccessMode.observer,
-                                  ) ==
-                                  true),
+                      value: 'mode',
+                      enabled: !_activating,
                       child: Row(
                         children: [
                           const Icon(Icons.visibility_outlined, size: 20),
                           const SizedBox(width: 12),
-                          Flexible(child: Text(l10n.readOnlyAssistant)),
+                          Flexible(child: Text(l10n.sessionMode)),
                         ],
                       ),
                     ),
@@ -1189,7 +1295,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       label: Text(context.l10n.pendingApprovals),
                     ),
                   ),
-                if (_canActivate || _activating)
+                if (_controller.queueEnabled &&
+                    (_controller.queuedCommands.isNotEmpty ||
+                        _controller.queueProblem != null))
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('command-queue'),
+                      onPressed: () => showCommandQueue(context, _controller),
+                      icon: const Icon(Icons.playlist_play_rounded, size: 22),
+                      label: Text(
+                        context.l10n.commandQueueCount(
+                          _controller.queuedCommands.length,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!_controller.queueEnabled && (_canActivate || _activating))
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
@@ -1214,7 +1336,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                if (!viewState.isHistorical || _canActivate || _activating)
+                if (_controller.queueEnabled ||
+                    !viewState.isHistorical ||
+                    _canActivate ||
+                    _activating)
                   _buildComposer(
                     context,
                     maxLines: _composerMaxLines(
@@ -1353,21 +1478,25 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Widget _buildTimelineNavigation() {
     final color = Theme.of(context).colorScheme.primary;
-    final navigationBusy =
-        _scrollingToStart || _scrollingToLatest || _preservingReadingPosition;
+    final navigationBusy = _scrollingToLatest;
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(24),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (_showJumpToLatest)
+          if (_showJumpToLatest || _scrollingToLatest)
             IconButton(
               key: const ValueKey<String>('jump-to-latest'),
               onPressed: navigationBusy ? null : _jumpToLatest,
               tooltip: context.l10n.jumpToLatest,
               color: color,
-              icon: const Icon(Icons.arrow_downward_rounded),
+              icon: _scrollingToLatest
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.arrow_downward_rounded),
             ),
         ],
       ),
@@ -1377,6 +1506,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Widget _buildComposer(BuildContext context, {required int maxLines}) {
     final viewState = SessionViewState.fromController(_controller);
     final canDraft =
+        _controller.queueEnabled ||
         _canActivate ||
         _activating ||
         (!viewState.isHistorical &&
@@ -1390,11 +1520,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       maxLines: maxLines,
       onSend: _send,
       hint: canDraft ? context.l10n.composerMessage : _composerHint(),
-      modelLabel: _controller.sessionRuntime?.model.knownId,
-      modelHint: _controller.canSelectModel
-          ? context.l10n.chooseModel
-          : context.l10n.modelSelectionUnavailable,
-      onSelectModel: _controller.canSelectModel ? _chooseModel : null,
+      modelLabel: _controller.selectedModelReference
+          ?.split('/')
+          .skip(1)
+          .join('/'),
+      modelHint: _modelSelectionHint,
+      canSelectModel: _controller.canSelectModel,
+      onSelectModel: _chooseModel,
       onAbort: viewState.canAbort ? _confirmAbort : null,
       aborting: _aborting,
     );
@@ -1436,12 +1568,16 @@ class _ChatNavigationTitle extends StatelessWidget {
     required this.state,
     required this.canActivate,
     required this.workspace,
+    required this.accessMode,
+    this.queueEnabled = false,
   });
 
   final String title;
   final SessionViewState state;
   final bool canActivate;
   final String workspace;
+  final SessionAccessMode accessMode;
+  final bool queueEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1475,7 +1611,12 @@ class _ChatNavigationTitle extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Flexible(
-              child: _SessionStatusLine(state: state, canActivate: canActivate),
+              child: _SessionStatusLine(
+                state: state,
+                canActivate: canActivate,
+                accessMode: accessMode,
+                queueEnabled: queueEnabled,
+              ),
             ),
           ],
         ),
@@ -1485,10 +1626,17 @@ class _ChatNavigationTitle extends StatelessWidget {
 }
 
 class _SessionStatusLine extends StatelessWidget {
-  const _SessionStatusLine({required this.state, required this.canActivate});
+  const _SessionStatusLine({
+    required this.state,
+    required this.canActivate,
+    required this.accessMode,
+    this.queueEnabled = false,
+  });
 
   final SessionViewState state;
   final bool canActivate;
+  final SessionAccessMode accessMode;
+  final bool queueEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1505,7 +1653,8 @@ class _SessionStatusLine extends StatelessWidget {
       SessionUiPhase.synchronizing => l10n.chatConnecting,
       SessionUiPhase.reconnecting => l10n.chatReconnecting,
       SessionUiPhase.running => l10n.chatRunning,
-      SessionUiPhase.ready => l10n.chatReady,
+      SessionUiPhase.ready =>
+        queueEnabled ? l10n.chatReady : accessMode.localizedLabel(l10n),
     };
     final (icon, color) = switch (state.phase) {
       SessionUiPhase.failed ||
@@ -1566,12 +1715,14 @@ class _SessionDetailsSheet extends StatelessWidget {
     required this.runtimeState,
     required this.sessionId,
     this.configuredModel,
+    this.queueEnabled = false,
   });
 
   final String title;
   final VoidCallback? onRename;
   final SessionRuntimeSnapshot? runtime;
   final String? configuredModel;
+  final bool queueEnabled;
   final String workspaceName;
   final SessionAccessMode accessMode;
   final RuntimeState runtimeState;
@@ -1673,12 +1824,13 @@ class _SessionDetailsSheet extends StatelessWidget {
                   label: l10n.approvalWorkspace,
                   value: workspaceName,
                 ),
-                const _RuntimeDetailDivider(),
-                _RuntimeDetailRow(
-                  icon: Icons.shield_outlined,
-                  label: l10n.accessPermission,
-                  value: accessMode.localizedLabel(l10n),
-                ),
+                if (!queueEnabled) const _RuntimeDetailDivider(),
+                if (!queueEnabled)
+                  _RuntimeDetailRow(
+                    icon: Icons.shield_outlined,
+                    label: l10n.accessPermission,
+                    value: accessMode.localizedLabel(l10n),
+                  ),
               ],
             ),
           ),

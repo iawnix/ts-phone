@@ -362,6 +362,36 @@ abstract class AppLocalizations {
   /// **'The TSPi host could not verify the model configuration.'**
   String get problemModelCheckFailed;
 
+  /// No description provided for @problemProviderUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The model service is temporarily unavailable and this generation failed. You can send again later; tool actions already performed remain recorded.'**
+  String get problemProviderUnavailable;
+
+  /// No description provided for @problemProviderRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'The model service rejected this generation due to rate or quota limits. Try later or check the service quota.'**
+  String get problemProviderRateLimited;
+
+  /// No description provided for @problemProviderAuthFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The model service rejected authentication. Check the Host\'s upstream credentials; this is separate from your phone connection.'**
+  String get problemProviderAuthFailed;
+
+  /// No description provided for @problemProviderError.
+  ///
+  /// In en, this message translates to:
+  /// **'The model service returned an error and this generation failed. Details remain in the Host\'s session history.'**
+  String get problemProviderError;
+
+  /// No description provided for @problemGenerationIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution ended without a confirmed complete reply. Review the conversation\'s output and tool results.'**
+  String get problemGenerationIncomplete;
+
   /// No description provided for @problemModelStorageUnavailable.
   ///
   /// In en, this message translates to:
@@ -521,7 +551,7 @@ abstract class AppLocalizations {
   /// No description provided for @activeItems.
   ///
   /// In en, this message translates to:
-  /// **'Active'**
+  /// **'Current'**
   String get activeItems;
 
   /// No description provided for @archivedItems.
@@ -977,13 +1007,13 @@ abstract class AppLocalizations {
   /// No description provided for @accessController.
   ///
   /// In en, this message translates to:
-  /// **'Controller'**
+  /// **'Research'**
   String get accessController;
 
   /// No description provided for @accessObserver.
   ///
   /// In en, this message translates to:
-  /// **'Read-only session'**
+  /// **'Read-only Q&A'**
   String get accessObserver;
 
   /// No description provided for @historySession.
@@ -1838,6 +1868,120 @@ abstract class AppLocalizations {
   /// **'The server request failed'**
   String get problemRequestFailed;
 
+  /// No description provided for @problemApiRouteMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The requested API endpoint does not exist. Check that the app and Host are up to date.'**
+  String get problemApiRouteMissing;
+
+  /// No description provided for @problemQueueStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Host could not confirm request storage. Check its state directory before retrying.'**
+  String get problemQueueStorage;
+
+  /// No description provided for @problemQueueCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'The request queue or its receipt storage is full. Finish pending requests or check Host storage.'**
+  String get problemQueueCapacity;
+
+  /// No description provided for @problemQueueRecovery.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous request has an uncertain outcome. Review its history and outputs before continuing the queue.'**
+  String get problemQueueRecovery;
+
+  /// No description provided for @commandQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests'**
+  String get commandQueue;
+
+  /// No description provided for @commandQueueCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests · {count}'**
+  String commandQueueCount(int count);
+
+  /// No description provided for @commandQueueEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending requests'**
+  String get commandQueueEmpty;
+
+  /// No description provided for @commandQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting · {position}'**
+  String commandQueued(int position);
+
+  /// No description provided for @commandStarting.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing'**
+  String get commandStarting;
+
+  /// No description provided for @commandRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get commandRunning;
+
+  /// No description provided for @commandCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get commandCompleted;
+
+  /// No description provided for @commandFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not completed'**
+  String get commandFailed;
+
+  /// No description provided for @commandUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs verification'**
+  String get commandUnknown;
+
+  /// No description provided for @commandCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get commandCancelled;
+
+  /// No description provided for @commandAcknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewed'**
+  String get commandAcknowledged;
+
+  /// No description provided for @cancelQueuedRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel waiting request'**
+  String get cancelQueuedRequest;
+
+  /// No description provided for @acknowledgeRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm review'**
+  String get acknowledgeRequest;
+
+  /// No description provided for @acknowledgeRequestBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm that you have checked this request\'s conversation and outputs. This releases later requests without repeating this one or claiming that it succeeded. Its uncertain runtime must already be stopped.'**
+  String get acknowledgeRequestBody;
+
+  /// No description provided for @modelNextTurn.
+  ///
+  /// In en, this message translates to:
+  /// **'Model for the next message'**
+  String get modelNextTurn;
+
   /// No description provided for @filterConversations.
   ///
   /// In en, this message translates to:
@@ -1865,14 +2009,44 @@ abstract class AppLocalizations {
   /// No description provided for @continueSession.
   ///
   /// In en, this message translates to:
-  /// **'Continue research'**
+  /// **'Continue conversation'**
   String get continueSession;
 
   /// No description provided for @readOnlyAssistant.
   ///
   /// In en, this message translates to:
-  /// **'Read-only assistant'**
+  /// **'Read-only Q&A'**
   String get readOnlyAssistant;
+
+  /// No description provided for @sessionMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation mode'**
+  String get sessionMode;
+
+  /// No description provided for @workspaceReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace access: read-only'**
+  String get workspaceReadOnly;
+
+  /// No description provided for @workspaceReadWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace access: read and write'**
+  String get workspaceReadWrite;
+
+  /// No description provided for @switchAssistantMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to {mode}?'**
+  String switchAssistantMode(String mode);
+
+  /// No description provided for @switchAssistantModeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The idle assistant will restart in this conversation. History and submitted calculations stay intact. If startup fails, you can start the conversation again.'**
+  String get switchAssistantModeBody;
 
   /// No description provided for @activationUpgradeRequired.
   ///
@@ -1907,7 +2081,7 @@ abstract class AppLocalizations {
   /// No description provided for @activationSwitchTitle.
   ///
   /// In en, this message translates to:
-  /// **'Switch the running conversation?'**
+  /// **'Continue research in this conversation?'**
   String get activationSwitchTitle;
 
   /// No description provided for @activationSwitchBody.
@@ -2087,8 +2261,110 @@ abstract class AppLocalizations {
   /// No description provided for @modelSelectionUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'Model selection is available in an idle Host conversation'**
+  /// **'Wait for synchronization and pending messages to finish before switching models.'**
   String get modelSelectionUnavailable;
+
+  /// No description provided for @modelSelectionBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant is busy. Switch models after this response finishes.'**
+  String get modelSelectionBusy;
+
+  /// No description provided for @modelSelectionHostRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Only Host-managed conversations can switch models here.'**
+  String get modelSelectionHostRequired;
+
+  /// No description provided for @modelSelectionStartRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue this conversation before changing its model.'**
+  String get modelSelectionStartRequired;
+
+  /// No description provided for @modelPreference.
+  ///
+  /// In en, this message translates to:
+  /// **'Model for the next conversation start'**
+  String get modelPreference;
+
+  /// No description provided for @viewFullOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'View full output'**
+  String get viewFullOutput;
+
+  /// No description provided for @copyOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy full output'**
+  String get copyOutput;
+
+  /// No description provided for @outputCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Output copied'**
+  String get outputCopied;
+
+  /// No description provided for @outputCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not copy output'**
+  String get outputCopyFailed;
+
+  /// No description provided for @contentDisplayFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This content could not be displayed.'**
+  String get contentDisplayFailed;
+
+  /// No description provided for @activityFailureCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 failed activity} other{{count} failed activities}}'**
+  String activityFailureCount(int count);
+
+  /// No description provided for @viewAllActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'View all {count} activities'**
+  String viewAllActivities(int count);
+
+  /// No description provided for @projectViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Project lists'**
+  String get projectViews;
+
+  /// No description provided for @sessionViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation lists'**
+  String get sessionViews;
+
+  /// No description provided for @archivedProjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived projects'**
+  String get archivedProjects;
+
+  /// No description provided for @deletedProjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently deleted projects'**
+  String get deletedProjects;
+
+  /// No description provided for @archivedSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived conversations'**
+  String get archivedSessions;
+
+  /// No description provided for @deletedSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently deleted conversations'**
+  String get deletedSessions;
 
   /// No description provided for @chatReady.
   ///

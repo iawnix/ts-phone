@@ -94,7 +94,7 @@ test("HTTP API keeps an offline workspace read-only until its TSPi bridge connec
     };
     assert.deepEqual(version.data, {
       apiVersion: "ts-phone-api/4",
-      serviceVersion: "0.9.0",
+      serviceVersion: "0.9.1",
       capabilities: ["terminal.attach"],
     });
     assert.equal((await api(fixture, "/api/v3/version")).status, 404);
@@ -437,6 +437,92 @@ test("SSE publishes CLI input and replays only events after Last-Event-ID", asyn
     assert.match(record, /event: input/);
     assert.match(record, /"instanceEpoch":"11111111/);
     await replayReader.cancel();
+  } finally {
+    await fixture.bridge?.close();
+    await fixture.application.close();
+  }
+});
+
+test("a fresh SSE client receives one current session snapshot before live deltas", async () => {
+  const fixture = await startFixture();
+  try {
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
+    await waitForState(fixture, "idle");
+    const response = await fetch(`${fixture.baseUrl}/api/v4/workspaces/ts_001/sessions/session-test/events`, {
+      headers: fixture.headers,
+    });
+    assert.equal(response.status, 200);
+    const reader = response.body!.getReader();
+    const record = await readSseRecord(reader);
+    assert.match(record, /event: session\.snapshot/);
+    assert.match(record, /"sessionId":"session-test"/);
+    await reader.cancel();
+  } finally {
+    await fixture.bridge?.close();
+    await fixture.application.close();
+  }
+});
+
+test("multiple clients receive the same live session event from one journal", async () => {
+  const fixture = await startFixture();
+  try {
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
+    await waitForState(fixture, "idle");
+    const journal = await fixture.application.hub.journal("ts_001", "session-test");
+    const checkpoint = journal.latestId;
+    const path = `${fixture.baseUrl}/api/v4/workspaces/ts_001/sessions/session-test/events`;
+    const [left, right] = await Promise.all([
+      fetch(path, { headers: { ...fixture.headers, "Last-Event-ID": checkpoint } }),
+      fetch(path, { headers: { ...fixture.headers, "Last-Event-ID": checkpoint } }),
+    ]);
+    assert.equal(left.status, 200);
+    assert.equal(right.status, 200);
+    assert.match(left.headers.get("content-type") ?? "", /^text\/event-stream/);
+    assert.match(right.headers.get("content-type") ?? "", /^text\/event-stream/);
+    const leftReader = left.body!.getReader();
+    const rightReader = right.body!.getReader();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fixture.bridge.publish("input", {
+      type: "input",
+      text: "shared live event",
+      source: "interactive",
+      origin: "local",
+    });
+    const [leftRecord, rightRecord] = await Promise.all([
+      readSseRecord(leftReader),
+      readSseRecord(rightReader),
+    ]);
+    assert.match(leftRecord, /event: input/);
+    assert.match(rightRecord, /event: input/);
+    assert.match(leftRecord, /shared live event/);
+    assert.match(rightRecord, /shared live event/);
+    await Promise.all([leftReader.cancel(), rightReader.cancel()]);
+  } finally {
+    await fixture.bridge?.close();
+    await fixture.application.close();
+  }
+});
+
+test("SSE sends the latest session baseline when a reconnect cursor fell out of the journal", async () => {
+  const fixture = await startFixture();
+  try {
+    fixture.bridge = await connectFakeBridge(fixture.config, "ts_001", fixture.workspace);
+    await waitForState(fixture, "idle");
+    const journal = await fixture.application.hub.journal("ts_001", "session-test");
+    const oldCursor = journal.since(undefined).find((event) => event.type === "session.snapshot")?.id;
+    assert.ok(oldCursor);
+    for (let index = 0; index < fixture.config.eventJournalSize + 5; index += 1) {
+      journal.publish("bounded_noise", { index });
+    }
+    const response = await fetch(`${fixture.baseUrl}/api/v4/workspaces/ts_001/sessions/session-test/events`, {
+      headers: { ...fixture.headers, "Last-Event-ID": oldCursor },
+    });
+    assert.equal(response.status, 200);
+    const reader = response.body!.getReader();
+    const record = await readSseRecord(reader);
+    assert.match(record, /event: session\.snapshot/);
+    assert.match(record, /"sessionId":"session-test"/);
+    await reader.cancel();
   } finally {
     await fixture.bridge?.close();
     await fixture.application.close();

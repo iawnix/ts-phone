@@ -583,11 +583,13 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
     padding: const EdgeInsets.only(left: 4),
     child: Row(
       children: [
+        if (_lifecycleState != LifecycleState.active)
+          BackButton(onPressed: () => _selectLifecycle(LifecycleState.active)),
         Expanded(
           child: Text(switch (_lifecycleState) {
             LifecycleState.active => context.l10n.workspaces,
-            LifecycleState.archived => context.l10n.archivedItems,
-            LifecycleState.trashed => context.l10n.recentlyDeleted,
+            LifecycleState.archived => context.l10n.archivedProjects,
+            LifecycleState.trashed => context.l10n.deletedProjects,
           }, style: Theme.of(context).textTheme.titleSmall),
         ),
         if (_managementApi != null && _lifecycleState == LifecycleState.active)
@@ -601,7 +603,7 @@ class _WorkspaceListPageState extends State<WorkspaceListPage>
           LifecycleSwitcher(
             value: _lifecycleState,
             onChanged: _selectLifecycle,
-            activeLabel: context.l10n.workspaces,
+            tooltip: context.l10n.projectViews,
             activeIcon: Icons.folder_outlined,
           ),
       ],

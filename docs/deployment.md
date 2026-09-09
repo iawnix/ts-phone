@@ -21,9 +21,9 @@ the protocol versions in this table:
 
 | Component | Required version | Contract |
 | --- | ---: | --- |
-| TS Phone server | 0.9.0 | API v4, Events v3, Bridge v3, model selection, terminal attach and guarded idle switching |
+| TS Phone server | 0.9.1 | API v4, Events v3, Bridge v3, durable workspace queue, next-message model selection and terminal attach |
 | TSPi package | 0.15.0 | Shared terminal/Phone Host, exact session Workers, model readiness and guard/1 |
-| Mobile app | 0.18.1+46 | Composer model picker, navigation-safe prompt receipts and distinct session guard diagnostics |
+| Mobile app | 0.18.3+48 | Queued sends, composer model selection and explicit model-service failure messages |
 
 This is the source compatibility set for this change; it does not assert that
 production has been upgraded. Previous installed releases remain recorded in
@@ -32,8 +32,9 @@ production has been upgraded. Previous installed releases remain recorded in
 App 0.16.0 opens a work home, not the previous conversation. Recent entries use
 summary requests only; project/session management remains in lists and menus.
 Explicitly opened history does not activate a Worker and loads
-the latest 50 items first. Continue conversation is an explicit action that
-preserves drafts and never sends them automatically. Settings retain full-label
+the latest 50 items first. On a queue-capable Host, Send admits a request and
+starts execution only when the workspace is idle; Continue and mode selection
+remain compatibility actions for older Hosts. Settings retain full-label
 choice sheets and show the actual Host version. An older Host can
 still serve API v4 history while lacking the new creation endpoints; a successful
 health check alone is not proof that project/session management is installed.

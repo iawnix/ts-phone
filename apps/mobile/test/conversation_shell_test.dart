@@ -623,6 +623,73 @@ void main() {
     },
   );
 
+  testWidgets(
+    'live read-only mode is explicit and changes only after confirmation',
+    (tester) async {
+      final gateway = ConversationGateway()
+        ..sessions = [
+          const SessionSummary(
+            sessionId: 'session_1',
+            sessionRevision: 'revision-1',
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+            accessMode: SessionAccessMode.observer,
+            currentAccessMode: SessionAccessMode.observer,
+            runtimeOwner: 'host',
+            canPrompt: true,
+            capabilities: {'session.activate_mode', 'command.prompt'},
+            activation: SessionActivation(
+              modes: {SessionAccessMode.observer, SessionAccessMode.controller},
+              conflict: SessionActivationConflict(
+                sessionId: 'session_1',
+                sessionRevision: 'revision-1',
+                owner: 'host',
+                switchable: true,
+              ),
+            ),
+          ),
+        ];
+      await tester.pumpWidget(shellApp(gateway));
+      await tester.pumpAndSettle();
+      await openRecent(tester);
+      expect(find.byKey(const ValueKey('continue-session')), findsNothing);
+      expect(find.text('Read-only Q&A'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('chat-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Conversation mode'));
+      await tester.pumpAndSettle();
+      final observer = find.byKey(const ValueKey('session-mode-observer'));
+      expect(
+        find.descendant(
+          of: observer,
+          matching: find.byIcon(Icons.check_rounded),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Workspace access: read-only'), findsOneWidget);
+      await tester.tap(observer);
+      await tester.pumpAndSettle();
+      expect(gateway.activations, 0);
+      expect(find.byType(AlertDialog), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('chat-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Conversation mode'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('session-mode-controller')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Switch to Research?'), findsOneWidget);
+      expect(
+        find.text('Continue research in this conversation?'),
+        findsNothing,
+      );
+      expect(gateway.activations, 0);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(gateway.activations, 0);
+    },
+  );
+
   testWidgets('external owner can be opened but never switched', (
     tester,
   ) async {

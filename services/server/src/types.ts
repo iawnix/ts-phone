@@ -1,6 +1,6 @@
 export const API_VERSION = "ts-phone-api/4" as const;
 export const EVENT_VERSION = "ts-phone-events/3" as const;
-export const SERVICE_VERSION = "0.9.0" as const;
+export const SERVICE_VERSION = "0.9.1" as const;
 
 export type RuntimeState =
   | "offline"
@@ -23,6 +23,8 @@ export type SessionCapability =
   | "activity.subagents"
   | "activity.research"
   | "session.activate_mode"
+  | "session.model_preference"
+  | "command.queue"
   | "command.prompt"
   | "command.abort"
   | "command.model"
@@ -48,6 +50,9 @@ export interface SessionSummary {
   activeAgentRunId: string | null;
   sessionName?: string;
   model?: string;
+  nextModel?: string;
+  commands?: CommandReceipt[];
+  queueProblem?: string;
   promptProblem?: PromptProblem;
   runtime?: SessionRuntimeSnapshot;
   runtimeState: RuntimeState;
@@ -122,6 +127,7 @@ export interface WorkspaceDeletionPreflight {
   remoteCalculations: number;
   pendingApprovals: number;
   unresolvedRemoteEffects: number;
+  pendingCommands?: number;
   canDelete: boolean;
 }
 
@@ -299,4 +305,19 @@ export interface ModelSelectionInput {
   sessionRevision: string;
   provider: string;
   modelId: string;
+  nextTurn?: boolean;
+}
+
+export type CommandStatus = "queued" | "starting" | "running" | "completed" | "failed" | "cancelled" | "unknown" | "acknowledged";
+
+export interface CommandReceipt {
+  clientMessageId: string;
+  sessionId?: string;
+  status: CommandStatus;
+  createdAt: string;
+  updatedAt: string;
+  model?: string;
+  problem?: string;
+  position?: number;
+  preview?: string;
 }

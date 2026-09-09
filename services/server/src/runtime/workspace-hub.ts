@@ -46,6 +46,7 @@ import {
   type RegisteredWorkspace,
 } from "../workspace-registry.js";
 import { WorkerSupervisor, type WorkerExit } from "./worker-supervisor.js";
+import { CommandQueue, commandDigest, commandOutcome, receipt, type QueuedCommand } from "./command-queue.js";
 import type { LifecycleGuard, LifecyclePreflight } from "./lifecycle-client.js";
 import { BridgeConnection } from "../bridge/bridge-connection.js";
 import { BRIDGE_PROTOCOL_VERSION } from "../bridge/protocol.js";
@@ -85,6 +86,7 @@ interface SessionRecord {
   activating?: boolean;
   switching?: boolean;
   ownedWorker?: boolean;
+  queuedCommandId?: string;
 }
 
 interface PendingActivation {
@@ -126,6 +128,7 @@ export class WorkspaceHub {
       config.bridgeSecretPath,
     ),
     registry = new WorkspaceRegistry(config.workspaceRoot),
+    readonly commandQueue?: CommandQueue,
   ) {
     this.#config = config;
     this.#bridgeSecret = bridgeSecret;
@@ -136,6 +139,13 @@ export class WorkspaceHub {
       if (session) session.journal.publish("runtime.error", { code: error.code });
     };
     this.#registry = registry;
+    commandQueue?.connect({
+      ready: (command) => this.#queueReady(command),
+      dispatch: (command) => this.#dispatchQueuedCommand(command),
+      changed: (workspaceId) => {
+        for (const session of this.#records.get(workspaceId)?.sessions.values() ?? []) this.#publishState(session);
+      },
+    });
     this.#staleTimer = setInterval(() => this.#closeStaleConnections(), 10_000);
     this.#staleTimer.unref();
   }
@@ -220,14 +230,57 @@ export class WorkspaceHub {
   }
 
   async setModel(workspaceId: string, sessionId: string, input: ModelSelectionInput): Promise<SessionSummary> {
+    if (input.nextTurn) return this.#serializeMutation(async () => {
+      const { workspace, session } = await this.#managedSession(workspaceId, sessionId);
+      this.#assertRevision(session, input.sessionRevision);
+      if (!this.#queueSupported(session) || session.activating || this.#guardedWorkspaces.has(workspaceId) || this.#closing) {
+        throw new HttpError(409, "session_not_ready", "This conversation cannot update its next-turn model yet");
+      }
+      const model = (await this.models()).find((m) => m.provider === input.provider && m.id === input.modelId);
+      if (!model) throw new HttpError(400, "model_unavailable", "The selected model is not in the Host catalog");
+      this.#assertRevision(session, input.sessionRevision);
+      if (!this.#queueSupported(session) || session.activating || this.#closing) {
+        throw new HttpError(409, "session_not_ready", "Conversation changed while selecting its next-turn model");
+      }
+      await this.#management.rememberSessionModel(workspaceId, this.#workspaceName(workspace), sessionId,
+        `${model.provider}/${model.id}`, this.#sessionDefaults(session));
+      this.#publishState(session);
+      return this.#sessionSummary(session);
+    });
+    this.#assertQueueEmpty(workspaceId);
+    const preference = await this.#serializeMutation(async () => {
+      const { workspace, session } = await this.#managedSession(workspaceId, sessionId);
+      this.#assertQueueEmpty(workspaceId);
+      this.#assertRevision(session, input.sessionRevision);
+      if (isLive(session)) return undefined;
+      const summary = this.#sessionSummary(session);
+      if (!summary.capabilities.includes("session.model_preference") || this.#workers.owns(workspaceId, sessionId)
+        || this.#activations.has(workspaceId) || this.#guardedWorkspaces.has(workspaceId) || this.#closing) {
+        throw new HttpError(409, "session_not_ready", "Preselect a model only for a new conversation; resume existing history before changing its model");
+      }
+      const model = (await this.models()).find((model) => model.provider === input.provider && model.id === input.modelId);
+      if (!model) throw new HttpError(400, "model_unavailable", "The selected model is not in the Host catalog");
+      // Catalog reads can outlive a bridge attachment. Do not overwrite a live model.
+      this.#assertRevision(session, input.sessionRevision);
+      if (!this.#sessionSummary(session).capabilities.includes("session.model_preference")
+        || this.#closing || this.#guardedWorkspaces.has(workspaceId)) {
+        throw new HttpError(409, "session_not_ready", "Conversation started while selecting a model");
+      }
+      await this.#management.rememberSessionModel(workspaceId, this.#workspaceName(workspace), sessionId,
+        `${model.provider}/${model.id}`, this.#sessionDefaults(session));
+      this.#publishState(session);
+      return this.#sessionSummary(session);
+    });
+    if (preference) return preference;
     const session = await this.#connectedSession(workspaceId, sessionId);
+    this.#assertQueueEmpty(workspaceId);
     this.#assertRevision(session, input.sessionRevision);
     if (!session.snapshot?.modelControl || !this.#workers.owns(workspaceId, sessionId)) {
       throw new HttpError(409, "model_control_unavailable", "Reopen with an updated Host to select this conversation's model");
     }
     if (!this.#isIdleOwnedRuntime(session) || session.activating || session.switching
-      || this.#guardedWorkspaces.has(workspaceId) || this.#closing || session.accessMode !== "controller") {
-      throw new HttpError(409, "session_not_ready", "Model selection requires an idle Controller with no pending messages");
+      || this.#guardedWorkspaces.has(workspaceId) || this.#closing) {
+      throw new HttpError(409, "session_not_ready", "Model selection requires an idle Host-owned assistant with no pending messages");
     }
     const connection = session.connection;
     session.switching = true;
@@ -367,6 +420,9 @@ export class WorkspaceHub {
   }
 
   async workspaceDeletionPreflight(workspaceId: string): Promise<WorkspaceDeletionPreflight> {
+    if (this.commandQueue?.faulted) {
+      throw new HttpError(503, "queue_storage_unavailable", "Recover Host command storage before deletion preflight");
+    }
     const workspace = await this.#loadWorkspace(workspaceId);
     await this.#reconcileSessions(workspace);
     const metadata = this.#management.workspace(workspaceId);
@@ -395,7 +451,9 @@ export class WorkspaceHub {
       remoteCalculations: scientific.remoteCalculations,
       pendingApprovals,
       unresolvedRemoteEffects: scientific.unresolvedRemoteEffects,
+      pendingCommands: this.commandQueue?.pendingCount(workspaceId) ?? 0,
       canDelete: activeWorkers === 0
+        && !this.commandQueue?.hasPending(workspaceId)
         && scientific.remoteCalculations === 0
         && pendingApprovals === 0
         && scientific.unresolvedRemoteEffects === 0,
@@ -453,7 +511,12 @@ export class WorkspaceHub {
           await this.#management.purgeWorkspace(workspaceId, input.managementRevision);
           managementPurged = true;
           guard.assertHeld();
-          await this.#registry.deleteQuarantine(quarantine);
+          const remove = async () => {
+            guard.assertHeld();
+            await this.#registry.deleteQuarantine(quarantine);
+          };
+          if (this.commandQueue) await this.commandQueue.withPurgedReceipts(workspaceId, undefined, remove);
+          else await remove();
         } catch (error) {
           const recoveryErrors: unknown[] = [];
           try {
@@ -538,7 +601,12 @@ export class WorkspaceHub {
           await this.#management.purgeSession(workspaceId, sessionId, input.managementRevision);
           managementPurged = true;
           guard?.assertHeld();
-          if (quarantine) await this.#registry.deleteQuarantine(quarantine);
+          const remove = async () => {
+            guard?.assertHeld();
+            if (quarantine) await this.#registry.deleteQuarantine(quarantine);
+          };
+          if (this.commandQueue) await this.commandQueue.withPurgedReceipts(workspaceId, sessionId, remove);
+          else await remove();
         } catch (error) {
           const recoveryErrors: unknown[] = [];
           if (quarantine) {
@@ -578,9 +646,12 @@ export class WorkspaceHub {
     workspaceId: string,
     sessionId: string,
     input: ActivateInput,
+    queued = false,
+    queuedModel?: string,
   ): Promise<SessionSummary> {
     const admitted = await this.#serializeMutation(async () => {
       if (this.#closing) throw new HttpError(503, "host_stopping", "TSPi Host is stopping");
+      if (!queued) this.#assertQueueEmpty(workspaceId);
       const requestKey = input.requestId ? `${workspaceId}\u0000${sessionId}\u0000${input.requestId}` : undefined;
       const previous = requestKey ? this.#activationRequests.get(requestKey) : undefined;
       if (previous) {
@@ -617,6 +688,7 @@ export class WorkspaceHub {
         throw new HttpError(409, "activation_capacity_exceeded", "Activation receipt capacity reached; schedule Host maintenance before more starts");
       }
       if (isLive(session) && accessMode === session.accessMode) {
+        if (queuedModel) await this.#selectQueuedModel(session, queuedModel);
         if (!canPrompt(session)) {
           throw new HttpError(409, promptProblem(session) ?? "session_not_ready", "This conversation is not ready; refresh its runtime state");
         }
@@ -647,7 +719,7 @@ export class WorkspaceHub {
         throw new HttpError(409, "session_switch_stale", "The runtime to switch changed; refresh before continuing");
       }
       session.activating = true;
-      const result = this.#activateRuntime(workspace, session, input, accessMode, source)
+      const result = this.#activateRuntime(workspace, session, input, accessMode, source, queuedModel)
         .finally(() => {
           delete session.activating;
           if (source) delete source.switching;
@@ -669,6 +741,7 @@ export class WorkspaceHub {
     input: ActivateInput,
     accessMode: SessionAccessMode,
     source?: SessionRecord,
+    queuedModel?: string,
   ): Promise<SessionSummary> {
     const workspaceId = session.workspaceId;
     const sessionId = session.sessionId;
@@ -703,6 +776,7 @@ export class WorkspaceHub {
       if (this.#closing || !isLive(session) || !session.snapshot || session.accessMode !== accessMode) {
         throw new HttpError(409, "worker_start_interrupted", "TSPi startup was interrupted before the session became ready");
       }
+      if (queuedModel) await this.#selectQueuedModel(session, queuedModel);
       const problem = promptProblem(session);
       if (problem) throw new HttpError(409, problem, "The selected model is not configured for this TSPi runtime");
       await this.#serializeMutation(async () => {
@@ -882,12 +956,149 @@ export class WorkspaceHub {
       activeAgentRunId: session.activeAgentRunId ?? null,
       ...page,
       lastEventId: session.snapshotEventId ?? session.journal.latestId,
-      capabilities: capabilitiesForSession(session, selectedActive),
+      capabilities: selectedActive ? this.#sessionSummary(session).capabilities : capabilitiesForSession(session, false),
     };
   }
 
-  async prompt(workspaceId: string, sessionId: string, input: PromptInput): Promise<void> {
+  async resumeQueue(): Promise<void> {
+    for (const workspaceId of this.commandQueue?.workspaceIds() ?? []) {
+      try {
+        const workspace = await this.#loadWorkspace(workspaceId);
+        await this.#reconcileSessions(workspace);
+        this.commandQueue!.wake(workspaceId);
+      } catch {
+        console.warn(JSON.stringify({ event: "queue_workspace_unavailable", workspaceId }));
+      }
+    }
+  }
+
+  async enqueue(workspaceId: string, sessionId: string, input: PromptInput) {
+    return this.#serializeMutation(async () => {
+      const { session } = await this.#managedSession(workspaceId, sessionId);
+      const existing = this.commandQueue?.find(workspaceId, sessionId, input.clientMessageId);
+      if (existing) {
+        if (existing.digest !== commandDigest(input.message)) throw new HttpError(409, "message_id_conflict", "Message identity was reused with different content");
+        return receipt(existing);
+      }
+      if (!this.#queueSupported(session) || this.#closing) {
+        throw new HttpError(409, "queue_unavailable", "Queued execution needs an active conversation managed by Host");
+      }
+      this.#assertRevision(session, input.sessionRevision);
+      if (this.#guardedWorkspaces.has(workspaceId)) throw new HttpError(409, "workspace_activating", "Workspace lifecycle is changing");
+      const model = this.#sessionSummary(session).nextModel;
+      return this.commandQueue!.enqueue(workspaceId, sessionId, input, model);
+    });
+  }
+
+  async cancelCommand(workspaceId: string, sessionId: string, id: string) {
+    await this.#managedSession(workspaceId, sessionId);
+    if (!this.commandQueue) throw new HttpError(409, "queue_unavailable", "Host command queue is unavailable");
+    return this.commandQueue.cancel(workspaceId, sessionId, id);
+  }
+
+  async acknowledgeCommand(workspaceId: string, sessionId: string, id: string) {
+    return this.#serializeMutation(async () => {
+      const { session } = await this.#managedSession(workspaceId, sessionId);
+      if (!this.commandQueue) throw new HttpError(409, "queue_unavailable", "Host command queue is unavailable");
+      if (isLive(session) || this.#workers.owns(workspaceId, sessionId) || session.activating || session.pendingPrompts) {
+        throw new HttpError(409, "session_recovery_required", "End the uncertain runtime before acknowledging its outcome");
+      }
+      const result = await this.commandQueue.acknowledge(workspaceId, sessionId, id);
+      if (!this.commandQueue.hasUnknown(workspaceId)) {
+        session.state = "offline";
+        session.unstartedPrompts.clear();
+        session.observedPrompts.clear();
+      }
+      this.#publishState(session);
+      this.commandQueue.wake(workspaceId);
+      return result;
+    });
+  }
+
+  #queueSupported(session: SessionRecord): boolean {
+    return Boolean(this.commandQueue && this.#workers.available
+      && (this.#management.workspace(session.workspaceId)?.lifecycleState ?? "active") === "active"
+      && (this.#management.session(session.workspaceId, session.sessionId)?.lifecycleState ?? "active") === "active"
+      && (!isLive(session) || this.#workers.owns(session.workspaceId, session.sessionId)));
+  }
+
+  #queueProblem(workspaceId: string): string | undefined {
+    if (this.commandQueue?.faulted) return "queue_storage_unavailable";
+    if (this.commandQueue?.hasUnknown(workspaceId)) return "queue_recovery_required";
+    const sessions = [...this.#records.get(workspaceId)?.sessions.values() ?? []];
+    if (sessions.some((s) => s.state === "recovery_required")) return "session_recovery_required";
+    if (sessions.some((s) => s.accessMode === "controller" && isLive(s) && !this.#workers.owns(workspaceId, s.sessionId))) return "external_controller";
+    return undefined;
+  }
+
+  #queueReady(command: QueuedCommand): boolean {
+    const workspace = this.#records.get(command.workspaceId);
+    const target = workspace?.sessions.get(command.sessionId);
+    if (!workspace || !target || !this.#queueSupported(target) || this.#closing
+      || this.#queueProblem(command.workspaceId) || this.#activations.has(command.workspaceId)
+      || this.#guardedWorkspaces.has(command.workspaceId)) return false;
+    return [...workspace.sessions.values()].every((session) => {
+      if (session.accessMode !== "controller" && session !== target) return true;
+      if (session.activating || session.switching) return false;
+      return !isLive(session) && !this.#workers.owns(command.workspaceId, session.sessionId)
+        || this.#isIdleOwnedRuntime(session);
+    });
+  }
+
+  async #dispatchQueuedCommand(command: QueuedCommand): Promise<void> {
+    const { workspace, session } = await this.#managedSession(command.workspaceId, command.sessionId);
+    // Existing read-only workers retain their authority until explicitly replaced.
+    // The queued send is the authenticated request to run this conversation normally.
+    if (isLive(session) && session.accessMode === "observer") await this.#stopIdleWorker(session);
+    const source = this.#controller(workspace);
+    const active = await this.activateSession(command.workspaceId, command.sessionId, {
+      managementRevision: this.#management.session(command.workspaceId, command.sessionId)?.managementRevision ?? "unmanaged",
+      accessMode: "controller",
+      ...(source && source !== session ? { switchFrom: { sessionId: source.sessionId, sessionRevision: source.journal.epoch } } : {}),
+    }, true, command.model);
+    session.queuedCommandId = command.clientMessageId;
+    try {
+      await this.prompt(command.workspaceId, command.sessionId, {
+        sessionRevision: active.sessionRevision, clientMessageId: command.clientMessageId,
+        message: command.message!, clientKind: command.clientKind,
+      }, true);
+    } catch (error) {
+      // An explicit preflight rejection cannot later produce an agent_settled event.
+      if (error instanceof HttpError) delete session.queuedCommandId;
+      throw error;
+    }
+  }
+
+  async #selectQueuedModel(session: SessionRecord, reference: string): Promise<void> {
+    if (session.snapshot?.model === reference && !promptProblem(session)) return;
+    if (!session.snapshot?.modelControl || !this.#workers.owns(session.workspaceId, session.sessionId)) {
+      throw new HttpError(409, "model_control_unavailable", "This Worker cannot confirm a next-turn model");
+    }
+    const separator = reference.indexOf("/");
+    if (separator <= 0) throw new HttpError(400, "model_unavailable", "Queued model reference is invalid");
+    const connection = session.connection;
+    const model = await this.#workers.setModel(session.workspaceId, session.sessionId, reference.slice(0, separator), reference.slice(separator + 1));
+    if (connection !== session.connection || !isLive(session)) throw new HttpError(409, "model_change_unconfirmed", "Worker changed while selecting the queued model");
+    session.runtime = { schemaVersion: "ts-phone-session-runtime/1", model: { provider: model.provider, id: model.id }, updatedAt: new Date().toISOString() };
+    session.snapshot!.model = `${model.provider}/${model.id}`;
+    session.snapshot!.runtime = session.runtime;
+    delete session.snapshot!.promptProblem;
+    this.#publishState(session);
+  }
+
+  #assertQueueEmpty(workspaceId: string): void {
+    if (this.commandQueue?.faulted) {
+      throw new HttpError(503, "queue_storage_unavailable", "Recover Host command storage before changing execution state");
+    }
+    if (this.commandQueue?.hasPending(workspaceId)) {
+      throw new HttpError(409, "queue_requests_active", "Wait for or cancel queued requests before changing the runtime or project lifecycle");
+    }
+  }
+
+  async prompt(workspaceId: string, sessionId: string, input: PromptInput, queued = false): Promise<void> {
+    if (!queued) this.#assertQueueEmpty(workspaceId);
     const session = await this.#connectedSession(workspaceId, sessionId);
+    if (!queued) this.#assertQueueEmpty(workspaceId);
     this.#assertRevision(session, input.sessionRevision);
     if (session.activating || session.switching || this.#guardedWorkspaces.has(workspaceId)
       || this.#closing || (session.state !== "idle" && session.state !== "running")) {
@@ -949,6 +1160,8 @@ export class WorkspaceHub {
     await this.#reconcileSessions(workspace);
     const session = workspace.sessions.get(sessionId);
     if (!session) throw new HttpError(404, "session_not_found", "TSPi session was not found");
+    const durable = this.commandQueue?.find(workspaceId, sessionId, messageId);
+    if (durable) return { ...receipt(durable), sessionRevision: session.journal.epoch, durable: true };
     // These receipts are scoped to this live journal, not durable evidence of
     // non-delivery. An absent or old receipt must never authorize replay.
     return { clientMessageId: messageId, sessionRevision: session.journal.epoch,
@@ -1044,6 +1257,7 @@ export class WorkspaceHub {
     this.#bridgeWaiters.clear();
     await this.#workers.close();
     await Promise.allSettled([...this.#activations.values()].map((activation) => activation.result));
+    await this.commandQueue?.close();
   }
 
   #handleBridgeRecord(
@@ -1090,18 +1304,7 @@ export class WorkspaceHub {
       session.state = snapshot.isStreaming ? "running" : "idle";
       session.snapshotEventId = session.journal.publish(
         "session.snapshot",
-        {
-          ...this.#sessionSummary(session),
-          ...snapshot,
-          activeAgentRunId: session.activeAgentRunId ?? null,
-          messages: [...snapshot.messages],
-          accessMode: session.accessMode,
-          historyAvailable: Boolean(session.persisted),
-          historyOnly: false,
-          canPrompt: canPrompt(session),
-          promptProblem: promptProblem(session),
-          capabilities: capabilitiesForSession(session),
-        },
+        this.#snapshotPayload(session),
         identity,
       ).id;
       this.#publishState(session);
@@ -1143,6 +1346,7 @@ export class WorkspaceHub {
       session.observedPrompts.clear();
       session.state = "running";
       if (session.snapshot) session.snapshot.isStreaming = true;
+      this.#refreshSnapshotBaseline(session);
     }
     if (bridgeRecord.eventType === "agent_settled") {
       const agentRunId = agentRunIdFromEvent(bridgeRecord.payload, "agent_settled");
@@ -1156,6 +1360,12 @@ export class WorkspaceHub {
       session.observedPrompts.clear();
       session.state = "idle";
       if (session.snapshot) session.snapshot.isStreaming = false;
+      this.#refreshSnapshotBaseline(session);
+      if (session.queuedCommandId) {
+        this.commandQueue?.settle(session.workspaceId, session.sessionId, session.queuedCommandId,
+          commandOutcome(bridgeRecord.payload));
+        delete session.queuedCommandId;
+      }
     }
     if (bridgeRecord.eventType === "message_end" && session.snapshot) {
       const message = messageFromEndEvent(bridgeRecord.payload);
@@ -1165,6 +1375,7 @@ export class WorkspaceHub {
         delete session.snapshot.hasMore;
         delete session.snapshot.nextBefore;
       }
+      this.#refreshSnapshotBaseline(session);
     }
     const event = session.journal.publish(bridgeRecord.eventType, bridgeRecord.payload, identity);
     if (session.snapshot && (
@@ -1176,7 +1387,30 @@ export class WorkspaceHub {
     }
     if (bridgeRecord.eventType === "agent_start" || bridgeRecord.eventType === "agent_settled") {
       this.#publishState(session);
+      this.commandQueue?.wake(session.workspaceId);
     }
+  }
+
+  #refreshSnapshotBaseline(session: SessionRecord): void {
+    if (!session.snapshot) return;
+    session.journal.refreshLatestSnapshot(this.#snapshotPayload(session));
+  }
+
+  #snapshotPayload(session: SessionRecord): Record<string, unknown> {
+    if (!session.snapshot) throw new Error("Cannot build a snapshot without a live session snapshot");
+    const summary = this.#sessionSummary(session);
+    return {
+      ...summary,
+      ...session.snapshot,
+      activeAgentRunId: session.activeAgentRunId ?? null,
+      messages: [...session.snapshot.messages],
+      accessMode: session.accessMode,
+      historyAvailable: Boolean(session.persisted),
+      historyOnly: false,
+      canPrompt: canPrompt(session),
+      promptProblem: promptProblem(session),
+      capabilities: summary.capabilities,
+    };
   }
 
   #acceptApproval(
@@ -1198,6 +1432,10 @@ export class WorkspaceHub {
 
   #handleBridgeClose(session: SessionRecord, connection: BridgeConnection): void {
     if (session.connection !== connection) return;
+    if (session.queuedCommandId) {
+      this.commandQueue?.disconnected(session.workspaceId, session.sessionId);
+      delete session.queuedCommandId;
+    }
     delete session.connection;
     delete session.snapshot;
     delete session.snapshotEventId;
@@ -1209,6 +1447,7 @@ export class WorkspaceHub {
       if (pending.connection === connection) this.#approvals.delete(key);
     }
     this.#publishState(session);
+    this.commandQueue?.wake(session.workspaceId);
   }
 
   async #connectedSession(workspaceId: string, sessionId: string): Promise<SessionRecord> {
@@ -1381,15 +1620,29 @@ export class WorkspaceHub {
       ...(updatedAt ? { updatedAt } : {}),
       ...(metadata?.deletedAt ? { deletedAt: metadata.deletedAt } : {}),
     };
+    // Saved Pi history owns its model. Startup preferences apply only before
+    // the first Worker persists a conversation.
+    if (summary.canActivate && !historyAvailable && !this.#workers.owns(session.workspaceId, session.sessionId)) {
+      summary.capabilities.push("session.model_preference");
+    }
     if (metadata?.name) summary.sessionName = metadata.name;
     else if (session.snapshot?.sessionName) summary.sessionName = session.snapshot.sessionName;
     else if (session.persisted?.title) summary.sessionName = session.persisted.title;
-    if (session.snapshot?.model) summary.model = session.snapshot.model;
+    if (!live && !historyAvailable && metadata?.model) summary.model = metadata.model;
+    else if (session.snapshot?.model) summary.model = session.snapshot.model;
     else if (session.runtime) {
       summary.model = `${session.runtime.model.provider}/${session.runtime.model.id}`;
     }
     else if (metadata?.model) summary.model = metadata.model;
     if (session.runtime) summary.runtime = session.runtime;
+    if (this.#queueSupported(session)) {
+      summary.capabilities.push("command.queue");
+      summary.commands = this.commandQueue!.view(session.workspaceId, session.sessionId);
+      const nextModel = metadata?.model ?? summary.model;
+      if (nextModel) summary.nextModel = nextModel;
+      const problem = this.#queueProblem(session.workspaceId);
+      if (problem) summary.queueProblem = problem;
+    }
     return summary;
   }
 
@@ -1400,7 +1653,10 @@ export class WorkspaceHub {
       state: session.state,
       sessionId: session.sessionId,
       sessionName: session.snapshot?.sessionName,
-      model: session.snapshot?.model,
+      model: summary.model,
+      nextModel: summary.nextModel,
+      commands: summary.commands,
+      queueProblem: summary.queueProblem ?? null,
       runtime: session.runtime,
       isStreaming: session.state === "running",
       activeAgentRunId: session.activeAgentRunId ?? null,
@@ -1409,7 +1665,7 @@ export class WorkspaceHub {
       historyOnly: session.state === "offline" && !isLive(session) && Boolean(session.persisted),
       canPrompt: canPrompt(session),
       promptProblem: promptProblem(session),
-      capabilities: capabilitiesForSession(session),
+      capabilities: summary.capabilities,
       currentAccessMode: summary.currentAccessMode,
       runtimeOwner: summary.runtimeOwner,
       activation: summary.activation,
@@ -1432,6 +1688,7 @@ export class WorkspaceHub {
     for (const [key, pending] of this.#approvals) {
       if (Date.parse(pending.request.expiresAt) <= Date.now()) this.#approvals.delete(key);
     }
+    for (const workspaceId of this.commandQueue?.workspaceIds() ?? []) this.commandQueue!.wake(workspaceId);
   }
 
   #trimMessageCommands(commands: SessionRecord["messageCommands"]): void {
@@ -1474,6 +1731,7 @@ export class WorkspaceHub {
   }
 
   async #stopIdleOwnedWorkers(workspace: WorkspaceRecord): Promise<void> {
+    this.#assertQueueEmpty(workspace.workspace.id);
     for (const session of workspace.sessions.values()) {
       if (this.#runtimeConflict(session).switchable) await this.#stopIdleWorker(session);
     }
@@ -1503,6 +1761,7 @@ export class WorkspaceHub {
     operation: (guard: LifecycleGuard) => Promise<T>,
   ): Promise<T> {
     const id = workspace.workspace.id;
+    this.#assertQueueEmpty(id);
     this.#guardedWorkspaces.add(id);
     try {
       return await this.#workers.withLifecycleGuard(id, workspace.workspace.root, operation);
@@ -1597,6 +1856,7 @@ export class WorkspaceHub {
   }
 
   #assertSessionCanHide(workspaceId: string, session: SessionRecord): void {
+    this.#assertQueueEmpty(workspaceId);
     if (isLive(session)
       || this.#workers.owns(workspaceId, session.sessionId)
       || session.state === "connecting"
@@ -1665,6 +1925,7 @@ export class WorkspaceHub {
   }
 
   #assertNoActivation(workspaceId: string): void {
+    this.#assertQueueEmpty(workspaceId);
     if (this.#activations.has(workspaceId)) {
       throw new HttpError(409, "workspace_activating", "Wait for conversation activation before changing its lifecycle");
     }
@@ -1814,7 +2075,7 @@ function capabilitiesForSession(
   if (activeBranch && isLive(session)) {
     if (canPrompt(session)) capabilities.push("command.prompt");
     capabilities.push("command.abort", "interaction.approval");
-    if (session.ownedWorker && session.snapshot?.modelControl && session.accessMode === "controller"
+    if (session.ownedWorker && session.snapshot?.modelControl
       && !session.switching && !session.activating) {
       capabilities.push("command.model");
     }

@@ -8,6 +8,7 @@ import '../models/connection_settings.dart';
 import '../models/session_timeline.dart';
 import '../models/workspace.dart';
 import '../models/phone_model.dart';
+import '../models/queued_command.dart';
 import 'sse_parser.dart';
 
 class TsPhoneApiException implements Exception {
@@ -61,6 +62,15 @@ enum TsPhoneProblemCode {
   activationOutcomeUnknown,
   activationCapacity,
   runtimeRecoveryRequired,
+  apiRouteMissing,
+  queueStorageUnavailable,
+  queueCapacity,
+  queueRecovery,
+  providerUnavailable,
+  providerRateLimited,
+  providerAuthFailed,
+  providerError,
+  generationIncomplete,
 }
 
 class TsPhoneProblem {
@@ -85,10 +95,21 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
   }
   if (error is TsPhoneApiException) {
     final promptCode = switch (error.code) {
+      'not_found' => TsPhoneProblemCode.apiRouteMissing,
+      'queue_storage_unavailable' => TsPhoneProblemCode.queueStorageUnavailable,
+      'queue_capacity_exceeded' => TsPhoneProblemCode.queueCapacity,
+      'queue_recovery_required' ||
+      'host_restarted' => TsPhoneProblemCode.queueRecovery,
       'model_unavailable' => TsPhoneProblemCode.modelUnavailable,
       'model_auth_missing' => TsPhoneProblemCode.modelAuthMissing,
       'model_storage_unavailable' => TsPhoneProblemCode.modelStorageUnavailable,
       'model_check_failed' => TsPhoneProblemCode.modelCheckFailed,
+      'provider_unavailable' => TsPhoneProblemCode.providerUnavailable,
+      'provider_rate_limited' => TsPhoneProblemCode.providerRateLimited,
+      'provider_auth_failed' => TsPhoneProblemCode.providerAuthFailed,
+      'provider_error' => TsPhoneProblemCode.providerError,
+      'generation_incomplete' ||
+      'generation_unconfirmed' => TsPhoneProblemCode.generationIncomplete,
       'model_control_unavailable' =>
         TsPhoneProblemCode.activationUpgradeRequired,
       'model_change_unconfirmed' => TsPhoneProblemCode.runtimeRecoveryRequired,
@@ -134,10 +155,13 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
       'controller_session_active' ||
       'workspace_activating' ||
       'session_not_ready' ||
+      'queue_requests_active' ||
+      'command_already_started' ||
       'worker_identity_conflict' ||
       'session_active' ||
       'session_has_pending_approvals' => TsPhoneProblemCode.resourcesBusy,
       'workspace_preflight_unavailable' ||
+      'queue_unavailable' ||
       'worker_unavailable' => TsPhoneProblemCode.preflightUnavailable,
       'management_capacity_exceeded' => TsPhoneProblemCode.managementCapacity,
       _ => null,
@@ -459,11 +483,44 @@ abstract interface class TsPhoneModelGateway {
   );
 }
 
+abstract interface class TsPhoneQueueGateway {
+  Future<QueuedCommand> enqueueMessage(
+    String workspaceId,
+    String sessionId,
+    String revision,
+    String message,
+    String clientMessageId,
+  );
+  Future<QueuedCommand> commandReceipt(
+    String workspaceId,
+    String sessionId,
+    String revision,
+    String clientMessageId,
+  );
+  Future<void> cancelQueuedCommand(
+    String workspaceId,
+    String sessionId,
+    String id,
+  );
+  Future<void> acknowledgeQueuedCommand(
+    String workspaceId,
+    String sessionId,
+    String id,
+  );
+  Future<SessionSummary> selectNextModel(
+    String workspaceId,
+    String sessionId,
+    String revision,
+    PhoneModel model,
+  );
+}
+
 class TsPhoneApi
     implements
         TsPhoneGateway,
         TsPhoneManagementGateway,
         TsPhoneHistoryGateway,
+        TsPhoneQueueGateway,
         TsPhoneModelGateway {
   TsPhoneApi(
     this.settings, {
@@ -600,10 +657,111 @@ class TsPhoneApi
 
   @override
   Future<List<PhoneModel>> models() async {
-    final value = await _request('GET', '/api/v4/models');
+    final value = await _request('GET', 'models');
     if (value is! List) throw const FormatException('Invalid model catalog');
     return value.map(PhoneModel.fromJson).toList(growable: false);
   }
+
+  @override
+  Future<QueuedCommand> enqueueMessage(
+    String workspaceId,
+    String sessionId,
+    String revision,
+    String message,
+    String clientMessageId,
+  ) async {
+    final value = await _request(
+      'POST',
+      _sessionPath(workspaceId, sessionId, 'commands'),
+      body: {
+        'sessionRevision': revision,
+        'message': message,
+        'clientMessageId': clientMessageId,
+        'clientKind': 'phone',
+      },
+    );
+    final command = QueuedCommand.fromJson(_asMap(value, 'Command receipt'));
+    if (command.id != clientMessageId) {
+      throw const FormatException('Host returned an unrelated command receipt');
+    }
+    return command;
+  }
+
+  @override
+  Future<QueuedCommand> commandReceipt(
+    String workspaceId,
+    String sessionId,
+    String revision,
+    String clientMessageId,
+  ) async {
+    final value = await _request(
+      'GET',
+      _sessionPath(
+        workspaceId,
+        sessionId,
+        'commands/${Uri.encodeComponent(clientMessageId)}',
+      ),
+      queryParameters: {'sessionRevision': revision},
+    );
+    final record = _asMap(value, 'Command receipt');
+    if (record['durable'] != true ||
+        record['clientMessageId'] != clientMessageId) {
+      throw const FormatException('Host has not confirmed durable admission');
+    }
+    return QueuedCommand.fromJson(record);
+  }
+
+  @override
+  Future<void> cancelQueuedCommand(
+    String workspaceId,
+    String sessionId,
+    String id,
+  ) async {
+    await _request(
+      'POST',
+      _sessionPath(
+        workspaceId,
+        sessionId,
+        'commands/${Uri.encodeComponent(id)}/cancel',
+      ),
+      body: {},
+    );
+  }
+
+  @override
+  Future<void> acknowledgeQueuedCommand(
+    String workspaceId,
+    String sessionId,
+    String id,
+  ) async {
+    await _request(
+      'POST',
+      _sessionPath(
+        workspaceId,
+        sessionId,
+        'commands/${Uri.encodeComponent(id)}/acknowledge',
+      ),
+      body: {'confirmation': id},
+    );
+  }
+
+  @override
+  Future<SessionSummary> selectNextModel(
+    String workspaceId,
+    String sessionId,
+    String revision,
+    PhoneModel model,
+  ) => _sessionMutation(
+    workspaceId,
+    sessionId,
+    'model',
+    body: {
+      'sessionRevision': revision,
+      'provider': model.provider,
+      'modelId': model.id,
+      'nextTurn': true,
+    },
+  );
 
   @override
   Future<SessionSummary> selectModel(
@@ -1038,7 +1196,7 @@ class TsPhoneApi
     String sessionId, {
     String? lastEventId,
     void Function()? onConnected,
-  }) async* {
+  }) {
     final abort = Completer<void>();
     final request =
         http.AbortableRequest(
@@ -1052,34 +1210,78 @@ class TsPhoneApi
             'Accept': 'text/event-stream',
           });
     if (lastEventId != null) request.headers['Last-Event-ID'] = lastEventId;
-    late final http.StreamedResponse response;
-    try {
-      response = await _client.send(request).timeout(requestTimeout);
-    } on TimeoutException {
+    StreamSubscription<String>? subscription;
+    var cancelled = false;
+    late final StreamController<TsPhoneEvent> stream;
+    void finish([Object? error, StackTrace? stack]) {
+      if (cancelled || stream.isClosed) return;
       if (!abort.isCompleted) abort.complete();
-      throw const TsPhoneApiException(
-        'Request timed out',
-        code: 'request_timeout',
-      );
+      if (error != null) stream.addError(error, stack);
+      unawaited(stream.close());
     }
-    if (response.statusCode != 200) {
-      final body = await response.stream.bytesToString();
-      throw _apiError(response.statusCode, body);
-    }
-    onConnected?.call();
-    final parser = SseParser();
-    await for (final line
-        in response.stream
+
+    Future<void> open() async {
+      try {
+        final response = await _client.send(request).timeout(requestTimeout);
+        if (cancelled) return;
+        if (response.statusCode != 200) {
+          final body = await response.stream.bytesToString().timeout(
+            requestTimeout,
+          );
+          throw _apiError(response.statusCode, body);
+        }
+        onConnected?.call();
+        if (cancelled) return;
+        final parser = SseParser();
+        subscription = response.stream
             .transform(utf8.decoder)
-            .transform(const LineSplitter())) {
-      final record = parser.addLine(line);
-      if (record == null) continue;
-      final event = TsPhoneEvent.fromJson(jsonDecode(record.data));
-      if (record.id != null && record.id != event.id) {
-        throw const FormatException('SSE id does not match its event envelope');
+            .transform(const LineSplitter())
+            .listen(
+              (line) {
+                if (cancelled || stream.isClosed) return;
+                try {
+                  final record = parser.addLine(line);
+                  if (record == null) return;
+                  final event = TsPhoneEvent.fromJson(jsonDecode(record.data));
+                  if (record.id != null && record.id != event.id) {
+                    throw const FormatException(
+                      'SSE id does not match its event envelope',
+                    );
+                  }
+                  stream.add(event);
+                } on Object catch (error, stack) {
+                  finish(error, stack);
+                }
+              },
+              onError: (Object error, StackTrace stack) => finish(error, stack),
+              onDone: finish,
+              cancelOnError: true,
+            );
+        if (stream.isPaused) subscription!.pause();
+      } on TimeoutException catch (_, stack) {
+        finish(
+          const TsPhoneApiException(
+            'Request timed out',
+            code: 'request_timeout',
+          ),
+          stack,
+        );
+      } on Object catch (error, stack) {
+        finish(error, stack);
       }
-      yield event;
     }
+
+    stream = StreamController<TsPhoneEvent>(
+      onListen: () => unawaited(open()),
+      onPause: () => subscription?.pause(),
+      onResume: () => subscription?.resume(),
+      onCancel: () async {
+        cancelled = true;
+        if (!abort.isCompleted) abort.complete();
+        await subscription?.cancel();
+      },
+    );
+    return stream.stream;
   }
 
   Future<Object?> _request(

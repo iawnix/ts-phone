@@ -122,7 +122,6 @@ class _SessionCreatorSheet extends StatefulWidget {
 class _SessionCreatorSheetState extends State<_SessionCreatorSheet> {
   final TextEditingController _nameController = TextEditingController();
   PhoneModel? _model;
-  SessionAccessMode _accessMode = SessionAccessMode.controller;
 
   @override
   void dispose() {
@@ -134,7 +133,7 @@ class _SessionCreatorSheetState extends State<_SessionCreatorSheet> {
     ActionFeedback.tap();
     Navigator.of(context).pop(
       SessionDraft(
-        accessMode: _accessMode,
+        accessMode: SessionAccessMode.controller,
         name: _optionalText(_nameController.text),
         model: _model?.reference,
       ),
@@ -151,23 +150,6 @@ class _SessionCreatorSheetState extends State<_SessionCreatorSheet> {
           Text(
             context.l10n.newSession,
             style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: TsPhoneSpacing.large),
-          TsSegmentedControl<SessionAccessMode>(
-            segments: <ButtonSegment<SessionAccessMode>>[
-              ButtonSegment(
-                value: SessionAccessMode.controller,
-                icon: const Icon(Icons.edit_outlined),
-                label: Text(context.l10n.accessController),
-              ),
-              ButtonSegment(
-                value: SessionAccessMode.observer,
-                icon: const Icon(Icons.visibility_outlined),
-                label: Text(context.l10n.accessObserver),
-              ),
-            ],
-            selected: _accessMode,
-            onChanged: (value) => setState(() => _accessMode = value),
           ),
           const SizedBox(height: TsPhoneSpacing.large),
           TextField(
@@ -367,6 +349,12 @@ Future<void> showDeletionBlockers(
           label: context.l10n.unresolvedRemoteEffects,
           count: preflight.unresolvedRemoteEffects,
         ),
+        if (preflight.pendingCommands > 0)
+          _BlockerRow(
+            icon: Icons.playlist_play_rounded,
+            label: context.l10n.commandQueue,
+            count: preflight.pendingCommands,
+          ),
       ],
     ),
   ),
@@ -380,6 +368,7 @@ class LifecycleSwitcher extends StatelessWidget {
     this.vertical = false,
     this.activeLabel,
     this.activeIcon = Icons.chat_bubble_outline,
+    this.tooltip,
   });
 
   final LifecycleState value;
@@ -387,11 +376,16 @@ class LifecycleSwitcher extends StatelessWidget {
   final bool vertical;
   final String? activeLabel;
   final IconData activeIcon;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final entries = <(LifecycleState, IconData, String)>[
-      (LifecycleState.active, activeIcon, activeLabel ?? context.l10n.sessions),
+      (
+        LifecycleState.active,
+        activeIcon,
+        activeLabel ?? context.l10n.activeItems,
+      ),
       (
         LifecycleState.archived,
         Icons.archive_outlined,
@@ -409,11 +403,15 @@ class LifecycleSwitcher extends StatelessWidget {
         children: [
           for (final entry in entries)
             ListTile(
+              key: ValueKey('lifecycle-${entry.$1.name}'),
               dense: true,
               leading: Icon(entry.$2, size: 22),
               title: Text(entry.$3),
               selected: value == entry.$1,
-              onTap: () => onChanged(entry.$1),
+              trailing: value == entry.$1
+                  ? const Icon(Icons.check_rounded, size: 18)
+                  : null,
+              onTap: value == entry.$1 ? null : () => onChanged(entry.$1),
             ),
         ],
       );
@@ -422,8 +420,16 @@ class LifecycleSwitcher extends StatelessWidget {
       alignment: Alignment.centerRight,
       child: PopupMenuButton<LifecycleState>(
         key: const ValueKey('lifecycle-filter'),
-        tooltip: context.l10n.filterConversations,
-        icon: const Icon(Icons.more_horiz, size: 22),
+        tooltip:
+            '${tooltip ?? context.l10n.sessionViews}: ${entries.firstWhere((entry) => entry.$1 == value).$3}',
+        icon: Icon(
+          value == LifecycleState.active
+              ? Icons.filter_list_rounded
+              : value == LifecycleState.archived
+              ? Icons.archive_outlined
+              : Icons.delete_outline,
+          size: 22,
+        ),
         initialValue: value,
         onSelected: onChanged,
         itemBuilder: (_) => [

@@ -9,14 +9,230 @@ import 'package:ts_phone/l10n/app_localizations_en.dart';
 import 'package:ts_phone/l10n/app_localizations_extensions.dart';
 import 'package:ts_phone/l10n/app_localizations_zh.dart';
 import 'package:ts_phone/models/connection_settings.dart';
+import 'package:ts_phone/models/phone_model.dart';
+import 'package:ts_phone/models/queued_command.dart';
 import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 
 void main() {
+  test(
+    'provider failures stay distinct from delivery and phone authentication errors',
+    () {
+      for (final entry in {
+        'provider_unavailable': TsPhoneProblemCode.providerUnavailable,
+        'provider_rate_limited': TsPhoneProblemCode.providerRateLimited,
+        'provider_auth_failed': TsPhoneProblemCode.providerAuthFailed,
+        'provider_error': TsPhoneProblemCode.providerError,
+        'generation_unconfirmed': TsPhoneProblemCode.generationIncomplete,
+      }.entries) {
+        final problem = describeTsPhoneProblem(
+          TsPhoneApiException('private provider body', code: entry.key),
+        );
+        expect(problem.code, entry.value);
+        expect(
+          problem.localizedMessage(AppLocalizationsZh()),
+          isNot(contains('private provider body')),
+        );
+        expect(
+          problem.localizedMessage(AppLocalizationsEn()),
+          isNot(contains('private provider body')),
+        );
+      }
+    },
+  );
   const token = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
   final settings = ConnectionSettings(
     serverUrl: 'https://phone.test',
     token: token,
+  );
+
+  test('model catalog uses the API prefix exactly once', () async {
+    final api = TsPhoneApi(
+      settings,
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.toString(), 'https://phone.test/api/v4/models');
+        expect(request.headers['Authorization'], 'Bearer $token');
+        return http.Response(
+          jsonEncode({
+            'apiVersion': 'ts-phone-api/4',
+            'data': [
+              {
+                'provider': 'test',
+                'id': 'model',
+                'name': 'Model',
+                'contextWindow': 100000,
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    expect((await api.models()).single.reference, 'test/model');
+  });
+
+  test(
+    'queue admission, receipt and actions bind the exact conversation and message',
+    () async {
+      const revision = '11111111-1111-4111-8111-111111111111';
+      final requests = <http.Request>[];
+      final api = TsPhoneApi(
+        settings,
+        client: MockClient((request) async {
+          requests.add(request);
+          expect(request.headers['Authorization'], 'Bearer $token');
+          return http.Response(
+            jsonEncode({
+              'apiVersion': 'ts-phone-api/4',
+              'data': {
+                'clientMessageId': 'phone:one',
+                'status': 'queued',
+                'createdAt': '2026-09-09T00:00:00Z',
+                'updatedAt': '2026-09-09T00:00:00Z',
+                if (request.method == 'GET') 'durable': true,
+              },
+            }),
+            request.method == 'POST' && request.url.path.endsWith('/commands')
+                ? 202
+                : 200,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      expect(
+        (await api.enqueueMessage(
+          'ts_001',
+          'session_1',
+          revision,
+          'Question',
+          'phone:one',
+        )).status,
+        CommandStatus.queued,
+      );
+      expect(
+        (await api.commandReceipt(
+          'ts_001',
+          'session_1',
+          revision,
+          'phone:one',
+        )).id,
+        'phone:one',
+      );
+      await api.cancelQueuedCommand('ts_001', 'session_1', 'phone:one');
+      await api.acknowledgeQueuedCommand('ts_001', 'session_1', 'phone:one');
+      expect(requests.map((request) => request.method), [
+        'POST',
+        'GET',
+        'POST',
+        'POST',
+      ]);
+      expect(requests.map((request) => request.url.path), [
+        '/api/v4/workspaces/ts_001/sessions/session_1/commands',
+        '/api/v4/workspaces/ts_001/sessions/session_1/commands/phone%3Aone',
+        '/api/v4/workspaces/ts_001/sessions/session_1/commands/phone%3Aone/cancel',
+        '/api/v4/workspaces/ts_001/sessions/session_1/commands/phone%3Aone/acknowledge',
+      ]);
+      expect(jsonDecode(requests[0].body), {
+        'sessionRevision': revision,
+        'message': 'Question',
+        'clientMessageId': 'phone:one',
+        'clientKind': 'phone',
+      });
+      expect(requests[1].url.queryParameters, {'sessionRevision': revision});
+      expect(jsonDecode(requests[2].body), {});
+      expect(jsonDecode(requests[3].body), {'confirmation': 'phone:one'});
+    },
+  );
+
+  test('missing or mismatched receipts never prove queue admission', () async {
+    for (final data in [
+      {'clientMessageId': 'one', 'status': 'unknown'},
+      {
+        'clientMessageId': 'other',
+        'status': 'queued',
+        'createdAt': '2026-09-09T00:00:00Z',
+        'durable': true,
+      },
+    ]) {
+      final api = TsPhoneApi(
+        settings,
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({'apiVersion': 'ts-phone-api/4', 'data': data}),
+            200,
+          ),
+        ),
+      );
+      addTearDown(api.close);
+      await expectLater(
+        api.enqueueMessage(
+          'ts_001',
+          'session_1',
+          'revision',
+          'Question',
+          'one',
+        ),
+        throwsFormatException,
+      );
+      await expectLater(
+        api.commandReceipt('ts_001', 'session_1', 'revision', 'one'),
+        throwsFormatException,
+      );
+    }
+  });
+
+  test(
+    'next-turn model selection saves a preference without runtime activation',
+    () async {
+      final api = TsPhoneApi(
+        settings,
+        client: MockClient((request) async {
+          expect(
+            request.url.path,
+            '/api/v4/workspaces/ts_001/sessions/session_1/model',
+          );
+          expect(request.method, 'POST');
+          expect(jsonDecode(request.body), {
+            'sessionRevision': 'revision',
+            'provider': 'test',
+            'modelId': 'model',
+            'nextTurn': true,
+          });
+          return http.Response(
+            jsonEncode({
+              'apiVersion': 'ts-phone-api/4',
+              'data': {
+                'sessionId': 'session_1',
+                'sessionRevision': 'revision',
+                'runtimeState': 'offline',
+                'activeAgentRunId': null,
+                'isStreaming': false,
+                'accessMode': 'controller',
+                'capabilities': ['command.queue'],
+                'nextModel': 'test/model',
+              },
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final selected = await api.selectNextModel(
+        'ts_001',
+        'session_1',
+        'revision',
+        const PhoneModel(
+          provider: 'test',
+          id: 'model',
+          name: 'Model',
+          contextWindow: 128000,
+        ),
+      );
+      expect(selected.nextModel, 'test/model');
+      expect(selected.runtimeState, RuntimeState.offline);
+    },
   );
 
   test('old Host creation endpoints produce an upgrade message', () async {
@@ -179,6 +395,72 @@ void main() {
     expect(snapshot.lastEventId, 'epoch:12');
     expect(snapshot.messageIds, isNull);
     expect(snapshot.hasMore, isFalse);
+  });
+
+  test(
+    'cancelling an idle SSE aborts HTTP without waiting for a new event',
+    () async {
+      final connected = Completer<void>();
+      final closed = Completer<void>();
+      final body = StreamController<List<int>>(
+        onCancel: () => closed.complete(),
+      );
+      final client = StreamClient(
+        (_) async => http.StreamedResponse(body.stream, 200),
+      );
+      final api = TsPhoneApi(settings, client: client);
+      addTearDown(api.close);
+      final subscription = api
+          .events('ts_001', 'session-test', onConnected: connected.complete)
+          .listen((_) {});
+      await connected.future;
+      await subscription.cancel().timeout(const Duration(seconds: 1));
+      await client.request!.abortTrigger!.timeout(const Duration(seconds: 1));
+      await closed.future.timeout(const Duration(seconds: 1));
+      await body.close();
+    },
+  );
+
+  test(
+    'cancelling SSE before headers aborts the pending HTTP request',
+    () async {
+      final pending = Completer<http.StreamedResponse>();
+      final client = StreamClient((request) {
+        request.abortTrigger!.then(
+          (_) =>
+              pending.completeError(http.RequestAbortedException(request.url)),
+        );
+        return pending.future;
+      });
+      final api = TsPhoneApi(settings, client: client);
+      addTearDown(api.close);
+      var connected = false;
+      final errors = <Object>[];
+      final subscription = api
+          .events('ts_001', 'session-test', onConnected: () => connected = true)
+          .listen((_) {}, onError: errors.add);
+      await client.sent.future;
+      await subscription.cancel().timeout(const Duration(seconds: 1));
+      await client.request!.abortTrigger!;
+      await Future<void>.delayed(Duration.zero);
+      expect(connected, isFalse);
+      expect(errors, isEmpty);
+    },
+  );
+
+  test('malformed SSE reports the error and closes the transport', () async {
+    final body = StreamController<List<int>>();
+    final client = StreamClient(
+      (_) async => http.StreamedResponse(body.stream, 200),
+    );
+    final api = TsPhoneApi(settings, client: client);
+    addTearDown(api.close);
+    final result = api.events('ts_001', 'session-test').toList();
+    final failed = expectLater(result, throwsFormatException);
+    body.add(utf8.encode('data: not-json\n\n'));
+    await failed;
+    await client.request!.abortTrigger!.timeout(const Duration(seconds: 1));
+    await body.close();
   });
 
   test('requests and parses an earlier message page', () async {
@@ -854,3 +1136,17 @@ http.Response _apiResponse(Object? data, {int statusCode = 200}) =>
       }),
       statusCode,
     );
+
+class StreamClient extends http.BaseClient {
+  StreamClient(this.respond);
+  final Future<http.StreamedResponse> Function(http.AbortableRequest) respond;
+  final sent = Completer<void>();
+  http.AbortableRequest? request;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    this.request = request as http.AbortableRequest;
+    sent.complete();
+    return respond(this.request!);
+  }
+}

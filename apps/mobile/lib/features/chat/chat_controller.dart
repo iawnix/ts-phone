@@ -8,6 +8,7 @@ import '../../models/chat_message.dart';
 import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
 import '../../models/phone_model.dart';
+import '../../models/queued_command.dart';
 import 'chat_view_memory.dart';
 import 'chat_outbox.dart';
 
@@ -196,6 +197,11 @@ class ChatController extends ChangeNotifier {
   String? _lastEventId;
   String _sessionRevision;
   String? _sessionTitle;
+  String? _sessionModel;
+  String? _nextModel;
+  bool _nextModelUnconfirmed = false;
+  List<QueuedCommand> _queuedCommands = const [];
+  String? _queueProblem;
   SessionRuntimeSnapshot? _sessionRuntime;
   String? _activeAgentRunId;
   bool _historyAvailable;
@@ -223,6 +229,7 @@ class ChatController extends ChangeNotifier {
   bool _hasLaterHistory = false;
   bool _viewingHistoryWindow = false;
   bool _historyNavigationInProgress = false;
+  int _historyGeneration = 0;
   List<String> _latestSnapshotMessageIds = const <String>[];
   List<String> _latestTimelineItemIds = const <String>[];
   String? _selectedBranchId;
@@ -292,7 +299,14 @@ class ChatController extends ChangeNotifier {
   int get timelineActivityCount => _timelineHistory?.activityCount ?? 0;
   List<TimelineBranchSummary> get timelineBranches =>
       _timelineHistory?.branches ?? const <TimelineBranchSummary>[];
-  bool get canRefresh => _historyAvailable || _runtimeState.isAvailable;
+  bool get canRefresh =>
+      queueEnabled || _historyAvailable || _runtimeState.isAvailable;
+  TsPhoneQueueGateway? get queueGateway =>
+      api is TsPhoneQueueGateway ? api as TsPhoneQueueGateway : null;
+  bool get queueEnabled =>
+      queueGateway != null && _capabilities.contains('command.queue');
+  List<QueuedCommand> get queuedCommands => _queuedCommands;
+  String? get queueProblem => _queueProblem;
   bool get loadingEarlierMessages => _loadingEarlierMessages;
   bool get loadingAllHistory => _loadingAllHistory;
   bool get viewingHistoryWindow => _viewingHistoryWindow;
@@ -304,32 +318,55 @@ class ChatController extends ChangeNotifier {
       _nextBefore != null &&
       !_loadingEarlierMessages &&
       !_historyNavigationInProgress;
-  bool get canSend =>
-      _canPrompt &&
-      _promptProblem == null &&
+  bool get _promptStateReady =>
+      (queueEnabled ||
+          (_canPrompt &&
+              _promptProblem == null &&
+              _runtimeState.isAvailable &&
+              _snapshotReady)) &&
+      _queueProblem != 'queue_storage_unavailable' &&
+      !_nextModelUnconfirmed &&
       !_historyNavigationInProgress &&
       !viewingInactiveBranch &&
-      _runtimeState.isAvailable &&
-      _snapshotReady &&
-      !_snapshotSyncInProgress &&
+      !_snapshotSyncInProgress;
+  bool get canSend =>
+      _promptStateReady &&
       _eventConnectionState == EventConnectionState.connected;
   Stream<ExtensionUiRequest> get uiRequests => _uiRequests.stream;
 
   TsPhoneModelGateway? get modelGateway =>
       api is TsPhoneModelGateway ? api as TsPhoneModelGateway : null;
+  String? get selectedModelReference {
+    if (queueEnabled && _nextModel != null) return _nextModel;
+    final model = _sessionRuntime?.model;
+    final current = model == null ? null : '${model.provider}/${model.id}';
+    return _runtimeState == RuntimeState.offline
+        ? _sessionModel ?? current
+        : current ?? _sessionModel;
+  }
+
+  bool get selectingModelPreference =>
+      queueEnabled || _runtimeState == RuntimeState.offline;
   bool get canSelectModel =>
       modelGateway != null &&
-      _capabilities.contains('command.model') &&
-      accessMode == SessionAccessMode.controller &&
-      _runtimeState == RuntimeState.idle &&
-      _snapshotReady &&
+      !_nextModelUnconfirmed &&
       !_snapshotSyncInProgress &&
       !viewingInactiveBranch &&
       !_historyNavigationInProgress &&
-      _eventConnectionState == EventConnectionState.connected &&
       !commandInFlight &&
-      outbox.messages.isEmpty &&
-      _activeAgentRunId == null;
+      ((queueEnabled &&
+              _eventConnectionState == EventConnectionState.connected &&
+              _runtimeState != RuntimeState.connecting) ||
+          outbox.messages.isEmpty &&
+              _activeAgentRunId == null &&
+              ((_runtimeState == RuntimeState.idle &&
+                      _capabilities.contains('command.model') &&
+                      _snapshotReady &&
+                      _eventConnectionState ==
+                          EventConnectionState.connected) ||
+                  (selectingModelPreference &&
+                      _canActivate &&
+                      _capabilities.contains('session.model_preference'))));
 
   Future<void> selectModel(PhoneModel model) async {
     if (!canSelectModel) {
@@ -339,15 +376,23 @@ class ChatController extends ChangeNotifier {
       );
     }
     final revision = _sessionRevision;
+    final preference = selectingModelPreference;
     _commandInFlight = true;
     _notify();
     try {
-      final session = await modelGateway!.selectModel(
-        workspaceId,
-        sessionId,
-        revision,
-        model,
-      );
+      final session = queueEnabled
+          ? await queueGateway!.selectNextModel(
+              workspaceId,
+              sessionId,
+              revision,
+              model,
+            )
+          : await modelGateway!.selectModel(
+              workspaceId,
+              sessionId,
+              revision,
+              model,
+            );
       if (_disposed) return;
       if (_sessionRevision != revision ||
           session.sessionId != sessionId ||
@@ -363,10 +408,27 @@ class ChatController extends ChangeNotifier {
       _capabilities = session.capabilities;
       _applyManagement(session);
       _operationProblem = null;
-    } on Object {
+    } on Object catch (error) {
       // A lost HTTP receipt does not prove that Pi kept the old model. Block
       // commands until a fresh Host snapshot reconciles the actual state.
-      if (!_disposed) {
+      final definitive =
+          error is TsPhoneApiException &&
+          error.statusCode != null &&
+          error.statusCode! >= 400 &&
+          error.statusCode! < 500;
+      if (!_disposed && preference && queueEnabled && !definitive) {
+        _nextModelUnconfirmed = true;
+        try {
+          await refreshSessionMetadata();
+        } on Object {
+          _setError(
+            const TsPhoneApiException(
+              'Model selection needs reconciliation',
+              code: 'model_change_unconfirmed',
+            ),
+          );
+        }
+      } else if (!_disposed && !preference) {
         _snapshotReady = false;
         _canPrompt = false;
         await _refreshMessages(allowUnavailable: true);
@@ -458,6 +520,7 @@ class ChatController extends ChangeNotifier {
   }
 
   void _applyManagement(SessionSummary session) {
+    if (session.model != null) _sessionModel = session.model;
     if (session.sessionName?.isNotEmpty == true) {
       _sessionTitle = session.sessionName;
     }
@@ -465,14 +528,36 @@ class ChatController extends ChangeNotifier {
     _canActivate = session.canActivate;
     _activation = session.activation;
     _runtimeOwner = session.runtimeOwner;
+    _nextModel = session.nextModel;
+    _nextModelUnconfirmed = false;
+    _queuedCommands = session.commands;
+    _queueProblem = session.queueProblem;
     _capabilities = {
-      ..._capabilities.where((value) => value != 'session.activate_mode'),
+      ..._capabilities.where(
+        (value) =>
+            value != 'session.activate_mode' &&
+            value != 'session.model_preference' &&
+            value != 'command.queue',
+      ),
       if (session.capabilities.contains('session.activate_mode'))
         'session.activate_mode',
+      if (session.capabilities.contains('session.model_preference'))
+        'session.model_preference',
+      if (session.capabilities.contains('command.queue')) 'command.queue',
     };
   }
 
   void _applyManagementEvent(Map<String, Object?>? payload) {
+    if (payload?.containsKey('nextModel') == true) {
+      _nextModel = payload!['nextModel'] as String?;
+      _nextModelUnconfirmed = false;
+    }
+    if (payload?.containsKey('commands') == true) {
+      _queuedCommands = QueuedCommand.parseList(payload!['commands']);
+    }
+    if (payload?.containsKey('queueProblem') == true) {
+      _queueProblem = payload!['queueProblem'] as String?;
+    }
     if (payload?['managementRevision'] case final String revision) {
       _managementRevision = revision;
     }
@@ -494,7 +579,16 @@ class ChatController extends ChangeNotifier {
     bool resetView = false,
   }) {
     final existing = _snapshotSynchronization;
-    if (existing != null) return existing;
+    if (existing != null) {
+      return resetView
+          ? existing.then(
+              (_) => _refreshMessages(
+                allowUnavailable: allowUnavailable,
+                resetView: true,
+              ),
+            )
+          : existing;
+    }
     if ((!allowUnavailable && !canRefresh) || _disposed) {
       return Future<void>.value();
     }
@@ -523,7 +617,9 @@ class ChatController extends ChangeNotifier {
         : EventConnectionState.reconnecting;
     _notify();
     try {
-      await _cancelEventSubscriptionAndWait();
+      // Event generations fence late data; reading history must not wait for
+      // an idle network stream to close. Reconnection still waits for cleanup.
+      _cancelEventSubscription();
       if (_capabilities.contains(timelineCapability)) {
         final snapshot = await _awaitSnapshot(
           api.getTimeline(
@@ -588,6 +684,7 @@ class ChatController extends ChangeNotifier {
       return false;
     }
     _loadingEarlierMessages = true;
+    final generation = _historyGeneration;
     _operationProblem = null;
     _notify();
     try {
@@ -596,11 +693,13 @@ class ChatController extends ChangeNotifier {
       }
       return await _loadEarlierMessagePage(before);
     } on Object catch (error) {
-      if (!_disposed) _setError(error);
+      if (!_disposed && generation == _historyGeneration) _setError(error);
       return false;
     } finally {
-      _loadingEarlierMessages = false;
-      if (!_disposed) _notify();
+      if (generation == _historyGeneration) {
+        _loadingEarlierMessages = false;
+        if (!_disposed) _notify();
+      }
     }
   }
 
@@ -612,14 +711,23 @@ class ChatController extends ChangeNotifier {
   Future<bool> loadLaterMessages() => _readForwardHistory(fromStart: false);
 
   Future<bool> returnToLatest() async {
-    if (_historyNavigationInProgress ||
-        _loadingEarlierMessages ||
-        _loadingAllHistory) {
-      return false;
+    if (_disposed) return false;
+    // A direct tail request supersedes pagination, including replies in flight.
+    final generation = ++_historyGeneration;
+    _loadingEarlierMessages = false;
+    _loadingAllHistory = false;
+    _historyNavigationInProgress = true;
+    _operationProblem = null;
+    _notify();
+    try {
+      await _refreshMessages(allowUnavailable: true, resetView: true);
+      return !_disposed && !_viewingHistoryWindow && _snapshotReady;
+    } finally {
+      if (generation == _historyGeneration) {
+        _historyNavigationInProgress = false;
+        if (!_disposed) _notify();
+      }
     }
-    await _snapshotSynchronization;
-    await _refreshMessages(resetView: true);
-    return !_disposed && !_viewingHistoryWindow && _snapshotReady;
   }
 
   Future<bool> _readForwardHistory({required bool fromStart}) async {
@@ -646,6 +754,7 @@ class ChatController extends ChangeNotifier {
     final revision = _sessionRevision;
     final branch = _selectedBranchId;
     final after = fromStart ? null : _nextAfter;
+    final generation = _historyGeneration;
     _historyNavigationInProgress = true;
     _operationProblem = null;
     _notify();
@@ -659,7 +768,11 @@ class ChatController extends ChangeNotifier {
           branch: branch,
           limit: _timelinePageSize,
         );
-        if (_disposed || revision != _sessionRevision) return false;
+        if (_disposed ||
+            revision != _sessionRevision ||
+            generation != _historyGeneration) {
+          return false;
+        }
         if (page.sessionId != sessionId ||
             page.sessionRevision != revision ||
             (branch == null
@@ -691,7 +804,11 @@ class ChatController extends ChangeNotifier {
           after: after,
           limit: _historyPageSize,
         );
-        if (_disposed || revision != _sessionRevision) return false;
+        if (_disposed ||
+            revision != _sessionRevision ||
+            generation != _historyGeneration) {
+          return false;
+        }
         if (page.sessionId != sessionId ||
             page.sessionRevision != revision ||
             page.messageIds == null ||
@@ -714,21 +831,27 @@ class ChatController extends ChangeNotifier {
       _clearStreamingText();
       return true;
     } on Object catch (error) {
-      if (!_disposed) _setError(error);
+      if (!_disposed && generation == _historyGeneration) _setError(error);
       return false;
     } finally {
-      _historyNavigationInProgress = false;
-      if (!_disposed) _notify();
+      if (generation == _historyGeneration) {
+        _historyNavigationInProgress = false;
+        if (!_disposed) _notify();
+      }
     }
   }
 
   Future<void> loadAllHistory() async {
     if (_disposed || _loadingAllHistory || !canLoadEarlierMessages) return;
+    final generation = _historyGeneration;
     _loadingAllHistory = true;
     _operationProblem = null;
     _notify();
     try {
-      while (!_disposed && _hasMoreHistory && _nextBefore != null) {
+      while (!_disposed &&
+          generation == _historyGeneration &&
+          _hasMoreHistory &&
+          _nextBefore != null) {
         final loaded = usesStructuredTimeline
             ? await _loadEarlierTimelinePage(_nextBefore!)
             : await _loadEarlierMessagePage(_nextBefore!);
@@ -736,10 +859,12 @@ class ChatController extends ChangeNotifier {
         _notify();
       }
     } on Object catch (error) {
-      if (!_disposed) _setError(error);
+      if (!_disposed && generation == _historyGeneration) _setError(error);
     } finally {
-      _loadingAllHistory = false;
-      if (!_disposed) _notify();
+      if (generation == _historyGeneration) {
+        _loadingAllHistory = false;
+        if (!_disposed) _notify();
+      }
     }
   }
 
@@ -764,6 +889,7 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<bool> _loadEarlierTimelinePage(String before) async {
+    final generation = _historyGeneration;
     final page = await api.getTimeline(
       workspaceId,
       sessionId,
@@ -771,7 +897,7 @@ class ChatController extends ChangeNotifier {
       limit: _timelinePageSize,
       branch: _selectedBranchId,
     );
-    if (_disposed) return false;
+    if (_disposed || generation != _historyGeneration) return false;
     if (page.sessionId != sessionId ||
         page.sessionRevision != _sessionRevision ||
         page.history.selectedBranchId != _timelineHistory?.selectedBranchId) {
@@ -793,13 +919,14 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<bool> _loadEarlierMessagePage(String before) async {
+    final generation = _historyGeneration;
     final page = await api.getMessages(
       workspaceId,
       sessionId,
       before: before,
       limit: _historyPageSize,
     );
-    if (_disposed) return false;
+    if (_disposed || generation != _historyGeneration) return false;
     if (page.sessionId != sessionId ||
         page.sessionRevision != _sessionRevision ||
         page.messageIds == null) {
@@ -863,7 +990,8 @@ class ChatController extends ChangeNotifier {
     final message = value.trim();
     if (message.isEmpty || commandInFlight || !canSend) return false;
     if (_viewingHistoryWindow && !await returnToLatest()) return false;
-    if (!canSend) return false;
+    if (!_promptStateReady) return false;
+    if (queueEnabled) return _sendQueued(message);
     final revision = _sessionRevision;
     final retry = outbox.uncertain(message);
     if (retry != null) {
@@ -878,7 +1006,9 @@ class ChatController extends ChangeNotifier {
         return false;
       }
       await refreshMessages();
-      if (_disposed || !canSend) return false;
+      // This read reconnects SSE itself. Its revision-bound REST checkpoint
+      // remains usable while the new stream opens; events replay from it.
+      if (_disposed || !_promptStateReady) return false;
       if (outbox.accepted(retry)) return true;
       if (_sessionRevision != revision) return false;
     }
@@ -950,6 +1080,98 @@ class ChatController extends ChangeNotifier {
       if (_disposed) api.close();
       _notify();
     }
+  }
+
+  Future<bool> _sendQueued(String message) async {
+    final outgoing =
+        outbox.uncertain(message) ??
+        OutgoingChatMessage(
+          revision: _sessionRevision,
+          id: clientMessageIdFactory(),
+          text: message,
+        );
+    _commandInFlight = true;
+    _sendingRequest = true;
+    _operationProblem = null;
+    outbox.begin(outgoing);
+    _notify();
+    try {
+      await queueGateway!.enqueueMessage(
+        workspaceId,
+        sessionId,
+        _sessionRevision,
+        message,
+        outgoing.id,
+      );
+      outbox.receive(outgoing.revision, outgoing.id, preflightAccepted: true);
+      outbox.finish(outgoing, sent: true);
+      if (!_disposed) {
+        try {
+          await refreshSessionMetadata();
+        } on Object {
+          /* SSE also publishes the durable queue. */
+        }
+      }
+      return true;
+    } on Object catch (error) {
+      final definitive =
+          error is TsPhoneApiException &&
+          error.statusCode != null &&
+          error.statusCode! >= 400 &&
+          error.statusCode! < 500;
+      if (!definitive) {
+        try {
+          await queueGateway!.commandReceipt(
+            workspaceId,
+            sessionId,
+            _sessionRevision,
+            outgoing.id,
+          );
+          outbox.receive(
+            outgoing.revision,
+            outgoing.id,
+            preflightAccepted: true,
+          );
+          outbox.finish(outgoing, sent: true);
+          if (!_disposed) {
+            try {
+              await refreshSessionMetadata();
+            } on Object {
+              // Delivery is confirmed even when the following status read fails.
+            }
+          }
+          return true;
+        } on Object {
+          /* An absent receipt never proves non-delivery. */
+        }
+      }
+      outbox.finish(outgoing, sent: false, uncertain: !definitive);
+      if (!_disposed && definitive) _setError(error);
+      return false;
+    } finally {
+      _commandInFlight = false;
+      _sendingRequest = false;
+      if (_disposed) api.close();
+      _notify();
+    }
+  }
+
+  Future<void> cancelQueuedCommand(QueuedCommand command) async {
+    await queueGateway!.cancelQueuedCommand(
+      workspaceId,
+      command.sessionId ?? sessionId,
+      command.id,
+    );
+    if (!_disposed) await refreshSessionMetadata();
+  }
+
+  Future<void> acknowledgeQueuedCommand(QueuedCommand command) async {
+    await queueGateway!.acknowledgeQueuedCommand(
+      workspaceId,
+      command.sessionId ?? sessionId,
+      command.id,
+    );
+    if (!_disposed) await refreshSessionMetadata();
   }
 
   void _syncOutbox() {
