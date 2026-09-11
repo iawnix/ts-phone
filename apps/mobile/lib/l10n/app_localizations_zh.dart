@@ -959,21 +959,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemQueueRecovery => '前一请求的执行结果不明，请核验会话历史和输出后再继续队列。';
 
   @override
-  String get commandQueue => '请求队列';
+  String get commandQueue => '接下来';
 
   @override
   String commandQueueCount(int count) {
-    return '请求队列 · $count';
+    return '接下来 · $count';
   }
 
   @override
-  String get commandQueuePending => '待处理请求';
+  String get commandQueuePending => '等待中的消息';
 
   @override
-  String get commandQueueRecent => '最近结果';
-
-  @override
-  String get commandQueueEmpty => '没有等待的请求';
+  String get commandQueueEmpty => '没有等待中的消息';
 
   @override
   String commandQueued(int position) {
@@ -1010,6 +1007,18 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get acknowledgeRequestBody =>
       '请确认已检查这条请求的会话历史与输出。确认后仅放行后续请求，不会重发本条，也不会将其记为执行成功。原有不确定状态的进程必须已经停止。';
+
+  @override
+  String get commandWaitingForCurrent => '等待当前回复完成';
+
+  @override
+  String get commandOtherConversationWaiting => '其他会话正在等待';
+
+  @override
+  String get commandOtherConversation => '其他会话';
+
+  @override
+  String get commandNeedsReview => '上一条请求需要核验';
 
   @override
   String get modelNextTurn => '新消息及等待中消息使用的模型';

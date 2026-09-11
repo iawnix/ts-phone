@@ -1025,21 +1025,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'A previous request has an uncertain outcome. Review its history and outputs before continuing the queue.';
 
   @override
-  String get commandQueue => 'Requests';
+  String get commandQueue => 'Up next';
 
   @override
   String commandQueueCount(int count) {
-    return 'Requests · $count';
+    return 'Up next · $count';
   }
 
   @override
-  String get commandQueuePending => 'Pending requests';
+  String get commandQueuePending => 'Messages waiting';
 
   @override
-  String get commandQueueRecent => 'Recent results';
-
-  @override
-  String get commandQueueEmpty => 'No pending requests';
+  String get commandQueueEmpty => 'No messages waiting';
 
   @override
   String commandQueued(int position) {
@@ -1076,6 +1073,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get acknowledgeRequestBody =>
       'Confirm that you have checked this request\'s conversation and outputs. This releases later requests without repeating this one or claiming that it succeeded. Its uncertain runtime must already be stopped.';
+
+  @override
+  String get commandWaitingForCurrent => 'Waiting for the current reply';
+
+  @override
+  String get commandOtherConversationWaiting =>
+      'Another conversation is waiting';
+
+  @override
+  String get commandOtherConversation => 'Another conversation';
+
+  @override
+  String get commandNeedsReview => 'A previous request needs review';
 
   @override
   String get modelNextTurn => 'Model for new and waiting messages';

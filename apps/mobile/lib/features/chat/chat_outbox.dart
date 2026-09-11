@@ -21,6 +21,7 @@ class ChatOutbox extends ChangeNotifier {
   final _messages = <String, OutgoingChatMessage>{};
   final _inFlight = <String>{};
   final _accepted = <String>{};
+  final _delivered = <String>{};
 
   Iterable<OutgoingChatMessage> get messages => _messages.values;
   bool get isSending => _inFlight.isNotEmpty;
@@ -90,9 +91,50 @@ class ChatOutbox extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Records durable queue admission while keeping the optimistic message
+  /// visible until the Host publishes the matching input event. Admission is
+  /// already confirmed, but execution has not started yet, so the message is
+  /// shown as waiting for live synchronization rather than as an uncertain
+  /// delivery.
+  void admit(OutgoingChatMessage message) {
+    final identity = '${message.revision}\u0000${message.id}';
+    _accepted.add(identity);
+    while (_accepted.length > 200) {
+      _accepted.remove(_accepted.first);
+    }
+    _inFlight.remove(message.id);
+    // A fast Host can publish input before the enqueue HTTP response arrives.
+    // In that case the canonical message is already in the timeline and the
+    // optimistic copy must not be re-added by the late receipt.
+    if (_delivered.contains(identity)) {
+      _messages.remove(message.id);
+      notifyListeners();
+      return;
+    }
+    message.state = ChatDeliveryState.synchronizing;
+    _messages[message.id] = message;
+    notifyListeners();
+  }
+
+  /// Drops a local optimistic copy after the corresponding queued command was
+  /// cancelled before execution. The Host receipt remains the source of
+  /// truth; this only removes the transient chat rendering.
+  void discard(String revision, String id) {
+    _messages.removeWhere(
+      (key, value) => key == id && value.revision == revision,
+    );
+    _inFlight.remove(id);
+    notifyListeners();
+  }
+
   void receive(String revision, String id, {required bool preflightAccepted}) {
+    final identity = '$revision\u0000$id';
+    _delivered.add(identity);
+    while (_delivered.length > 200) {
+      _delivered.remove(_delivered.first);
+    }
     if (preflightAccepted) {
-      _accepted.add('$revision\u0000$id');
+      _accepted.add(identity);
       while (_accepted.length > 200) {
         _accepted.remove(_accepted.first);
       }

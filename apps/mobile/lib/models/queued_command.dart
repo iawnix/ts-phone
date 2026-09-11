@@ -75,6 +75,12 @@ class QueuedCommand {
   final String? model;
   final String? problem;
 
+  /// A request that has been admitted but has not started execution yet.
+  /// Running and recovery states are rendered by the conversation status.
+  bool get isWaiting => status == CommandStatus.queued;
+
+  bool get needsRecovery => status == CommandStatus.unknown;
+
   /// Requests in these states still occupy a workspace lane. Terminal
   /// receipts are history and must not be counted as pending work.
   bool get isPending => switch (status) {

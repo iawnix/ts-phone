@@ -8,6 +8,7 @@ import 'package:ts_phone/features/chat/chat_page.dart';
 import 'package:ts_phone/features/chat/command_queue_sheet.dart';
 import 'package:ts_phone/features/chat/session_view_state.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
+import 'package:ts_phone/models/chat_message.dart';
 import 'package:ts_phone/models/phone_model.dart';
 import 'package:ts_phone/models/queued_command.dart';
 import 'package:ts_phone/models/workspace.dart';
@@ -22,6 +23,7 @@ class QueueGateway extends model.ModelGateway implements TsPhoneQueueGateway {
   int cancellations = 0;
   int acknowledgements = 0;
   bool loseReceipt = false;
+  bool emitInputBeforeReceipt = false;
   bool loseModelReceipt = false;
   bool failMetadata = false;
   String? queuedId;
@@ -66,6 +68,17 @@ class QueueGateway extends model.ModelGateway implements TsPhoneQueueGateway {
         position: 1,
       ),
     ];
+    if (emitInputBeforeReceipt) {
+      addEvent('input', {
+        'text': message,
+        'origin': 'phone',
+        'clientMessageId': clientMessageId,
+        'preflightAccepted': true,
+      });
+      // Let the controller consume the event before the simulated HTTP
+      // receipt resolves, exercising the real response/event race.
+      await Future<void>.delayed(Duration.zero);
+    }
     if (loseReceipt) throw TimeoutException('Lost HTTP response');
     return commands.single;
   }
@@ -136,7 +149,14 @@ void main() {
       expect(await controller.send('Next question'), isTrue);
       expect(api.enqueues, 1);
       expect(api.sendCalls, 0);
-      expect(controller.outbox.messages, isEmpty);
+      expect(
+        controller.outbox.messages.single.state,
+        ChatDeliveryState.synchronizing,
+      );
+      final queuedMessage = controller.messages
+          .where((message) => message.text == 'Next question')
+          .single;
+      expect(queuedMessage.deliveryState, ChatDeliveryState.synchronizing);
       expect(controller.queuedCommands.single.preview, 'Next question');
     },
   );
@@ -150,6 +170,33 @@ void main() {
       await controller.initialize();
       expect(await controller.send('Only once'), isTrue);
       expect(api.enqueues, 1);
+      expect(
+        controller.outbox.messages.single.state,
+        ChatDeliveryState.synchronizing,
+      );
+      final queuedMessage = controller.messages
+          .where((message) => message.text == 'Only once')
+          .single;
+      expect(queuedMessage.deliveryState, ChatDeliveryState.synchronizing);
+    },
+  );
+
+  test(
+    'a fast queue dispatch does not re-add an input received before its receipt',
+    () async {
+      final api = QueueGateway()..emitInputBeforeReceipt = true;
+      final controller = controllerFor(api);
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(await controller.send('Fast queue turn'), isTrue);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        controller.messages.where(
+          (message) => message.text == 'Fast queue turn',
+        ),
+        hasLength(1),
+      );
+      expect(controller.messages.last.deliveryState, isNull);
       expect(controller.outbox.messages, isEmpty);
     },
   );
@@ -253,7 +300,7 @@ void main() {
   for (final locale in ['en', 'zh']) {
     for (final dark in [false, true]) {
       testWidgets(
-        'queued chat and request sheet fit narrow screens: $locale $dark',
+        'queued chat and pending messages fit narrow screens: $locale $dark',
         (tester) async {
           tester.view.devicePixelRatio = 1;
           tester.view.physicalSize = const Size(320, 740);
@@ -278,6 +325,15 @@ void main() {
                     'Check the reaction-coordinate assignment and both endpoints',
                 position: 2,
                 model: model.second.reference,
+              ),
+              QueuedCommand(
+                id: 'wait-other',
+                sessionId: 'session-other',
+                status: CommandStatus.queued,
+                createdAt: DateTime.now(),
+                preview: 'Review the alternative pathway',
+                position: 3,
+                model: model.first.reference,
               ),
             ];
           await tester.pumpWidget(
@@ -309,9 +365,20 @@ void main() {
             tester,
             'queued-chat-$locale-${dark ? 'dark' : 'light'}',
           );
-          await tester.tap(find.byKey(const ValueKey('command-queue')));
+          expect(
+            find.byKey(const ValueKey('pending-messages-strip')),
+            findsOneWidget,
+          );
+          await tester.tap(
+            find.byKey(const ValueKey('pending-messages-strip')),
+          );
           await tester.pumpAndSettle();
-          expect(find.text('Endpoint optimization'), findsOneWidget);
+          expect(
+            find.textContaining('Check the reaction-coordinate'),
+            findsOneWidget,
+          );
+          expect(find.text('Review the alternative pathway'), findsOneWidget);
+          expect(find.text('Endpoint optimization'), findsNothing);
           expect(tester.takeException(), isNull);
           await shell.capture(
             tester,
@@ -377,7 +444,13 @@ void main() {
       await tester.tap(find.byTooltip('Cancel waiting request'));
       await tester.pumpAndSettle();
       expect(api.cancellations, 1);
-      expect(find.text('No pending requests'), findsOneWidget);
+      expect(
+        controller.messages.where(
+          (message) => message.text == 'Check the endpoint',
+        ),
+        isEmpty,
+      );
+      expect(find.text('No messages waiting'), findsOneWidget);
     },
   );
 }

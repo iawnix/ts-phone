@@ -309,8 +309,17 @@ class ChatController extends ChangeNotifier {
   List<QueuedCommand> get pendingCommands => _queuedCommands
       .where((command) => command.isPending)
       .toList(growable: false);
-  List<QueuedCommand> get recentCommandResults => _queuedCommands
-      .where((command) => command.isTerminal)
+  List<QueuedCommand> get waitingCommands => _queuedCommands
+      .where((command) => command.isWaiting)
+      .toList(growable: false);
+  List<QueuedCommand> get currentWaitingCommands => waitingCommands
+      .where((command) => command.sessionId == sessionId)
+      .toList(growable: false);
+  List<QueuedCommand> get otherWaitingCommands => waitingCommands
+      .where((command) => command.sessionId != sessionId)
+      .toList(growable: false);
+  List<QueuedCommand> get recoveryCommands => _queuedCommands
+      .where((command) => command.needsRecovery)
       .toList(growable: false);
   int get pendingCommandCount =>
       _queuedCommands.where((command) => command.isPending).length;
@@ -1111,8 +1120,8 @@ class ChatController extends ChangeNotifier {
         message,
         outgoing.id,
       );
-      outbox.receive(outgoing.revision, outgoing.id, preflightAccepted: true);
-      outbox.finish(outgoing, sent: true);
+      outbox.admit(outgoing);
+      _syncOutbox();
       if (!_disposed) {
         try {
           await refreshSessionMetadata();
@@ -1135,12 +1144,8 @@ class ChatController extends ChangeNotifier {
             _sessionRevision,
             outgoing.id,
           );
-          outbox.receive(
-            outgoing.revision,
-            outgoing.id,
-            preflightAccepted: true,
-          );
-          outbox.finish(outgoing, sent: true);
+          outbox.admit(outgoing);
+          _syncOutbox();
           if (!_disposed) {
             try {
               await refreshSessionMetadata();
@@ -1170,6 +1175,11 @@ class ChatController extends ChangeNotifier {
       command.sessionId ?? sessionId,
       command.id,
     );
+    if (!_disposed &&
+        (command.sessionId == null || command.sessionId == sessionId)) {
+      outbox.discard(_sessionRevision, command.id);
+      _removePendingOutgoing(command.id, includeReceived: true);
+    }
     if (!_disposed) await refreshSessionMetadata();
   }
 

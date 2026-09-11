@@ -1895,31 +1895,25 @@ abstract class AppLocalizations {
   /// No description provided for @commandQueue.
   ///
   /// In en, this message translates to:
-  /// **'Requests'**
+  /// **'Up next'**
   String get commandQueue;
 
   /// No description provided for @commandQueueCount.
   ///
   /// In en, this message translates to:
-  /// **'Requests · {count}'**
+  /// **'Up next · {count}'**
   String commandQueueCount(int count);
 
   /// No description provided for @commandQueuePending.
   ///
   /// In en, this message translates to:
-  /// **'Pending requests'**
+  /// **'Messages waiting'**
   String get commandQueuePending;
-
-  /// No description provided for @commandQueueRecent.
-  ///
-  /// In en, this message translates to:
-  /// **'Recent results'**
-  String get commandQueueRecent;
 
   /// No description provided for @commandQueueEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No pending requests'**
+  /// **'No messages waiting'**
   String get commandQueueEmpty;
 
   /// No description provided for @commandQueued.
@@ -1987,6 +1981,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm that you have checked this request\'s conversation and outputs. This releases later requests without repeating this one or claiming that it succeeded. Its uncertain runtime must already be stopped.'**
   String get acknowledgeRequestBody;
+
+  /// No description provided for @commandWaitingForCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the current reply'**
+  String get commandWaitingForCurrent;
+
+  /// No description provided for @commandOtherConversationWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Another conversation is waiting'**
+  String get commandOtherConversationWaiting;
+
+  /// No description provided for @commandOtherConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Another conversation'**
+  String get commandOtherConversation;
+
+  /// No description provided for @commandNeedsReview.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous request needs review'**
+  String get commandNeedsReview;
 
   /// No description provided for @modelNextTurn.
   ///

@@ -1296,25 +1296,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       label: Text(context.l10n.pendingApprovals),
                     ),
                   ),
-                if (_controller.queueEnabled &&
-                    (_controller.pendingCommandCount > 0 ||
-                        _controller.recentCommandResults.isNotEmpty ||
-                        _controller.queueProblem != null))
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      key: const ValueKey('command-queue'),
-                      onPressed: () => showCommandQueue(context, _controller),
-                      icon: const Icon(Icons.playlist_play_rounded, size: 22),
-                      label: Text(
-                        _controller.pendingCommandCount > 0
-                            ? context.l10n.commandQueueCount(
-                                _controller.pendingCommandCount,
-                              )
-                            : context.l10n.commandQueue,
-                      ),
-                    ),
-                  ),
+                if (_controller.queueEnabled)
+                  PendingCommandsStrip(controller: _controller),
                 if (!_controller.queueEnabled && (_canActivate || _activating))
                   Align(
                     alignment: Alignment.centerLeft,

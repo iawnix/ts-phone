@@ -46,8 +46,37 @@ without replacing that entrypoint when starting Workers or lifecycle checks.
 
 ## 1. Build The TS Phone Component
 
+开发、候选和正式发布使用不同入口。日常改动运行：
+
+~~~bash
+npm run iterate:dev
+~~~
+
+它按改动路径只检查受影响的组件；服务端开发检查使用低延迟 fast 测试，
+完整生命周期和队列测试留给候选/正式发布流程。发布前运行：
+
+~~~bash
+npm run iterate:candidate
+~~~
+
+候选流程会执行服务端和发布工具测试、服务端生产构建、完整 Flutter 检查，
+并只生成一个本地 arm64 release APK。候选 APK 不会进入
+`dist/android-current`，也不触发组件归档或服务重启。
+
+正式交付才运行下面的完整流程：
+
 ~~~bash
 cd /home/iaw/Codex/Project/2026-08-14/ts-phone
+npm run iterate:release
+~~~
+
+如需在构建完成后切换服务，必须在升级窗口显式追加
+`npm run iterate -- release --install`。`--allow-dirty` 只允许本地验证，不能
+和 `--install` 一起使用。
+
+以下命令仍可单独运行，用于排查某一层：
+
+~~~bash
 env NPM_CONFIG_CACHE=.npm-cache npm ci
 npm run test:release
 ~~~

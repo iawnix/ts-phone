@@ -36,6 +36,15 @@ picker reads the Host's available-model catalog; credentials remain on the Host.
 Advanced creation uses the same picker. A request already running keeps the
 model it started with and remains visible as such in request history.
 
+When a message is admitted while another turn is running, the composer shows a
+small `Up next`/`接下来` strip. It opens a short sheet containing only messages
+that have not started and requests whose execution needs manual review. Running
+turns and finished receipts stay in the timeline and history, so the queue does
+not duplicate the conversation state. A waiting message can be cancelled; an
+uncertain request can only be acknowledged after its history and outputs have
+been checked. Requests from another conversation are labelled without exposing
+internal session IDs.
+
 History starts with the latest 50 items. Earlier pages load on demand, with the
 existing explicit load-all action available for an audit. A bounded in-memory
 display cache preserves recently viewed history, drafts and scroll positions

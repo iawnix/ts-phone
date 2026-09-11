@@ -134,6 +134,38 @@ of the research runtime, broker, Web explorer, and Android app.
 
 ## Development checks
 
+日常迭代使用分层入口，避免每次改动都触发完整 Android 发布流程：
+
+```bash
+# 只检查受影响的服务端、移动端或发布工具
+npm run iterate:dev
+
+# 检查全部源码，并生成一个本地 arm64 release APK
+npm run iterate:candidate
+
+# 正式发布：三 ABI APK、AAB、签名证明和组件归档
+npm run iterate:release
+
+# 正式发布并在构建成功后激活 TS Phone 服务
+npm run iterate -- release --install
+```
+
+`dev` 会根据 Git 工作树中的路径选择检查范围：服务端改动运行 typecheck
+和低延迟 fast 测试，移动端改动运行 Dart format、Flutter analyzer 和
+Flutter 测试，发布工具改动运行发布工具测试。生命周期、HTTP 集成和队列
+时序测试保留在候选/正式发布的 full 测试中。没有检测到源码改动时不会启动
+构建；需要完整检查时使用 `npm run iterate -- dev --all`。
+
+`candidate` 是发布前反馈环：它执行服务端和发布工具测试、服务端生产构建、
+移动端检查，并只构建当前手机常用的 arm64 release APK。这个 APK 不写入
+`dist/android-current`，也不生成来源证明或组件归档。
+
+`release` 才执行完整的可审计发布。它调用现有 Android 发布脚本生成三 ABI
+APK、AAB 和 attestations，再生成 TS Phone 组件归档。默认只构建和归档，
+不会重启服务；升级窗口内显式追加 `--install` 才会运行
+`deploy/install-local.sh --start`。`--allow-dirty` 仅用于本地验证，不能与
+`--install` 同时使用。
+
 Run the broker checks from the repository root:
 
 ```bash

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/queued_command.dart';
+import '../../theme/ts_phone_theme.dart';
 import 'chat_controller.dart';
 
 Future<void> showCommandQueue(
@@ -15,17 +16,121 @@ Future<void> showCommandQueue(
   showDragHandle: true,
   useSafeArea: true,
   isScrollControlled: true,
-  builder: (_) => _CommandQueueSheet(controller: controller),
+  builder: (_) => _PendingCommandsSheet(controller: controller),
 );
 
-class _CommandQueueSheet extends StatefulWidget {
-  const _CommandQueueSheet({required this.controller});
+/// A compact conversation affordance for messages that are admitted but have
+/// not started. The durable queue remains a Host concern; this strip only
+/// appears when there is something the user can act on or needs to review.
+class PendingCommandsStrip extends StatelessWidget {
+  const PendingCommandsStrip({super.key, required this.controller});
+
   final ChatController controller;
+
   @override
-  State<_CommandQueueSheet> createState() => _CommandQueueSheetState();
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) {
+      final waiting = controller.currentWaitingCommands;
+      final otherWaiting = controller.otherWaitingCommands;
+      final hasRecovery = controller.recoveryCommands.isNotEmpty;
+      final queueProblem = controller.queueProblem;
+      if (waiting.isEmpty &&
+          otherWaiting.isEmpty &&
+          !hasRecovery &&
+          queueProblem == null) {
+        return const SizedBox.shrink();
+      }
+
+      final l10n = context.l10n;
+      final label = queueProblem == null
+          ? hasRecovery
+                ? l10n.commandNeedsReview
+                : waiting.isNotEmpty
+                ? waiting.length == 1
+                      ? l10n.commandWaitingForCurrent
+                      : l10n.commandQueueCount(waiting.length)
+                : l10n.commandOtherConversationWaiting
+          : describeTsPhoneProblem(
+              TsPhoneApiException('Queue is paused', code: queueProblem),
+            ).localizedMessage(l10n);
+      final actionable =
+          waiting.isNotEmpty || otherWaiting.isNotEmpty || hasRecovery;
+      final colors = Theme.of(context).colorScheme;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: TsPhoneSpacing.small),
+        child: Semantics(
+          button: actionable,
+          label: label,
+          child: Material(
+            color: queueProblem == null
+                ? colors.surfaceContainerHighest
+                : colors.errorContainer,
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const ValueKey('pending-messages-strip'),
+              onTap: actionable
+                  ? () => showCommandQueue(context, controller)
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TsPhoneSpacing.medium,
+                  vertical: TsPhoneSpacing.small,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      queueProblem == null
+                          ? Icons.schedule_rounded
+                          : Icons.error_outline_rounded,
+                      size: 18,
+                      color: queueProblem == null
+                          ? colors.primary
+                          : colors.onErrorContainer,
+                    ),
+                    const SizedBox(width: TsPhoneSpacing.small),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: queueProblem == null
+                              ? colors.onSurface
+                              : colors.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                    if (actionable) ...<Widget>[
+                      const SizedBox(width: TsPhoneSpacing.small),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 20,
+                        color: queueProblem == null
+                            ? colors.onSurfaceVariant
+                            : colors.onErrorContainer,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
-class _CommandQueueSheetState extends State<_CommandQueueSheet> {
+class _PendingCommandsSheet extends StatefulWidget {
+  const _PendingCommandsSheet({required this.controller});
+  final ChatController controller;
+  @override
+  State<_PendingCommandsSheet> createState() => _PendingCommandsSheetState();
+}
+
+class _PendingCommandsSheetState extends State<_PendingCommandsSheet> {
   bool _busy = false;
   TsPhoneProblem? _problem;
 
@@ -85,8 +190,10 @@ class _CommandQueueSheetState extends State<_CommandQueueSheet> {
                     code: controller.queueProblem,
                   ),
                 ));
-      final pending = controller.pendingCommands;
-      final recent = controller.recentCommandResults;
+      final pending = <QueuedCommand>[
+        ...controller.waitingCommands,
+        ...controller.recoveryCommands,
+      ];
       return SizedBox(
         height: math.min(620, MediaQuery.sizeOf(context).height * .78),
         child: Column(
@@ -108,7 +215,7 @@ class _CommandQueueSheetState extends State<_CommandQueueSheet> {
                 ),
               ),
             Expanded(
-              child: pending.isEmpty && recent.isEmpty
+              child: pending.isEmpty
                   ? Center(child: Text(l10n.commandQueueEmpty))
                   : ListView(
                       padding: const EdgeInsets.only(bottom: 24),
@@ -123,29 +230,6 @@ class _CommandQueueSheetState extends State<_CommandQueueSheet> {
                             _commandTile(
                               context,
                               pending[index],
-                              controller,
-                              colors,
-                              index,
-                            ),
-                        ] else
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                            child: Text(
-                              l10n.commandQueueEmpty,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: colors.onSurfaceVariant),
-                            ),
-                          ),
-                        if (recent.isNotEmpty) ...<Widget>[
-                          _QueueSectionHeader(
-                            icon: Icons.history_rounded,
-                            label: l10n.commandQueueRecent,
-                            count: recent.length,
-                          ),
-                          for (var index = 0; index < recent.length; index++)
-                            _commandTile(
-                              context,
-                              recent[index],
                               controller,
                               colors,
                               index,
@@ -192,7 +276,7 @@ class _CommandQueueSheetState extends State<_CommandQueueSheet> {
       if (command.model != null) command.model!,
       if (command.sessionId != null &&
           command.sessionId != controller.sessionId)
-        command.sessionId!,
+        context.l10n.commandOtherConversation,
       if (command.problem != null)
         describeTsPhoneProblem(
           TsPhoneApiException('Command failed', code: command.problem),
