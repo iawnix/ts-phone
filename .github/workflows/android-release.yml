@@ -102,7 +102,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mapfile -t assets < <(find dist/android-current dist/component -maxdepth 1 -type f -print | sort)
+          mapfile -t assets < <(find -L dist/android-current dist/component -maxdepth 1 -type f -print | sort)
           test "${#assets[@]}" -gt 0
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
