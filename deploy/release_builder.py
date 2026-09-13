@@ -33,7 +33,13 @@ MOBILE_APK_ABIS = {"arm64-v8a", "armeabi-v7a", "x86_64"}
 ANDROID_RELEASE_ABIS = ("arm64-v8a", "armeabi-v7a", "x86_64")
 ANDROID_PACKAGE_NAME = "xyz.iawnix.ts_phone"
 ANDROID_ABI_VERSION_CODE_OFFSETS = {"armeabi-v7a": 1000, "arm64-v8a": 2000, "x86_64": 4000}
-EXPECTED_ANDROID_CERTIFICATE_SHA256 = "41998c3f13ee6a2b5e370b3ded25de4dc2af4e0de7172dbcc33e63bfa9fdc19f"
+DEFAULT_ANDROID_CERTIFICATE_SHA256 = "41998c3f13ee6a2b5e370b3ded25de4dc2af4e0de7172dbcc33e63bfa9fdc19f"
+EXPECTED_ANDROID_CERTIFICATE_SHA256 = os.environ.get(
+    "TS_PHONE_RELEASE_CERTIFICATE_SHA256",
+    DEFAULT_ANDROID_CERTIFICATE_SHA256,
+).replace(":", "").lower()
+if not SHA256.fullmatch(EXPECTED_ANDROID_CERTIFICATE_SHA256):
+    raise ValueError("TS_PHONE_RELEASE_CERTIFICATE_SHA256 must be a 64-character SHA-256 fingerprint")
 REQUIRED_SOURCE_PATHS = {
     b"package.json",
     b"apps/mobile/pubspec.yaml",

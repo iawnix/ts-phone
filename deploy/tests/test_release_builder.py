@@ -19,6 +19,7 @@ sys.path.insert(0, str(DEPLOY))
 
 from release_builder import (  # noqa: E402
     ComponentReleaseError,
+    DEFAULT_ANDROID_CERTIFICATE_SHA256,
     EXPECTED_ANDROID_CERTIFICATE_SHA256,
     EXPECTED_PROTOCOLS,
     MAX_COMPONENT_ARCHIVE_BYTES,
@@ -682,7 +683,7 @@ class ReleaseBuilderTests(unittest.TestCase):
             / "build_release_android.sh"
         ).read_text(encoding="utf-8")
         self.assertIn("TS_PHONE_RELEASE_CERTIFICATE_SHA256:-", script)
-        self.assertIn(EXPECTED_ANDROID_CERTIFICATE_SHA256, script)
+        self.assertIn(DEFAULT_ANDROID_CERTIFICATE_SHA256, script)
         self.assertIn('"$JARSIGNER" -verify -strict -verbose', script)
         self.assertIn('"$bundle_status" -eq 0 || "$bundle_status" -eq 4', script)
 
