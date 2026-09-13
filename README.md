@@ -4,24 +4,27 @@
 
 # TS Phone
 
-TS Phone is the mobile companion for [TSPi](https://github.com/iawnix/TSPi).
-It lets you browse transition-state research workspaces, follow Pi sessions,
-and continue a conversation from your phone without keeping a terminal open.
+[简体中文](README.zh-CN.md)
 
-This repository contains the Flutter app, a small TypeScript broker, the shared
-protocol definitions, and component release tooling. TS Phone runs alongside
-TSPi; it is not a general-purpose Pi client or a research runtime by itself.
+TS Phone is the mobile companion for [TSPi](https://github.com/iawnix/TSPi). It
+connects a phone to TSPi workspaces, Pi conversations, and research activity
+through an authenticated host service.
 
-## What it does
+The repository contains the Flutter Android client, the TypeScript host broker,
+shared Phone protocols, and the release tooling used by the TSPi component
+installer.
 
-- Browse live and persisted Pi sessions, including earlier conversation branches.
+## Features
+
+- Browse projects, conversations, branches, and persisted session history.
 - Create, rename, archive, restore, and delete projects and conversations.
 - Follow messages, tool calls, research activity, failures, and run status over SSE.
-- Send from Phone or terminal into one workspace queue; choose the model for new and waiting messages.
-- See the active model and Pi's context-window estimate when the Bridge reports them.
-- Use an English or Chinese interface with light and dark themes, large text, and reduced motion.
+- Send messages from a phone or terminal through one workspace queue.
+- Select the model for new and queued messages and see the active model reported by the Bridge.
+- Use English or Chinese, light or dark themes, large text, and reduced motion.
+- Reconnect to the same conversation from the terminal, browser, or phone.
 
-## How it fits together
+## Architecture
 
 ```text
 Flutter app
@@ -39,38 +42,43 @@ TS Phone broker
 TSPi/Pi process <-> TSPi Bridge
 ```
 
-TSPi owns scientific state and Pi session files. The Host handles phone
-authentication, project/session metadata, live routing, persisted history, and
-the lifecycle of TSPi Workers it starts. Pi JSONL is the conversation history;
-the Host separately persists pending requests and bounded delivery receipts.
+TSPi stores scientific state and Pi session files. The Phone broker manages
+authentication, project and session metadata, live event delivery, queued
+requests, and the lifecycle of TSPi Workers. Pi JSONL remains the conversation
+history while the broker stores pending requests and delivery receipts.
 
-Several clients may view a project at once. Messages execute in arrival order,
-one Agent turn per workspace. Host starts the requested conversation when its
-turn arrives; switching views does not interrupt research. Different workspaces
-can execute independently. TSPi's single-writer lock remains the final guard.
+Several clients can view a project at the same time. Messages run in arrival
+order, with one Agent turn active per workspace; independent workspaces run in
+parallel.
 
-## Requirements
+## Installation
 
-- Node.js 22.19 or newer and npm for the broker
-- Flutter 3.44 or newer with Dart `>=3.12.0 <4.0.0` for mobile development
-- TSPi 0.15.0 for shared terminal/Phone sessions; Bridge v3 for live transport
-- An HTTPS origin reachable from the phone for remote use
+The TSPi installer deploys the Phone broker from GitHub and configures its
+service. The Android client is distributed as a signed GitHub Release asset.
+Download the matching release from
+[iawnix/ts-phone/releases](https://github.com/iawnix/ts-phone/releases) and
+install the `arm64-v8a` APK on current Android phones.
 
-The broker listens only on `127.0.0.1` or `::1`. A reverse proxy must terminate
-TLS because the mobile app rejects plain HTTP for non-loopback addresses.
-Stopping generation is fenced by both the current session revision and the
-exact Bridge-issued agent run ID, so a delayed phone request cannot stop a
-newer run.
+The host installation needs Node.js and npm. Flutter and the Android SDK are
+required for mobile development and maintainer release builds only.
 
-## Run from source
+See the TSPi [installation guide](https://github.com/iawnix/TSPi/blob/main/docs/INSTALLATION.md)
+for the complete host setup. See [Build artifacts](docs/artifacts.md) for APK
+versions, checksums, component archives, and release verification.
 
-Install dependencies and start the broker from the repository root:
+## Run the broker from source
+
+Install dependencies from the repository root:
 
 ```bash
 git clone https://github.com/iawnix/ts-phone.git
 cd ts-phone
 npm ci
+```
 
+Configure the host paths and start the broker:
+
+```bash
 export TS_PHONE_WORKSPACES=/absolute/path/to/tspi/workspaces
 export TS_PHONE_TSPI=/absolute/path/to/tspi/TSPi
 export TS_PHONE_STATE_DIR=/absolute/path/to/ts-phone-dev/state
@@ -79,43 +87,24 @@ export TS_PHONE_BRIDGE_SECRET_FILE=/absolute/path/to/ts-phone-dev/state/bridge.s
 npm run dev
 ```
 
-These paths must be absolute, and `TS_PHONE_WORKSPACES` must already be a real,
-non-symlink directory. First startup creates separate API and Bridge credentials
-at the configured paths with owner-only permissions.
-
-In another terminal, check the service and read the API token locally:
+The broker creates API and Bridge credentials in the configured state directory
+on first startup. Run the health check and print the local API token with:
 
 ```bash
 curl http://127.0.0.1:22113/healthz
 TS_PHONE_STATE_DIR=/absolute/path/to/ts-phone-dev/state npm run ctl -- token
 ```
 
-The app opens to recent conversations and projects. Creating a conversation or
-reading history does not start a Worker. With `TS_PHONE_TSPI` configured, choose
-the next-message model and send normally. The Host saves the request before
-execution and waits for the workspace's current turn to finish. The app shows
-waiting, running, or interrupted requests and allows waiting requests to be
-cancelled. Ordinary conversations have no read-only/research mode selector.
-Explicit standalone Observer sessions remain supported, but are not required
-for viewing. External/native Pi runtimes are never stopped by the queue.
-The configured launcher must advertise `tspi-session-guard/1`. A manually started
-phone session remains supported for diagnostics:
+For remote phone access, place an HTTPS reverse proxy in front of the loopback
+broker and enter its URL and API token in the app. The host and TSPi process
+should run as the same Unix user so they can access the Bridge socket.
 
-```bash
-TS_PHONE_BRIDGE_SOCKET=/absolute/path/to/ts-phone-dev/run/bridge.sock \
-TS_PHONE_BRIDGE_SECRET_FILE=/absolute/path/to/ts-phone-dev/state/bridge.secret \
-  /path/to/tspi/TSPi --workspace WORKSPACE --standalone --phone
-```
+An installed TSPi uses the Host-backed terminal client by default. The `--phone`
+alias opens the same conversation service. See the TSPi
+[terminal guide](https://github.com/iawnix/TSPi/blob/main/docs/TERMINAL.md) for
+workspace and session commands.
 
-Run the broker and TSPi as the same Unix user so both can access the protected
-socket and secret.
-
-Installed `TSPi` now opens a thin terminal client of this Host by default;
-`--phone` is an alias. Browsing or detaching does not start or stop a Worker.
-Use `--standalone` only when native Pi owns the session. See the TSPi
-[terminal guide](https://github.com/iawnix/TSPi/blob/ts-hypothesis-loop/docs/TERMINAL.md).
-
-Run the mobile app on a connected development device:
+## Run the Android client from source
 
 ```bash
 cd apps/mobile
@@ -124,55 +113,12 @@ flutter devices
 flutter run -d DEVICE_ID
 ```
 
-This starts the client UI. Completing an end-to-end connection also requires an
-HTTPS origin reachable from the device. Enter that origin and the API token in
-the app; the broker stays on loopback, as described in the
-[deployment guide](docs/deployment.md).
-
-Production installation uses the TSPi Package, which ships compatible versions
-of the research runtime, broker, Web explorer, and Android app. Download the
-signed Android APK from the matching [GitHub Release](https://github.com/iawnix/ts-phone/releases);
-the normal TSPi installer builds the server and does not require Flutter or an
-Android SDK on the host.
-
-Maintainers publish releases with the `TS Phone Android Release` workflow after
-configuring the signing secrets described in [Build artifacts](docs/artifacts.md).
+Enter the broker's HTTPS URL and API token in the app. Android release users
+should install the signed APK from GitHub Releases instead of building the app.
 
 ## Development checks
 
-日常迭代使用分层入口，避免每次改动都触发完整 Android 发布流程：
-
-```bash
-# 只检查受影响的服务端、移动端或发布工具
-npm run iterate:dev
-
-# 检查全部源码，并生成一个本地 arm64 release APK
-npm run iterate:candidate
-
-# 正式发布：三 ABI APK、AAB、签名证明和组件归档
-npm run iterate:release
-
-# 正式发布并在构建成功后激活 TS Phone 服务
-npm run iterate -- release --install
-```
-
-`dev` 会根据 Git 工作树中的路径选择检查范围：服务端改动运行 typecheck
-和低延迟 fast 测试，移动端改动运行 Dart format、Flutter analyzer 和
-Flutter 测试，发布工具改动运行发布工具测试。生命周期、HTTP 集成和队列
-时序测试保留在候选/正式发布的 full 测试中。没有检测到源码改动时不会启动
-构建；需要完整检查时使用 `npm run iterate -- dev --all`。
-
-`candidate` 是发布前反馈环：它执行服务端和发布工具测试、服务端生产构建、
-移动端检查，并只构建当前手机常用的 arm64 release APK。这个 APK 不写入
-`dist/android-current`，也不生成来源证明或组件归档。
-
-`release` 才执行完整的可审计发布。它调用现有 Android 发布脚本生成三 ABI
-APK、AAB 和 attestations，再生成 TS Phone 组件归档。默认只构建和归档，
-不会重启服务；升级窗口内显式追加 `--install` 才会运行
-`deploy/install-local.sh --start`。`--allow-dirty` 仅用于本地验证，不能与
-`--install` 同时使用。
-
-Run the broker checks from the repository root:
+Run broker and release checks from the repository root:
 
 ```bash
 npm run typecheck
@@ -182,7 +128,7 @@ npm run build
 TS_PHONE_SMOKE_PORT=23113 npm run smoke
 ```
 
-Run the mobile checks from `apps/mobile`:
+Run mobile checks from `apps/mobile`:
 
 ```bash
 dart format --output=none --set-exit-if-changed lib test
@@ -190,51 +136,51 @@ flutter analyze
 flutter test
 ```
 
-Android signing and component packaging are maintainer workflows documented in
-[Build artifacts](docs/artifacts.md).
+The iteration commands provide shorter feedback loops:
+
+```bash
+npm run iterate:dev
+npm run iterate:candidate
+npm run iterate:release
+```
+
+`candidate` builds a local arm64 APK. `release` builds the three ABI APKs, an
+AAB, source attestations, and the validated TS Phone component archive.
+
+## Android releases
+
+The `TS Phone Android Release` workflow runs for tags such as
+`ts-phone-v0.18.3+48` and can also be started manually for a release tag. It
+publishes signed APKs, the AAB, source attestations, and the component archive
+to the GitHub Release page.
+
+Maintainers configure the signing secrets described in
+[Build artifacts](docs/artifacts.md), then push a tag matching the mobile
+version in `apps/mobile/pubspec.yaml`.
 
 ## Security
 
-Treat the API token as remote controller access. It can create projects and
-sessions, start TSPi Workers, submit prompts, change lifecycle state, and request
-permanent deletion. Queued phone turns have the same registered tool authority
-as local Controller turns. This is a trusted single-user interface, not a
-low-privilege read-only account.
+The API token grants control of the configured TSPi installation: project and
+session management, Worker starts, prompts, lifecycle actions, and deletion.
+Store it as a private credential and use HTTPS for connections outside the host.
 
-Project deletion is fail-closed: TSPi must report no active Worker, remote
-calculation, pending approval, queued request, or unresolved remote effect. Recently Deleted is
-manual retention, not a timed cleanup service. Permanent deletion requires the
-exact resource ID and cannot be undone.
-
-The projection drops thinking and raw provider records, but it is not a secret
-redaction layer. Visible text, tool arguments, and tool results can still
-contain sensitive information. Do not put credentials in conversations,
-screenshots, logs, or source control.
-
-Read the [security model](docs/security.md) before making the service reachable
-from another device.
+Conversation projections can include visible text, tool arguments, and tool
+results. Keep credentials out of conversations, screenshots, logs, and source
+control. The full trust model is documented in [Security](docs/security.md).
 
 ## Platform status
 
-| Component | Current status |
+| Component | Version / support |
 | --- | --- |
 | Host | 0.9.1; API v4, Events v3, Bridge v3, `terminal.attach` |
 | Android | App 0.18.3+48; Android 7.0 or newer |
-| TSPi compatibility | TSPi 0.15.0; terminal attach, exact-session Workers and lifecycle guards |
-| iOS | Flutter source is included; no IPA is produced on Linux. Building requires macOS and Apple signing. |
-
-These are source versions. See [release records](docs/artifacts.md) for published
-artifacts; changing this table does not deploy an upgrade.
+| TSPi | 0.15.0; terminal attach, exact-session Workers, and lifecycle guards |
+| iOS | Flutter source included; release builds require macOS and Apple signing |
 
 ## Documentation
 
-- [Architecture](docs/architecture.md): ownership, sessions, synchronization, and recovery boundaries
-- [Security](docs/security.md): trust model, credentials, projection, and remote-control risks
-- [Deployment](docs/deployment.md): TSPi Package integration, service activation, HTTPS, and rollback
-- [Recovery](docs/recovery.md): reconnects, offline history, and ambiguous commands
-- [Build artifacts](docs/artifacts.md): Android downloads, releases, and component archives
-
-## License
-
-This repository does not currently include a license. Until one is added,
-normal copyright restrictions apply.
+- [Architecture](docs/architecture.md)
+- [Security](docs/security.md)
+- [Deployment](docs/deployment.md)
+- [Recovery](docs/recovery.md)
+- [Build artifacts](docs/artifacts.md)
