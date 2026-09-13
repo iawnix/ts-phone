@@ -1,8 +1,8 @@
 # Build Artifacts
 
-## Current Source
+## Current Source And Downloads
 
-Mobile `0.18.2+47` opens a work home with recent conversations and projects,
+Mobile `0.18.3+48` opens a work home with recent conversations and projects,
 with explicit navigation, a session sidebar and a single expanding text
 composer. Cold start requests summary lists only. History opens without starting a
 Worker, requests the latest 50 items first, and retains the explicit load-all
@@ -48,11 +48,17 @@ preserves drafts and uses a separate 90-second wait budget. Activation receipts
 are bounded in-memory state; command.queue receipts are separate durable state.
 API v4, Events v3, and Bridge v3 remain unchanged; queue use is capability-negotiated.
 
-Build with `apps/mobile/tool/build_release_android.sh --allow-dirty` while
-reviewing an uncommitted change, or omit the flag after commit. Local artifacts
-are published under `dist/android-releases/` and selected by `dist/android-current`.
-Each attestation contains the exact source state, version, size, SHA-256 and
-signer. Building does not deploy the server, install on a phone or update TSPi.
+Download the signed Android APK from the matching
+[GitHub Release](https://github.com/iawnix/ts-phone/releases). Install the
+`arm64-v8a` APK on most current phones; use `armeabi-v7a` or `x86_64` only for
+devices with those ABIs. The release includes the APK SHA-256 digest and its
+source attestation. The APK version must match the Phone server component used
+by TSPi.
+
+Maintainers build with `apps/mobile/tool/build_release_android.sh` and publish
+through `.github/workflows/android-release.yml`. Local artifacts are published
+under `dist/android-releases/` and selected by `dist/android-current`; local
+builds do not create a GitHub Release.
 
 ## Historical Release Record
 
@@ -90,6 +96,12 @@ It is included in TSPi Package
 `350faa25d47c9e28f7930eaf3bf3d45e018d728aa1944770cb6d86d9b4a9d7e3`.
 
 ## Android Release
+
+Production releases contain the signed APKs, AAB, per-artifact source
+attestations, and the validated `ts-phone-component-*.tgz` archive. A release
+tag has the form `ts-phone-v<mobile-version>`, for example
+`ts-phone-v0.18.3+48`. The workflow checks that tag against
+`apps/mobile/pubspec.yaml` before uploading the assets.
 
 - App: TS Phone
 - App version: 0.13.0

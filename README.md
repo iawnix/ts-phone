@@ -130,7 +130,10 @@ the app; the broker stays on loopback, as described in the
 [deployment guide](docs/deployment.md).
 
 Production installation uses the TSPi Package, which ships compatible versions
-of the research runtime, broker, Web explorer, and Android app.
+of the research runtime, broker, Web explorer, and Android app. Download the
+signed Android APK from the matching [GitHub Release](https://github.com/iawnix/ts-phone/releases);
+the normal TSPi installer builds the server and does not require Flutter or an
+Android SDK on the host.
 
 ## Development checks
 
@@ -226,7 +229,7 @@ artifacts; changing this table does not deploy an upgrade.
 - [Security](docs/security.md): trust model, credentials, projection, and remote-control risks
 - [Deployment](docs/deployment.md): TSPi Package integration, service activation, HTTPS, and rollback
 - [Recovery](docs/recovery.md): reconnects, offline history, and ambiguous commands
-- [Build artifacts](docs/artifacts.md): Android releases and component archives
+- [Build artifacts](docs/artifacts.md): Android downloads, releases, and component archives
 
 ## License
 

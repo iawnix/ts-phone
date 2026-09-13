@@ -681,7 +681,8 @@ class ReleaseBuilderTests(unittest.TestCase):
             / "tool"
             / "build_release_android.sh"
         ).read_text(encoding="utf-8")
-        self.assertIn(f'RELEASE_CERTIFICATE_SHA256="{EXPECTED_ANDROID_CERTIFICATE_SHA256}"', script)
+        self.assertIn("TS_PHONE_RELEASE_CERTIFICATE_SHA256:-", script)
+        self.assertIn(EXPECTED_ANDROID_CERTIFICATE_SHA256, script)
         self.assertIn('"$JARSIGNER" -verify -strict -verbose', script)
         self.assertIn('"$bundle_status" -eq 0 || "$bundle_status" -eq 4', script)
 
