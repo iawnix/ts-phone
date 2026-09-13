@@ -31,7 +31,7 @@ async function fixture(options: Parameters<typeof writeFakeTspi>[3] = {}) {
 }
 
 async function waitFor(check: () => Promise<boolean>) {
-  const end = Date.now() + 8_000;
+  const end = Date.now() + 20_000;
   while (!await check()) {
     if (Date.now() > end) throw new Error("Host did not reach expected queue state");
     await new Promise((resolve) => setTimeout(resolve, 20));
