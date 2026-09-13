@@ -103,6 +103,19 @@ tag has the form `ts-phone-v<mobile-version>`, for example
 `ts-phone-v0.18.3+48`. The workflow checks that tag against
 `apps/mobile/pubspec.yaml` before uploading the assets.
 
+Before the first release, configure these repository Actions secrets:
+
+| Secret | Value |
+| --- | --- |
+| `TS_PHONE_RELEASE_KEYSTORE_B64` | Base64 of the production `ts-phone-release.p12` |
+| `TS_PHONE_RELEASE_KEYSTORE_PASSWORD` | Contents of the protected `keystore.pass` file |
+| `TS_PHONE_RELEASE_CERTIFICATE_SHA256` | Lowercase SHA-256 fingerprint of the release certificate |
+
+The keystore and password are the same pair used by the local release builder.
+The workflow checks the fingerprint through `apksigner` and publishes only the
+signed artifacts. Push a matching tag, or start the workflow manually with its
+tag input, to create or update the GitHub Release.
+
 - App: TS Phone
 - App version: 0.13.0
 - Build number: 37

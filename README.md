@@ -135,6 +135,9 @@ signed Android APK from the matching [GitHub Release](https://github.com/iawnix/
 the normal TSPi installer builds the server and does not require Flutter or an
 Android SDK on the host.
 
+Maintainers publish releases with the `TS Phone Android Release` workflow after
+configuring the signing secrets described in [Build artifacts](docs/artifacts.md).
+
 ## Development checks
 
 日常迭代使用分层入口，避免每次改动都触发完整 Android 发布流程：
