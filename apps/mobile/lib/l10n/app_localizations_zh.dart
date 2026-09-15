@@ -30,7 +30,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get server => '服务器';
 
   @override
-  String get serverHint => 'https://tsphone.example.com';
+  String get serverHint => 'https://radius.pi.dev';
+
+  @override
+  String get appServerId => 'App Server ID';
+
+  @override
+  String get appServerIdHint => '00000000-0000-4000-8000-000000000000';
+
+  @override
+  String get validationServerId => '请输入 TSPi App Server 显示的小写 UUID。';
 
   @override
   String get accessToken => '访问令牌';
@@ -102,7 +111,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionDetails => '连接详情';
 
   @override
-  String get tsPhoneService => 'TS Phone 服务';
+  String get tsPhoneService => 'Pi App Server';
 
   @override
   String get notConfigured => '尚未配置';
@@ -121,7 +130,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'TS Phone 服务地址';
+  String get endpoint => 'Pi Radius 网关';
 
   @override
   String get copyServerAddress => '复制服务地址';
@@ -136,14 +145,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loadLaterMessages => '加载后续消息';
 
   @override
-  String get problemModelUnavailable => '当前 TSPi 会话没有可用模型，请检查主机上的模型选择。';
+  String get problemModelUnavailable =>
+      '当前 TSPi 会话没有可用模型，请检查 App Server 上的模型选择。';
 
   @override
   String get problemModelAuthMissing =>
-      '模型需要在 TSPi 主机上配置认证。手机与 TS Phone 的连接仍然有效。';
+      '模型需要在 Pi App Server 上配置认证。手机与 TS Phone 的连接仍然有效。';
 
   @override
-  String get problemModelCheckFailed => 'TSPi 主机无法核验模型配置。';
+  String get problemModelCheckFailed => 'Pi App Server 无法核验模型配置。';
 
   @override
   String get problemProviderUnavailable =>
@@ -154,10 +164,12 @@ class AppLocalizationsZh extends AppLocalizations {
       '模型服务限制了请求频率或额度，本次生成已失败。请稍后再试或检查服务额度。';
 
   @override
-  String get problemProviderAuthFailed => '模型服务拒绝了认证。请检查主机使用的上游凭据；这不是手机连接认证失败。';
+  String get problemProviderAuthFailed =>
+      '模型服务拒绝了认证。请检查 App Server 使用的上游凭据；这不是手机连接认证失败。';
 
   @override
-  String get problemProviderError => '模型服务返回错误，本次生成已失败。详细原因保留在主机的会话记录中。';
+  String get problemProviderError =>
+      '模型服务返回错误，本次生成已失败。详细原因保留在 App Server 的会话记录中。';
 
   @override
   String get problemGenerationIncomplete =>
@@ -165,10 +177,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemModelStorageUnavailable =>
-      'TSPi 无法访问模型认证或缓存，请检查主机服务对 Pi 目录的读写权限。';
+      'TSPi 无法访问模型认证或缓存，请检查 App Server 对 Pi 目录的读写权限。';
 
   @override
-  String get problemRuntimeExtensionError => 'TSPi 会话中的扩展运行出错，请核对最新消息和主机日志。';
+  String get problemRuntimeExtensionError =>
+      'TSPi 会话中的扩展运行出错，请核对最新消息和 App Server 日志。';
 
   @override
   String get problemPromptRejected => 'Pi 在模型执行前拒绝了这条消息，草稿已保留。';
@@ -198,7 +211,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lastSync => '上次同步';
 
   @override
-  String get runDiagnostics => '检测 Phone 服务';
+  String get runDiagnostics => '检测 App Server';
 
   @override
   String get diagnosticsRunning => '检测中';
@@ -342,14 +355,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemPreflightUnavailable =>
-      'TSPi 暂时无法核验此操作，请检查 Host 的 TSPi 配置后重试。';
+      'TSPi 暂时无法核验此操作，请检查 App Server 的 TSPi 配置后重试。';
 
   @override
   String get problemManagementUnsupported =>
-      '当前 Phone 服务尚不支持创建项目或会话。请更新服务端安装；只更新手机 App 不够。';
+      '当前 Pi App Server 不支持此操作。请更新 App Server runtime；只更新手机 App 不够。';
 
   @override
-  String get hostVersion => '服务端版本';
+  String get appServerVersion => 'App Server 版本';
 
   @override
   String get problemManagementCapacity => '项目和会话管理存储已满，请清理不再需要的内容后重试。';
@@ -678,13 +691,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get liveSyncClosed => '实时同步已关闭';
 
   @override
-  String get liveSyncFailed => '无法连接 TS Phone 服务';
+  String get liveSyncFailed => '无法连接 Pi App Server';
 
   @override
   String get liveSyncRestoring => '正在恢复实时同步';
 
   @override
-  String get liveSyncConnecting => '正在连接 TS Phone 服务';
+  String get liveSyncConnecting => '正在连接 Pi App Server';
 
   @override
   String get generationDisconnectedBanner =>
@@ -935,10 +948,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemAgentRunChanged => '当前生成在中止前已发生切换';
 
   @override
-  String get problemServiceUnavailable => 'TS Phone 服务暂时不可用';
+  String get problemServiceUnavailable => 'Pi App Server 暂时不可用';
 
   @override
-  String get problemConnectionFailed => '无法连接 TS Phone 服务';
+  String get problemConnectionFailed => '无法连接 Pi App Server';
 
   @override
   String get problemRequestTimeout => '同步超时，请重试';
@@ -947,16 +960,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemRequestFailed => '服务器请求失败';
 
   @override
-  String get problemApiRouteMissing => '请求的接口不存在，请检查 App 与 Host 是否为配套版本。';
+  String get problemApiRouteMissing =>
+      '请求的 App Server 服务不可用，请检查 App 与 Pi runtime 是否为配套版本。';
 
   @override
-  String get problemQueueStorage => 'Host 无法确认请求是否已保存，请先检查其状态目录，不要重复发送。';
+  String get problemQueueStorage => 'App Server 无法确认请求是否已保存，请先检查状态目录，不要重复发送。';
 
   @override
-  String get problemQueueCapacity => '等待请求或回执存储已满，请先处理等待项，或检查 Host 存储。';
+  String get problemQueueCapacity => 'App Server 请求存储已满，请先处理等待项或检查其状态目录。';
 
   @override
-  String get problemQueueRecovery => '前一请求的执行结果不明，请核验会话历史和输出后再继续队列。';
+  String get problemQueueRecovery => '前一请求的执行结果不明，请核验会话历史和输出后再继续。';
 
   @override
   String get commandQueue => '接下来';
@@ -1060,19 +1074,19 @@ class AppLocalizationsZh extends AppLocalizations {
       '将在此会话中重启空闲助手，保留历史和已提交的计算。若启动失败，可重新启动此会话。';
 
   @override
-  String get activationUpgradeRequired => '请更新 TSPi Host 以选择会话模式。仍可浏览历史记录。';
+  String get activationUpgradeRequired => '请更新 Pi App Server 以选择会话模式。仍可浏览历史记录。';
 
   @override
   String get activationWriterActive =>
-      '另一个进程正在占用此工作区或会话，请先在 Host 上关闭该进程。历史和草稿仍保留。';
+      '另一个进程正在占用此工作区或会话，请先在 App Server 上关闭该进程。历史和草稿仍保留。';
 
   @override
   String get activationInspectionFailed =>
-      'Host 未能完成会话守卫检查，请检查 TSPi 安装诊断后重试。历史和草稿仍保留。';
+      'App Server 未能完成会话守卫检查，请检查 TSPi 安装诊断后重试。历史和草稿仍保留。';
 
   @override
   String get activationGuardInvalid =>
-      'Host 无法验证会话历史或写入锁，请检查会话文件。不要通过删除历史或锁文件绕过检查。';
+      'App Server 无法验证会话历史或写入锁，请检查会话文件。不要通过删除历史或锁文件绕过检查。';
 
   @override
   String get activationExternalOwner => '此工作区正在终端中打开。请继续该会话，或关闭终端会话后再切换。';
@@ -1093,19 +1107,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activationFailed =>
-      '会话未能就绪，请刷新状态并检查 Host 配置。切换时已停止的原进程不会自动重启，历史和草稿仍保留。';
+      '会话未能就绪，请刷新状态并检查 App Server 配置。切换时已停止的原进程不会自动重启，历史和草稿仍保留。';
 
   @override
   String get activationOutcomeUnknown =>
-      '未收到会话启动结果，Host 可能仍在准备会话。请先刷新状态，再决定是否重试。';
+      '未收到会话启动结果，App Server 可能仍在准备会话。请先刷新状态，再决定是否重试。';
 
   @override
   String get activationCapacity =>
-      'Host 的会话启动记录已达上限。请等待运行中的任务结束，安排重启 Host 后再刷新。';
+      'App Server 的会话启动记录已达上限。请等待运行中的任务结束，重启 App Server 后再刷新。';
 
   @override
   String get activationRecoveryRequired =>
-      '尚未确认会话进程的状态，请先在 Host 上检查再继续。不会自动重发消息。';
+      '尚未确认会话进程的状态，请先在 App Server 上检查再继续。不会自动重发消息。';
 
   @override
   String get preparingSession => '正在准备会话';
@@ -1173,7 +1187,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noModelsAvailable => '暂无可用模型';
 
   @override
-  String get hostDefaultModel => '使用 Host 默认模型';
+  String get appServerDefaultModel => '使用 App Server 默认模型';
 
   @override
   String get modelSelectionUnavailable => '同步和待处理消息结束后可切换模型。';
@@ -1182,7 +1196,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelSelectionBusy => '助手正在处理消息，请在本轮回复结束后切换模型。';
 
   @override
-  String get modelSelectionHostRequired => '此处仅支持切换 Host 托管会话的模型。';
+  String get modelSelectionAppServerRequired => '此处仅支持切换 Pi App Server 会话的模型。';
 
   @override
   String get modelSelectionStartRequired => '请先继续此对话，再切换模型。';

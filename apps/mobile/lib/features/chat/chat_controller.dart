@@ -8,7 +8,6 @@ import '../../models/chat_message.dart';
 import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
 import '../../models/phone_model.dart';
-import '../../models/queued_command.dart';
 import 'chat_view_memory.dart';
 import 'chat_outbox.dart';
 
@@ -130,7 +129,7 @@ class ChatController extends ChangeNotifier {
        _sessionRuntime = initialSessionRuntime,
        _promptProblem = initialPromptProblem,
        _activeAgentRunId = initialActiveAgentRunId {
-    if (initialSession != null) _applyManagement(initialSession);
+    if (initialSession != null) _applySessionSummary(initialSession);
     if (initialPreview != null && initialPreview.revision == _sessionRevision) {
       _timelineHistory = initialPreview.history;
       _selectedBranchId =
@@ -198,18 +197,10 @@ class ChatController extends ChangeNotifier {
   String _sessionRevision;
   String? _sessionTitle;
   String? _sessionModel;
-  String? _nextModel;
-  bool _nextModelUnconfirmed = false;
-  List<QueuedCommand> _queuedCommands = const [];
-  String? _queueProblem;
   SessionRuntimeSnapshot? _sessionRuntime;
   String? _activeAgentRunId;
   bool _historyAvailable;
   bool _canPrompt;
-  String _managementRevision = 'unmanaged';
-  bool _canActivate = false;
-  SessionActivation? _activation;
-  String? _runtimeOwner;
   bool _commandInFlight = false;
   bool _eventStreamEnabled = true;
   bool _snapshotReady = false;
@@ -249,12 +240,6 @@ class ChatController extends ChangeNotifier {
   ValueListenable<List<SessionTimelineItem>> get timelineUpdates =>
       _timelineUpdates;
   RuntimeState get runtimeState => _runtimeState;
-  String get managementRevision => _managementRevision;
-  SessionActivation? get activation => _activation;
-  String? get runtimeOwner => _runtimeOwner;
-  bool get canActivate => _canActivate && !viewingInactiveBranch;
-  bool get supportsModeActivation =>
-      _capabilities.contains('session.activate_mode');
   EventConnectionState get eventConnectionState => _eventConnectionState;
   String? get streamingText => _streamingTextChunks?.join();
   bool get hasStreamingText => _streamingTextChunks != null;
@@ -299,31 +284,7 @@ class ChatController extends ChangeNotifier {
   int get timelineActivityCount => _timelineHistory?.activityCount ?? 0;
   List<TimelineBranchSummary> get timelineBranches =>
       _timelineHistory?.branches ?? const <TimelineBranchSummary>[];
-  bool get canRefresh =>
-      queueEnabled || _historyAvailable || _runtimeState.isAvailable;
-  TsPhoneQueueGateway? get queueGateway =>
-      api is TsPhoneQueueGateway ? api as TsPhoneQueueGateway : null;
-  bool get queueEnabled =>
-      queueGateway != null && _capabilities.contains('command.queue');
-  List<QueuedCommand> get queuedCommands => _queuedCommands;
-  List<QueuedCommand> get pendingCommands => _queuedCommands
-      .where((command) => command.isPending)
-      .toList(growable: false);
-  List<QueuedCommand> get waitingCommands => _queuedCommands
-      .where((command) => command.isWaiting)
-      .toList(growable: false);
-  List<QueuedCommand> get currentWaitingCommands => waitingCommands
-      .where((command) => command.sessionId == sessionId)
-      .toList(growable: false);
-  List<QueuedCommand> get otherWaitingCommands => waitingCommands
-      .where((command) => command.sessionId != sessionId)
-      .toList(growable: false);
-  List<QueuedCommand> get recoveryCommands => _queuedCommands
-      .where((command) => command.needsRecovery)
-      .toList(growable: false);
-  int get pendingCommandCount =>
-      _queuedCommands.where((command) => command.isPending).length;
-  String? get queueProblem => _queueProblem;
+  bool get canRefresh => _historyAvailable || _runtimeState.isAvailable;
   bool get loadingEarlierMessages => _loadingEarlierMessages;
   bool get loadingAllHistory => _loadingAllHistory;
   bool get viewingHistoryWindow => _viewingHistoryWindow;
@@ -336,13 +297,10 @@ class ChatController extends ChangeNotifier {
       !_loadingEarlierMessages &&
       !_historyNavigationInProgress;
   bool get _promptStateReady =>
-      (queueEnabled ||
-          (_canPrompt &&
-              _promptProblem == null &&
-              _runtimeState.isAvailable &&
-              _snapshotReady)) &&
-      _queueProblem != 'queue_storage_unavailable' &&
-      !_nextModelUnconfirmed &&
+      _canPrompt &&
+      _promptProblem == null &&
+      _runtimeState.isAvailable &&
+      _snapshotReady &&
       !_historyNavigationInProgress &&
       !viewingInactiveBranch &&
       !_snapshotSyncInProgress;
@@ -354,36 +312,23 @@ class ChatController extends ChangeNotifier {
   TsPhoneModelGateway? get modelGateway =>
       api is TsPhoneModelGateway ? api as TsPhoneModelGateway : null;
   String? get selectedModelReference {
-    if (queueEnabled && _nextModel != null) return _nextModel;
     final model = _sessionRuntime?.model;
     final current = model == null ? null : '${model.provider}/${model.id}';
-    return _runtimeState == RuntimeState.offline
-        ? _sessionModel ?? current
-        : current ?? _sessionModel;
+    return current ?? _sessionModel;
   }
 
-  bool get selectingModelPreference =>
-      queueEnabled || _runtimeState == RuntimeState.offline;
   bool get canSelectModel =>
       modelGateway != null &&
-      !_nextModelUnconfirmed &&
       !_snapshotSyncInProgress &&
       !viewingInactiveBranch &&
       !_historyNavigationInProgress &&
       !commandInFlight &&
-      ((queueEnabled &&
-              _eventConnectionState == EventConnectionState.connected &&
-              _runtimeState != RuntimeState.connecting) ||
-          outbox.messages.isEmpty &&
-              _activeAgentRunId == null &&
-              ((_runtimeState == RuntimeState.idle &&
-                      _capabilities.contains('command.model') &&
-                      _snapshotReady &&
-                      _eventConnectionState ==
-                          EventConnectionState.connected) ||
-                  (selectingModelPreference &&
-                      _canActivate &&
-                      _capabilities.contains('session.model_preference'))));
+      outbox.messages.isEmpty &&
+      _activeAgentRunId == null &&
+      _runtimeState == RuntimeState.idle &&
+      _capabilities.contains('command.model') &&
+      _snapshotReady &&
+      _eventConnectionState == EventConnectionState.connected;
 
   Future<void> selectModel(PhoneModel model) async {
     if (!canSelectModel) {
@@ -393,23 +338,15 @@ class ChatController extends ChangeNotifier {
       );
     }
     final revision = _sessionRevision;
-    final preference = selectingModelPreference;
     _commandInFlight = true;
     _notify();
     try {
-      final session = queueEnabled
-          ? await queueGateway!.selectNextModel(
-              workspaceId,
-              sessionId,
-              revision,
-              model,
-            )
-          : await modelGateway!.selectModel(
-              workspaceId,
-              sessionId,
-              revision,
-              model,
-            );
+      final session = await modelGateway!.selectModel(
+        workspaceId,
+        sessionId,
+        revision,
+        model,
+      );
       if (_disposed) return;
       if (_sessionRevision != revision ||
           session.sessionId != sessionId ||
@@ -423,29 +360,10 @@ class ChatController extends ChangeNotifier {
       _promptProblem = session.promptProblem;
       _canPrompt = session.canPrompt;
       _capabilities = session.capabilities;
-      _applyManagement(session);
+      _applySessionSummary(session);
       _operationProblem = null;
-    } on Object catch (error) {
-      // A lost HTTP receipt does not prove that Pi kept the old model. Block
-      // commands until a fresh Host snapshot reconciles the actual state.
-      final definitive =
-          error is TsPhoneApiException &&
-          error.statusCode != null &&
-          error.statusCode! >= 400 &&
-          error.statusCode! < 500;
-      if (!_disposed && preference && queueEnabled && !definitive) {
-        _nextModelUnconfirmed = true;
-        try {
-          await refreshSessionMetadata();
-        } on Object {
-          _setError(
-            const TsPhoneApiException(
-              'Model selection needs reconciliation',
-              code: 'model_change_unconfirmed',
-            ),
-          );
-        }
-      } else if (!_disposed && !preference) {
+    } on Object {
+      if (!_disposed) {
         _snapshotReady = false;
         _canPrompt = false;
         await _refreshMessages(allowUnavailable: true);
@@ -484,37 +402,6 @@ class ChatController extends ChangeNotifier {
     viewingHistoryWindow: _viewingHistoryWindow,
   );
 
-  Future<void> acceptActivation(SessionSummary session) async {
-    if (_disposed) return;
-    if (session.sessionId != sessionId) {
-      throw const FormatException('Activation belongs to another session');
-    }
-    await _snapshotSynchronization;
-    if (_disposed) return;
-    _eventGeneration += 1;
-    await _cancelEventSubscriptionAndWait();
-    if (_disposed) return;
-    _applyManagement(session);
-    accessMode = session.accessMode;
-    _runtimeState = session.runtimeState;
-    _historyAvailable = session.historyAvailable;
-    _canPrompt = session.canPrompt;
-    _capabilities = session.capabilities;
-    _sessionRevision = session.sessionRevision;
-    _activeAgentRunId = session.activeAgentRunId;
-    _sessionRuntime = session.runtime;
-    _promptProblem = session.promptProblem;
-    _snapshotReady = false;
-    _lastEventId = null;
-    _loadedEarlierHistory = false;
-    _selectedBranchId = null;
-    _operationProblem = null;
-    _eventProblem = null;
-    _notify();
-    await refreshMessages();
-    if (!_disposed && !canRefresh) _connectEventStream();
-  }
-
   Future<void> refreshMessages() => _refreshMessages();
 
   Future<SessionSummary> refreshSessionMetadata() async {
@@ -530,65 +417,18 @@ class ChatController extends ChangeNotifier {
       );
     }
     if (!_disposed) {
-      _applyManagement(session);
+      _applySessionSummary(session);
       _notify();
     }
     return session;
   }
 
-  void _applyManagement(SessionSummary session) {
+  void _applySessionSummary(SessionSummary session) {
     if (session.model != null) _sessionModel = session.model;
     if (session.sessionName?.isNotEmpty == true) {
       _sessionTitle = session.sessionName;
     }
-    _managementRevision = session.managementRevision;
-    _canActivate = session.canActivate;
-    _activation = session.activation;
-    _runtimeOwner = session.runtimeOwner;
-    _nextModel = session.nextModel;
-    _nextModelUnconfirmed = false;
-    _queuedCommands = session.commands;
-    _queueProblem = session.queueProblem;
-    _capabilities = {
-      ..._capabilities.where(
-        (value) =>
-            value != 'session.activate_mode' &&
-            value != 'session.model_preference' &&
-            value != 'command.queue',
-      ),
-      if (session.capabilities.contains('session.activate_mode'))
-        'session.activate_mode',
-      if (session.capabilities.contains('session.model_preference'))
-        'session.model_preference',
-      if (session.capabilities.contains('command.queue')) 'command.queue',
-    };
-  }
-
-  void _applyManagementEvent(Map<String, Object?>? payload) {
-    if (payload?.containsKey('nextModel') == true) {
-      _nextModel = payload!['nextModel'] as String?;
-      _nextModelUnconfirmed = false;
-    }
-    if (payload?.containsKey('commands') == true) {
-      _queuedCommands = QueuedCommand.parseList(payload!['commands']);
-    }
-    if (payload?.containsKey('queueProblem') == true) {
-      _queueProblem = payload!['queueProblem'] as String?;
-    }
-    if (payload?['managementRevision'] case final String revision) {
-      _managementRevision = revision;
-    }
-    if (payload?['canActivate'] case final bool available) {
-      _canActivate = available;
-    }
-    if (payload?['activation'] case final Map value) {
-      _activation = SessionActivation.fromJson(
-        Map<String, Object?>.from(value),
-      );
-    }
-    if (payload?.containsKey('runtimeOwner') == true) {
-      _runtimeOwner = payload!['runtimeOwner'] as String?;
-    }
+    _capabilities = session.capabilities;
   }
 
   Future<void> _refreshMessages({
@@ -762,7 +602,7 @@ class ChatController extends ChangeNotifier {
     if (gateway == null || !_capabilities.contains('history.seek')) {
       _setError(
         const TsPhoneApiException(
-          'History navigation requires an updated host',
+          'History navigation is not exposed by the native App Server',
           code: 'management_unsupported',
         ),
       );
@@ -1008,7 +848,6 @@ class ChatController extends ChangeNotifier {
     if (message.isEmpty || commandInFlight || !canSend) return false;
     if (_viewingHistoryWindow && !await returnToLatest()) return false;
     if (!_promptStateReady) return false;
-    if (queueEnabled) return _sendQueued(message);
     final revision = _sessionRevision;
     final retry = outbox.uncertain(message);
     if (retry != null) {
@@ -1023,8 +862,8 @@ class ChatController extends ChangeNotifier {
         return false;
       }
       await refreshMessages();
-      // This read reconnects SSE itself. Its revision-bound REST checkpoint
-      // remains usable while the new stream opens; events replay from it.
+      // This read obtains a fresh native App Server transcript before the
+      // replicated-state subscription is re-established.
       if (_disposed || !_promptStateReady) return false;
       if (outbox.accepted(retry)) return true;
       if (_sessionRevision != revision) return false;
@@ -1070,7 +909,7 @@ class ChatController extends ChangeNotifier {
           error is TsPhoneApiException &&
           !const {
             'command_ambiguous',
-            'bridge_disconnected',
+            'connection_closed',
           }.contains(error.code) &&
           (const {
                 'model_unavailable',
@@ -1097,99 +936,6 @@ class ChatController extends ChangeNotifier {
       if (_disposed) api.close();
       _notify();
     }
-  }
-
-  Future<bool> _sendQueued(String message) async {
-    final outgoing =
-        outbox.uncertain(message) ??
-        OutgoingChatMessage(
-          revision: _sessionRevision,
-          id: clientMessageIdFactory(),
-          text: message,
-        );
-    _commandInFlight = true;
-    _sendingRequest = true;
-    _operationProblem = null;
-    outbox.begin(outgoing);
-    _notify();
-    try {
-      await queueGateway!.enqueueMessage(
-        workspaceId,
-        sessionId,
-        _sessionRevision,
-        message,
-        outgoing.id,
-      );
-      outbox.admit(outgoing);
-      _syncOutbox();
-      if (!_disposed) {
-        try {
-          await refreshSessionMetadata();
-        } on Object {
-          /* SSE also publishes the durable queue. */
-        }
-      }
-      return true;
-    } on Object catch (error) {
-      final definitive =
-          error is TsPhoneApiException &&
-          error.statusCode != null &&
-          error.statusCode! >= 400 &&
-          error.statusCode! < 500;
-      if (!definitive) {
-        try {
-          await queueGateway!.commandReceipt(
-            workspaceId,
-            sessionId,
-            _sessionRevision,
-            outgoing.id,
-          );
-          outbox.admit(outgoing);
-          _syncOutbox();
-          if (!_disposed) {
-            try {
-              await refreshSessionMetadata();
-            } on Object {
-              // Delivery is confirmed even when the following status read fails.
-            }
-          }
-          return true;
-        } on Object {
-          /* An absent receipt never proves non-delivery. */
-        }
-      }
-      outbox.finish(outgoing, sent: false, uncertain: !definitive);
-      if (!_disposed && definitive) _setError(error);
-      return false;
-    } finally {
-      _commandInFlight = false;
-      _sendingRequest = false;
-      if (_disposed) api.close();
-      _notify();
-    }
-  }
-
-  Future<void> cancelQueuedCommand(QueuedCommand command) async {
-    await queueGateway!.cancelQueuedCommand(
-      workspaceId,
-      command.sessionId ?? sessionId,
-      command.id,
-    );
-    if (!_disposed &&
-        (command.sessionId == null || command.sessionId == sessionId)) {
-      outbox.discard(_sessionRevision, command.id);
-      _removePendingOutgoing(command.id, includeReceived: true);
-    }
-    if (!_disposed) await refreshSessionMetadata();
-  }
-
-  Future<void> acknowledgeQueuedCommand(QueuedCommand command) async {
-    await queueGateway!.acknowledgeQueuedCommand(
-      workspaceId,
-      command.sessionId ?? sessionId,
-      command.id,
-    );
-    if (!_disposed) await refreshSessionMetadata();
   }
 
   void _syncOutbox() {
@@ -1255,9 +1001,9 @@ class ChatController extends ChangeNotifier {
     } on Object catch (error) {
       final problem = describeTsPhoneProblem(error);
       if (problem.code == TsPhoneProblemCode.agentRunChanged) {
-        // The broker has authoritative evidence that this run is no longer
+        // The App Server has authoritative evidence that this run is no longer
         // active. Retire the stale local identity before reconciling the
-        // replacement (or idle state) from a fresh REST checkpoint.
+        // replacement (or idle state) from a fresh transcript snapshot.
         _activeAgentRunId = null;
         if (_runtimeState.isAvailable) _runtimeState = RuntimeState.idle;
         _operationProblem = null;
@@ -1323,12 +1069,6 @@ class ChatController extends ChangeNotifier {
     _eventStreamEnabled = true;
     _retrySeconds = 1;
     _eventProblem = null;
-    if (api is TsPhoneManagementGateway) {
-      // History synchronization keeps its own visible error and retry path.
-      unawaited(
-        refreshSessionMetadata().then<void>((_) {}, onError: (Object _) {}),
-      );
-    }
     if (canRefresh) {
       unawaited(refreshMessages());
     } else {
@@ -1564,7 +1304,6 @@ class ChatController extends ChangeNotifier {
     var notifyController = true;
     switch (event.type) {
       case 'session_state':
-        _applyManagementEvent(payload);
         _promptProblem = payload?['promptProblem'] as String?;
         final previous = _runtimeState;
         late final RuntimeState nextState;
@@ -1601,7 +1340,6 @@ class ChatController extends ChangeNotifier {
           unawaited(refreshMessages());
         }
       case 'session.snapshot':
-        _applyManagementEvent(payload);
         _promptProblem = payload?['promptProblem'] as String?;
         final messages = payload?['messages'];
         if (messages is List &&
@@ -1642,6 +1380,17 @@ class ChatController extends ChangeNotifier {
           payload?['activeAgentRunId'],
           source: 'session.snapshot',
         );
+        if (payload?['isStreaming'] == true) {
+          final streamingMessage = payload?['streamingMessage'];
+          if (streamingMessage is Map) {
+            final parsed = ChatMessage.fromJson(streamingMessage);
+            if (parsed.role == ChatRole.assistant) {
+              _replaceStreamingText(parsed.text);
+            }
+          }
+        } else {
+          _clearStreamingText();
+        }
         if (payload?['historyAvailable'] is bool) {
           _historyAvailable = payload!['historyAvailable']! as bool;
         }

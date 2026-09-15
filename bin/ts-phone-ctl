@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-
-set -euo pipefail
-
-readonly SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
-readonly PROJECT_ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
-
-export TS_PHONE_STATE_DIR="${TS_PHONE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/ts-phone}"
-exec /usr/bin/node "$PROJECT_ROOT/services/server/dist/cli.js" "$@"

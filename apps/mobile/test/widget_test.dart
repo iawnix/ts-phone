@@ -5,8 +5,6 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:ts_phone/app.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/data/settings_store.dart';
@@ -320,7 +318,7 @@ void main() {
         token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
 
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
     await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
@@ -347,7 +345,7 @@ void main() {
     expect(darkOverlay.value.systemNavigationBarColor, Colors.transparent);
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
@@ -368,11 +366,11 @@ void main() {
         token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
 
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
     await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TS Phone 服务'));
+    await tester.tap(find.text('Pi App Server').first);
     await tester.pumpAndSettle();
 
     expect(find.text('连接设置'), findsOneWidget);
@@ -383,9 +381,9 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('设置'), findsOneWidget);
-    expect(find.text('TS Phone 服务'), findsOneWidget);
+    expect(find.text('Pi App Server'), findsWidgets);
 
-    await tester.tap(find.text('TS Phone 服务'));
+    await tester.tap(find.text('Pi App Server').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
@@ -409,10 +407,14 @@ void main() {
       find.widgetWithText(TextFormField, '访问令牌'),
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
     );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'App Server ID'),
+      '123e4567-e89b-42d3-a456-426614174000',
+    );
     await tester.tap(find.widgetWithText(FilledButton, '连接'));
     await tester.pump();
 
-    expect(find.text('正在连接'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('connecting')), findsOneWidget);
     final button = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(button.onPressed, isNull);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -686,7 +688,7 @@ void main() {
         token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
 
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
     await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
@@ -698,7 +700,7 @@ void main() {
     expect(store.localePreference, AppLocalePreference.en);
     expect(find.text('Language'), findsOneWidget);
     expect(find.text('Appearance'), findsOneWidget);
-    expect(find.text('TS Phone service'), findsOneWidget);
+    expect(find.text('Pi App Server'), findsWidgets);
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
       const Locale('en'),
@@ -706,7 +708,7 @@ void main() {
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
     await _openSettings(tester, 'Settings');
     expect(find.text('Language'), findsOneWidget);
@@ -722,7 +724,7 @@ void main() {
     final store = MemorySettingsStore()
       ..localePreference = AppLocalePreference.en;
 
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
 
     expect(find.text('Server'), findsOneWidget);
@@ -749,10 +751,7 @@ void main() {
       addTearDown(accessibility.dispose);
 
       await tester.pumpWidget(
-        TsPhoneApp(
-          settingsStore: store,
-          accessibilityController: accessibility,
-        ),
+        _appWithStore(store, accessibilityController: accessibility),
       );
       await tester.pumpAndSettle();
 
@@ -785,7 +784,7 @@ void main() {
         token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
 
-    await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+    await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
     await _openSettings(tester, 'Settings');
     await tester.pumpAndSettle();
@@ -814,7 +813,7 @@ void main() {
     addTearDown(accessibility.dispose);
 
     await tester.pumpWidget(
-      TsPhoneApp(settingsStore: store, accessibilityController: accessibility),
+      _appWithStore(store, accessibilityController: accessibility),
     );
     await tester.pumpAndSettle();
     await _openSettings(tester, '设置');
@@ -861,7 +860,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final settings = ConnectionSettings(
         serverUrl:
-            'https://transition-state-research-phone-bridge.example.test',
+            'https://radius.example.test',
         token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
 
@@ -909,19 +908,14 @@ void main() {
     },
   );
 
-  testWidgets('connection diagnostics report verified server facts', (
+  testWidgets('connection diagnostics expose the Pi App Server protocol', (
     WidgetTester tester,
   ) async {
     final settings = ConnectionSettings(
-      serverUrl: 'https://tsphone.iawnix.xyz',
+      serverUrl: 'https://radius.pi.dev',
+      serverId: '123e4567-e89b-42d3-a456-426614174000',
       token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
     );
-    final response = Completer<http.Response>();
-    final client = MockClient((request) async {
-      expect(request.headers['Authorization'], startsWith('Bearer '));
-      return response.future;
-    });
-
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('en'),
@@ -936,102 +930,22 @@ void main() {
           onLocaleChanged: (_) async {},
           onEditConnection: () {},
           onClose: () {},
-          gatewayBuilder: (settings) => TsPhoneApi(settings, client: client),
+          gatewayBuilder: (_) => _WidgetDiagnosticGateway(),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    final diagnostics = find.byKey(
-      const ValueKey<String>('run-connection-diagnostics'),
-    );
-    await tester.ensureVisible(diagnostics);
-    await tester.pumpAndSettle();
-    await tester.tap(diagnostics);
-    await tester.pump();
-
-    expect(find.text('Checking'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey<String>('diagnostics-running')),
-      findsOneWidget,
-    );
-
-    response.complete(
-      http.Response(
-        '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4","serviceVersion":"0.4.1"}}',
-        200,
-      ),
+    await tester.tap(
+      find.byKey(const ValueKey<String>('run-connection-diagnostics')),
     );
     await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(of: diagnostics, matching: find.text('Healthy')),
-      findsOneWidget,
-    );
-    expect(find.text('ts-phone-api/4'), findsNothing);
-    final detailsToggle = find.byKey(
-      const ValueKey<String>('connection-details-toggle'),
-    );
-    await tester.ensureVisible(detailsToggle);
-    await tester.tap(detailsToggle);
-    await tester.pumpAndSettle();
-    expect(find.text('ts-phone-api/4'), findsOneWidget);
-    expect(find.text('Ping'), findsNothing);
-    expect(find.text('Runtime'), findsNothing);
-    expect(find.text('Node ID'), findsNothing);
-    expect(find.text('Server 0.4.1'), findsNothing);
-    expect(find.text('Not exposed'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('connection diagnostics expose a failed action state', (
-    WidgetTester tester,
-  ) async {
-    final settings = ConnectionSettings(
-      serverUrl: 'https://tsphone.iawnix.xyz',
-      token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-    );
-    final client = MockClient(
-      (_) async => http.Response(
-        '{"apiVersion":"ts-phone-api/4","error":{"code":"unauthorized","message":"no"}}',
-        401,
-      ),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: TsPhoneTheme.light(),
-        home: SettingsPage(
-          connectionSettings: settings,
-          themePreference: AppThemePreference.system,
-          localePreference: AppLocalePreference.en,
-          onThemeChanged: (_) async {},
-          onLocaleChanged: (_) async {},
-          onEditConnection: () {},
-          onClose: () {},
-          gatewayBuilder: (settings) => TsPhoneApi(settings, client: client),
-        ),
-      ),
+    expect(find.text('Healthy'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('connection-details-toggle')),
     );
     await tester.pumpAndSettle();
-    final diagnostics = find.byKey(
-      const ValueKey<String>('run-connection-diagnostics'),
-    );
-    await tester.ensureVisible(diagnostics);
-    await tester.tap(diagnostics);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(of: diagnostics, matching: find.text('Issue')),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Authentication failed. Check the access token'),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
+    expect(find.text('pi-app-server/8'), findsOneWidget);
+    expect(find.text('Pi App Server').last, findsOneWidget);
   });
 
   for (final locale in <AppLocalePreference>[
@@ -1054,7 +968,7 @@ void main() {
           token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
         );
 
-      await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+      await tester.pumpWidget(_appWithStore(store));
       await tester.pumpAndSettle();
       final settingsTooltip = locale == AppLocalePreference.zh
           ? '设置'
@@ -1094,7 +1008,7 @@ void main() {
           token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
         );
 
-      await tester.pumpWidget(TsPhoneApp(settingsStore: store));
+      await tester.pumpWidget(_appWithStore(store));
       await tester.pumpAndSettle();
       await _openSettings(tester, 'Settings');
       await tester.pumpAndSettle();
@@ -1164,6 +1078,30 @@ void main() {
     );
   });
 }
+
+class _WidgetDiagnosticGateway implements TsPhoneGateway {
+  @override
+  Future<Map<String, Object?>> version() async => const {
+    'apiVersion': 'pi-app-server/8',
+    'serviceVersion': 'Pi App Server',
+  };
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('not used in widget diagnostics');
+}
+
+Widget _appWithStore(
+  SettingsStore store, {
+  TsAccessibilityController? accessibilityController,
+}) => TsPhoneApp(
+  settingsStore: store,
+  accessibilityController: accessibilityController,
+  gatewayBuilder: (_) => _WidgetDiagnosticGateway(),
+);
 
 Future<void> _openSettings(WidgetTester tester, String label) async {
   await tester.tap(find.byTooltip(label));

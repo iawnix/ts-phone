@@ -91,8 +91,8 @@ class ChatOutbox extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Records durable queue admission while keeping the optimistic message
-  /// visible until the Host publishes the matching input event. Admission is
+  /// Records local delivery state while keeping the optimistic message
+  /// visible until the App Server publishes the matching transcript. Admission is
   /// already confirmed, but execution has not started yet, so the message is
   /// shown as waiting for live synchronization rather than as an uncertain
   /// delivery.
@@ -103,7 +103,7 @@ class ChatOutbox extends ChangeNotifier {
       _accepted.remove(_accepted.first);
     }
     _inFlight.remove(message.id);
-    // A fast Host can publish input before the enqueue HTTP response arrives.
+    // A fast App Server can publish the transcript before the request response arrives.
     // In that case the canonical message is already in the timeline and the
     // optimistic copy must not be re-added by the late receipt.
     if (_delivered.contains(identity)) {
@@ -116,8 +116,8 @@ class ChatOutbox extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Drops a local optimistic copy after the corresponding queued command was
-  /// cancelled before execution. The Host receipt remains the source of
+  /// Drops a local optimistic copy after a request is rejected before execution.
+  /// The App Server transcript remains the source of
   /// truth; this only removes the transient chat rendering.
   void discard(String revision, String id) {
     _messages.removeWhere(

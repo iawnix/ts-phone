@@ -60,6 +60,7 @@ extension ConnectionValidationLocalizations on ConnectionValidationReason {
       l10n.validationNoUrlComponents,
     ConnectionValidationReason.originOnly => l10n.validationOriginOnly,
     ConnectionValidationReason.httpsRequired => l10n.validationHttpsRequired,
+    ConnectionValidationReason.invalidServerId => l10n.validationServerId,
     ConnectionValidationReason.invalidToken => l10n.validationTokenInvalid,
   };
 }

@@ -3,6 +3,7 @@ enum ConnectionValidationReason {
   disallowedUrlComponents,
   originOnly,
   httpsRequired,
+  invalidServerId,
   invalidToken,
 }
 
@@ -13,16 +14,24 @@ class ConnectionValidationException extends FormatException {
 }
 
 class ConnectionSettings {
-  ConnectionSettings({required String serverUrl, required String token})
-    : serverUrl = normalizeServerUrl(serverUrl),
-      token = validateToken(token);
+  ConnectionSettings({
+    required String serverUrl,
+    String serverId = '00000000-0000-4000-8000-000000000000',
+    required String token,
+  }) : serverUrl = normalizeServerUrl(serverUrl),
+       serverId = validateServerId(serverId),
+       token = validateToken(token);
 
   final String serverUrl;
+  final String serverId;
   final String token;
 
+  /// Returns a path on the configured Radius origin for diagnostics and
+  /// tooling. App Server traffic itself always uses the Pi Radius WebSocket
+  /// route built by [PiAppServerClient], never a legacy REST endpoint.
   Uri endpoint(String path) {
-    final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
-    return Uri.parse(serverUrl).replace(path: '/api/v4/$normalizedPath');
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    return Uri.parse(serverUrl).replace(path: normalizedPath);
   }
 
   static String normalizeServerUrl(String value) {
@@ -61,9 +70,23 @@ class ConnectionSettings {
 
   static String validateToken(String value) {
     final trimmed = value.trim();
-    if (!RegExp(r'^[A-Za-z0-9_-]{40,100}$').hasMatch(trimmed)) {
+    if (trimmed.length < 40 ||
+        trimmed.length > 4096 ||
+        trimmed.codeUnits.any((value) => value <= 32 || value == 127)) {
       throw const ConnectionValidationException(
         ConnectionValidationReason.invalidToken,
+      );
+    }
+    return trimmed;
+  }
+
+  static String validateServerId(String value) {
+    final trimmed = value.trim().toLowerCase();
+    if (!RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    ).hasMatch(trimmed)) {
+      throw const ConnectionValidationException(
+        ConnectionValidationReason.invalidServerId,
       );
     }
     return trimmed;

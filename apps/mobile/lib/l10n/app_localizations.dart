@@ -143,8 +143,26 @@ abstract class AppLocalizations {
   /// No description provided for @serverHint.
   ///
   /// In en, this message translates to:
-  /// **'https://tsphone.example.com'**
+  /// **'https://radius.pi.dev'**
   String get serverHint;
+
+  /// No description provided for @appServerId.
+  ///
+  /// In en, this message translates to:
+  /// **'App Server ID'**
+  String get appServerId;
+
+  /// No description provided for @appServerIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'00000000-0000-4000-8000-000000000000'**
+  String get appServerIdHint;
+
+  /// No description provided for @validationServerId.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the lowercase UUID shown by the TSPi App Server.'**
+  String get validationServerId;
 
   /// No description provided for @accessToken.
   ///
@@ -287,7 +305,7 @@ abstract class AppLocalizations {
   /// No description provided for @tsPhoneService.
   ///
   /// In en, this message translates to:
-  /// **'TS Phone service'**
+  /// **'Pi App Server'**
   String get tsPhoneService;
 
   /// No description provided for @notConfigured.
@@ -317,7 +335,7 @@ abstract class AppLocalizations {
   /// No description provided for @endpoint.
   ///
   /// In en, this message translates to:
-  /// **'TS Phone server address'**
+  /// **'Pi Radius gateway'**
   String get endpoint;
 
   /// No description provided for @copyServerAddress.
@@ -347,19 +365,19 @@ abstract class AppLocalizations {
   /// No description provided for @problemModelUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'No model is ready in this TSPi session. Check the model selection on the host.'**
+  /// **'No model is ready in this TSPi session. Check the model selection on the App Server.'**
   String get problemModelUnavailable;
 
   /// No description provided for @problemModelAuthMissing.
   ///
   /// In en, this message translates to:
-  /// **'The model needs authentication on the TSPi host. Your TS Phone connection is still valid.'**
+  /// **'The model needs authentication on the Pi App Server. Your TS Phone connection is still valid.'**
   String get problemModelAuthMissing;
 
   /// No description provided for @problemModelCheckFailed.
   ///
   /// In en, this message translates to:
-  /// **'The TSPi host could not verify the model configuration.'**
+  /// **'The Pi App Server could not verify the model configuration.'**
   String get problemModelCheckFailed;
 
   /// No description provided for @problemProviderUnavailable.
@@ -377,13 +395,13 @@ abstract class AppLocalizations {
   /// No description provided for @problemProviderAuthFailed.
   ///
   /// In en, this message translates to:
-  /// **'The model service rejected authentication. Check the Host\'s upstream credentials; this is separate from your phone connection.'**
+  /// **'The model service rejected authentication. Check the App Server\'s upstream credentials; this is separate from your phone connection.'**
   String get problemProviderAuthFailed;
 
   /// No description provided for @problemProviderError.
   ///
   /// In en, this message translates to:
-  /// **'The model service returned an error and this generation failed. Details remain in the Host\'s session history.'**
+  /// **'The model service returned an error and this generation failed. Details remain in the App Server\'s session history.'**
   String get problemProviderError;
 
   /// No description provided for @problemGenerationIncomplete.
@@ -395,13 +413,13 @@ abstract class AppLocalizations {
   /// No description provided for @problemModelStorageUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'TSPi cannot access its model credentials or cache. Check the host service\'s Pi directory permissions.'**
+  /// **'TSPi cannot access its model credentials or cache. Check the App Server\'s Pi directory permissions.'**
   String get problemModelStorageUnavailable;
 
   /// No description provided for @problemRuntimeExtensionError.
   ///
   /// In en, this message translates to:
-  /// **'An extension failed in this TSPi session. Check the latest messages and host logs.'**
+  /// **'An extension failed in this TSPi session. Check the latest messages and App Server logs.'**
   String get problemRuntimeExtensionError;
 
   /// No description provided for @problemPromptRejected.
@@ -461,7 +479,7 @@ abstract class AppLocalizations {
   /// No description provided for @runDiagnostics.
   ///
   /// In en, this message translates to:
-  /// **'Check Phone service'**
+  /// **'Check App Server'**
   String get runDiagnostics;
 
   /// No description provided for @diagnosticsRunning.
@@ -743,20 +761,20 @@ abstract class AppLocalizations {
   /// No description provided for @problemPreflightUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'TSPi could not verify this operation. Check the Host\'s TSPi configuration and try again.'**
+  /// **'TSPi could not verify this operation. Check the App Server\'s TSPi configuration and try again.'**
   String get problemPreflightUnavailable;
 
   /// No description provided for @problemManagementUnsupported.
   ///
   /// In en, this message translates to:
-  /// **'This Phone service does not support creating projects or sessions yet. Update the server installation; updating the app alone is not enough.'**
+  /// **'This Pi App Server does not support that operation. Update the App Server runtime; updating the app alone is not enough.'**
   String get problemManagementUnsupported;
 
-  /// No description provided for @hostVersion.
+  /// No description provided for @appServerVersion.
   ///
   /// In en, this message translates to:
-  /// **'Server version'**
-  String get hostVersion;
+  /// **'App Server version'**
+  String get appServerVersion;
 
   /// No description provided for @problemManagementCapacity.
   ///
@@ -1373,7 +1391,7 @@ abstract class AppLocalizations {
   /// No description provided for @liveSyncFailed.
   ///
   /// In en, this message translates to:
-  /// **'Could not connect to the TS Phone service'**
+  /// **'Could not connect to the Pi App Server'**
   String get liveSyncFailed;
 
   /// No description provided for @liveSyncRestoring.
@@ -1385,7 +1403,7 @@ abstract class AppLocalizations {
   /// No description provided for @liveSyncConnecting.
   ///
   /// In en, this message translates to:
-  /// **'Connecting to the TS Phone service'**
+  /// **'Connecting to the Pi App Server'**
   String get liveSyncConnecting;
 
   /// No description provided for @generationDisconnectedBanner.
@@ -1847,13 +1865,13 @@ abstract class AppLocalizations {
   /// No description provided for @problemServiceUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'The TS Phone service is temporarily unavailable'**
+  /// **'The Pi App Server is temporarily unavailable'**
   String get problemServiceUnavailable;
 
   /// No description provided for @problemConnectionFailed.
   ///
   /// In en, this message translates to:
-  /// **'Could not connect to the TS Phone service'**
+  /// **'Could not connect to the Pi App Server'**
   String get problemConnectionFailed;
 
   /// No description provided for @problemRequestTimeout.
@@ -1871,25 +1889,25 @@ abstract class AppLocalizations {
   /// No description provided for @problemApiRouteMissing.
   ///
   /// In en, this message translates to:
-  /// **'The requested API endpoint does not exist. Check that the app and Host are up to date.'**
+  /// **'The requested App Server service is unavailable. Check that the app and Pi runtime are up to date.'**
   String get problemApiRouteMissing;
 
   /// No description provided for @problemQueueStorage.
   ///
   /// In en, this message translates to:
-  /// **'Host could not confirm request storage. Check its state directory before retrying.'**
+  /// **'The App Server could not confirm request storage. Check its state directory before retrying.'**
   String get problemQueueStorage;
 
   /// No description provided for @problemQueueCapacity.
   ///
   /// In en, this message translates to:
-  /// **'The request queue or its receipt storage is full. Finish pending requests or check Host storage.'**
+  /// **'The App Server request storage is full. Finish pending requests or check its state directory.'**
   String get problemQueueCapacity;
 
   /// No description provided for @problemQueueRecovery.
   ///
   /// In en, this message translates to:
-  /// **'A previous request has an uncertain outcome. Review its history and outputs before continuing the queue.'**
+  /// **'A previous request has an uncertain outcome. Review its history and outputs before continuing.'**
   String get problemQueueRecovery;
 
   /// No description provided for @commandQueue.
@@ -2081,25 +2099,25 @@ abstract class AppLocalizations {
   /// No description provided for @activationUpgradeRequired.
   ///
   /// In en, this message translates to:
-  /// **'Update the TSPi Host to choose a session mode. History remains available.'**
+  /// **'Update the Pi App Server to choose a session mode. History remains available.'**
   String get activationUpgradeRequired;
 
   /// No description provided for @activationWriterActive.
   ///
   /// In en, this message translates to:
-  /// **'Another process owns this workspace or conversation. Close it on the Host before continuing. History and drafts are kept.'**
+  /// **'Another process owns this workspace or conversation. Close it on the App Server before continuing. History and drafts are kept.'**
   String get activationWriterActive;
 
   /// No description provided for @activationInspectionFailed.
   ///
   /// In en, this message translates to:
-  /// **'The Host could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.'**
+  /// **'The App Server could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.'**
   String get activationInspectionFailed;
 
   /// No description provided for @activationGuardInvalid.
   ///
   /// In en, this message translates to:
-  /// **'The Host could not validate the session history or its writer locks. Inspect the session files on the Host. Do not delete history or lock files to bypass this check.'**
+  /// **'The App Server could not validate the session history or its writer locks. Inspect the session files on the App Server. Do not delete history or lock files to bypass this check.'**
   String get activationGuardInvalid;
 
   /// No description provided for @activationExternalOwner.
@@ -2135,25 +2153,25 @@ abstract class AppLocalizations {
   /// No description provided for @activationFailed.
   ///
   /// In en, this message translates to:
-  /// **'The conversation did not become ready. Refresh and check the Host configuration. A runtime stopped during switching will stay offline; history and drafts are kept.'**
+  /// **'The conversation did not become ready. Refresh and check the App Server configuration. A runtime stopped during switching will stay offline; history and drafts are kept.'**
   String get activationFailed;
 
   /// No description provided for @activationOutcomeUnknown.
   ///
   /// In en, this message translates to:
-  /// **'The activation result was not received. The Host may still be preparing this conversation. Refresh its state before trying again.'**
+  /// **'The activation result was not received. The App Server may still be preparing this conversation. Refresh its state before trying again.'**
   String get activationOutcomeUnknown;
 
   /// No description provided for @activationCapacity.
   ///
   /// In en, this message translates to:
-  /// **'The Host\'s activation records are full. Wait for active runs to settle, arrange a Host restart, then refresh.'**
+  /// **'The App Server\'s activation records are full. Wait for active runs to settle, restart the App Server, then refresh.'**
   String get activationCapacity;
 
   /// No description provided for @activationRecoveryRequired.
   ///
   /// In en, this message translates to:
-  /// **'The conversation process could not be confirmed. Inspect it on the Host before continuing. No message will be resent automatically.'**
+  /// **'The conversation process could not be confirmed. Inspect it on the App Server before continuing. No message will be resent automatically.'**
   String get activationRecoveryRequired;
 
   /// No description provided for @preparingSession.
@@ -2282,11 +2300,11 @@ abstract class AppLocalizations {
   /// **'No available models'**
   String get noModelsAvailable;
 
-  /// No description provided for @hostDefaultModel.
+  /// No description provided for @appServerDefaultModel.
   ///
   /// In en, this message translates to:
-  /// **'Host default model'**
-  String get hostDefaultModel;
+  /// **'App Server default model'**
+  String get appServerDefaultModel;
 
   /// No description provided for @modelSelectionUnavailable.
   ///
@@ -2300,11 +2318,11 @@ abstract class AppLocalizations {
   /// **'The assistant is busy. Switch models after this response finishes.'**
   String get modelSelectionBusy;
 
-  /// No description provided for @modelSelectionHostRequired.
+  /// No description provided for @modelSelectionAppServerRequired.
   ///
   /// In en, this message translates to:
-  /// **'Only Host-managed conversations can switch models here.'**
-  String get modelSelectionHostRequired;
+  /// **'Only Pi App Server conversations can switch models here.'**
+  String get modelSelectionAppServerRequired;
 
   /// No description provided for @modelSelectionStartRequired.
   ///

@@ -3,7 +3,7 @@ class PhoneModel {
     required this.provider,
     required this.id,
     required this.name,
-    required this.contextWindow,
+    this.contextWindow,
   });
 
   factory PhoneModel.fromJson(Object? value) {
@@ -11,21 +11,22 @@ class PhoneModel {
         value['provider'] is! String ||
         value['id'] is! String ||
         value['name'] is! String ||
-        value['contextWindow'] is! int ||
-        (value['contextWindow'] as int) <= 0) {
+        (value['contextWindow'] != null &&
+            (value['contextWindow'] is! int ||
+                (value['contextWindow'] as int) <= 0))) {
       throw const FormatException('Invalid model catalog entry');
     }
     return PhoneModel(
       provider: value['provider'] as String,
       id: value['id'] as String,
       name: value['name'] as String,
-      contextWindow: value['contextWindow'] as int,
+      contextWindow: value['contextWindow'] as int?,
     );
   }
 
   final String provider;
   final String id;
   final String name;
-  final int contextWindow;
+  final int? contextWindow;
   String get reference => '$provider/$id';
 }

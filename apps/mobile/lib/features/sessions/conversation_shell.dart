@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../data/app_server_gateway.dart';
 import '../../data/settings_store.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -10,10 +11,9 @@ import '../../models/workspace.dart';
 import '../../navigation/adaptive_page_route.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_view_memory.dart';
-import '../workspaces/workspace_list_page.dart';
 import 'session_list_page.dart';
 
-/// Navigation is explicit. Reading a list or opening history never starts a worker.
+/// One App Server owns one session directory; navigation starts at that directory.
 class ConversationShell extends StatefulWidget {
   const ConversationShell({
     super.key,
@@ -26,7 +26,7 @@ class ConversationShell extends StatefulWidget {
   final ConnectionSettings settings;
   final VoidCallback onOpenSettings;
   final ConversationSelectionStore? selectionStore;
-  final TsPhoneGatewayBuilder? gatewayBuilder;
+  final TsPhoneGateway Function(ConnectionSettings settings)? gatewayBuilder;
 
   @override
   State<ConversationShell> createState() => _ConversationShellState();
@@ -34,32 +34,35 @@ class ConversationShell extends StatefulWidget {
 
 class _ConversationShellState extends State<ConversationShell> {
   final _navigator = GlobalKey<NavigatorState>();
-  var _scaffold = GlobalKey<ScaffoldState>();
+  final _scaffold = GlobalKey<ScaffoldState>();
   final _memory = ConversationMemory();
   late final TsPhoneGateway _api;
-  WorkspaceSummary? _workspace;
+  late final WorkspaceSummary _server;
   SessionSummary? _session;
   List<SessionSummary>? _sessions;
   bool _creating = false;
   int _generation = 0;
   int _sidebarRevision = 0;
-  int _navigationId = 0;
-  int _homeRevision = 0;
-  bool _fromProjectList = false;
 
-  LocalKey get _listKey => ValueKey(('sessions', _navigationId));
-  LocalKey get _chatKey => ValueKey(('chat', _navigationId));
+  LocalKey get _chatKey => ValueKey(('chat', _session?.sessionId));
 
-  TsPhoneManagementGateway? get _management => _api is TsPhoneManagementGateway
-      ? _api as TsPhoneManagementGateway
-      : null;
+  AppServerSessionGateway? get _management =>
+      _api is AppServerSessionGateway ? _api as AppServerSessionGateway : null;
 
   @override
   void initState() {
     super.initState();
     _api =
         widget.gatewayBuilder?.call(widget.settings) ??
-        TsPhoneApi(widget.settings);
+        PiAppServerGateway(widget.settings);
+    _server = WorkspaceSummary(
+      id: appServerWorkspaceId,
+      name: 'App Server',
+      runtimeState: RuntimeState.idle,
+      isStreaming: false,
+      liveSessionCount: 0,
+      sessionCount: 0,
+    );
   }
 
   @override
@@ -68,27 +71,11 @@ class _ConversationShellState extends State<ConversationShell> {
     super.dispose();
   }
 
-  void _goHome() {
+  void _showDirectory() {
     _scaffold.currentState?.closeDrawer();
     setState(() {
       _generation += 1;
-      _workspace = null;
       _session = null;
-      _sessions = null;
-      _fromProjectList = false;
-      _homeRevision++;
-    });
-  }
-
-  void _selectWorkspace(WorkspaceSummary workspace) {
-    setState(() {
-      _generation += 1;
-      _workspace = workspace;
-      _session = null;
-      _sessions = null;
-      _fromProjectList = true;
-      _navigationId++;
-      _scaffold = GlobalKey<ScaffoldState>();
     });
   }
 
@@ -98,40 +85,30 @@ class _ConversationShellState extends State<ConversationShell> {
       _generation += 1;
       _session = session;
     });
-    unawaited(_remember(_workspace!.id, session.sessionId));
+    unawaited(_remember(session.sessionId));
   }
 
-  void _openRecent(WorkspaceSummary workspace, SessionSummary session) {
-    _selectWorkspace(workspace);
-    _fromProjectList = false;
-    _selectSession(session);
-  }
-
-  Future<void> _remember(String workspace, String session) async {
+  Future<void> _remember(String session) async {
     try {
       await widget.selectionStore?.saveConversation(
         widget.settings.serverUrl,
-        workspace,
+        widget.settings.serverId,
         session,
       );
     } on Object {
-      // An optional recent-selection preference must not block navigation.
+      // Recent selection is a presentation preference, never session state.
     }
   }
 
   Future<void> _newSession() async {
-    final workspace = _workspace;
     final management = _management;
-    if (_creating || workspace == null || management == null) return;
+    if (_creating || management == null) return;
     _scaffold.currentState?.closeDrawer();
     final generation = _generation;
     setState(() => _creating = true);
     try {
-      final session = await management.createSession(
-        workspace.id,
-        accessMode: SessionAccessMode.controller,
-      );
-      if (!mounted || _workspace?.id != workspace.id) return;
+      final session = await management.createSession();
+      if (!mounted) return;
       setState(() {
         _sessions = [
           session,
@@ -156,92 +133,70 @@ class _ConversationShellState extends State<ConversationShell> {
   }
 
   Widget _sessionList({required bool sidebar}) {
-    final generation = _generation;
     final revision = _sidebarRevision;
     final selectedId = _session?.sessionId;
     return SessionListPage(
-      key: ValueKey((_workspace!.id, sidebar)),
+      key: ValueKey((appServerWorkspaceId, sidebar)),
       settings: widget.settings,
-      workspace: _workspace!,
+      workspace: _server,
       initialSessions: _sessions,
       gatewayBuilder: widget.gatewayBuilder,
       sidebar: sidebar,
-      onBack: _goHome,
+      onBack: sidebar ? _showDirectory : null,
+      onOpenSettings: widget.onOpenSettings,
       selectedSessionId: selectedId,
       refreshToken: revision,
       onSelected: _selectSession,
       onSessionsChanged: (sessions) {
-        if (!mounted ||
-            _creating ||
-            generation != _generation ||
-            revision != _sidebarRevision ||
-            selectedId != _session?.sessionId) {
-          return;
-        }
+        if (!mounted || _creating || revision != _sidebarRevision) return;
         setState(() {
           _sessions = sessions;
-          // A removed/archived selection returns to the list, never another chat.
           final selected = sessions
               .where((value) => value.sessionId == selectedId)
               .firstOrNull;
-          if (_session != null && selected == null) _fromProjectList = true;
           _session = selected;
         });
       },
-      onCreateSession: _management == null ? null : _newSession,
+      onCreateSession: managementAvailable ? _newSession : null,
       creatingSession: _creating,
       sidebarHeader: sidebar
           ? ListTile(
-              key: const ValueKey('sidebar-home'),
-              leading: const Icon(Icons.arrow_back, size: 22),
-              title: Text(context.l10n.home),
-              onTap: _goHome,
+              key: const ValueKey('sidebar-directory'),
+              leading: const Icon(Icons.forum_outlined, size: 22),
+              title: Text(context.l10n.sessions),
+              onTap: _showDirectory,
+            )
+          : null,
+      sidebarFooter: sidebar
+          ? ListTile(
+              leading: const Icon(Icons.settings_outlined, size: 22),
+              title: Text(context.l10n.settings),
+              onTap: widget.onOpenSettings,
             )
           : null,
     );
   }
 
+  bool get managementAvailable => _management != null;
+
   @override
   Widget build(BuildContext context) {
     return NavigatorPopHandler(
-      enabled: _workspace != null,
+      enabled: _session != null,
       onPopWithResult: (result) => _navigator.currentState?.maybePop(result),
       child: Navigator(
         key: _navigator,
         pages: [
           TsAdaptivePage<void>(
-            key: const ValueKey('home'),
-            child: WorkspaceListPage(
-              key: ValueKey(('home-content', _homeRevision)),
-              settings: widget.settings,
-              onOpenSettings: widget.onOpenSettings,
-              gatewayBuilder: widget.gatewayBuilder,
-              selectionStore: widget.selectionStore,
-              onSelected: _selectWorkspace,
-              onSessionSelected: _openRecent,
-            ),
+            key: const ValueKey('sessions'),
+            child: _sessionList(sidebar: false),
           ),
-          if (_workspace != null && (_fromProjectList || _session == null))
-            TsAdaptivePage<void>(
-              key: _listKey,
-              child: _sessionList(sidebar: false),
-            ),
-          if (_workspace != null && _session != null)
+          if (_session != null)
             TsAdaptivePage<void>(key: _chatKey, child: _chat()),
         ],
         onDidRemovePage: (page) {
-          if (!mounted) return;
-          if (_session != null && page.key == _chatKey) {
-            if (!_fromProjectList) {
-              _goHome();
-            } else {
-              setState(() {
-                _generation++;
-                _session = null;
-              });
-            }
-          } else if (_workspace != null && page.key == _listKey) {
-            _goHome();
+          if (mounted && _session != null && page.key == _chatKey) {
+            _showDirectory();
           }
         },
       ),
@@ -252,15 +207,15 @@ class _ConversationShellState extends State<ConversationShell> {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final session = _session!;
     final content = ChatPage(
-      key: ValueKey((_workspace!.id, session.sessionId)),
+      key: ValueKey((appServerWorkspaceId, session.sessionId, _generation)),
       settings: widget.settings,
-      workspace: _workspace!,
+      workspace: _server,
       session: session,
       onOpenSession: _selectSession,
       gatewayFactory: widget.gatewayBuilder == null
           ? null
           : () => widget.gatewayBuilder!(widget.settings),
-      memory: _memory.view(_workspace!.id, session.sessionId),
+      memory: _memory.view(appServerWorkspaceId, session.sessionId),
       onOpenNavigation: wide
           ? null
           : () => _scaffold.currentState?.openDrawer(),

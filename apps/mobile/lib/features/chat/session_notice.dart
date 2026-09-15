@@ -18,13 +18,11 @@ class SessionNoticeView extends StatelessWidget {
     required this.state,
     required this.problem,
     required this.onRetry,
-    required this.onCopyStartCommand,
   });
 
   final SessionViewState state;
   final TsPhoneProblem? problem;
   final VoidCallback onRetry;
-  final VoidCallback onCopyStartCommand;
 
   @override
   Widget build(BuildContext context) {
@@ -60,20 +58,10 @@ class SessionNoticeView extends StatelessWidget {
         tooltip: l10n.checkAgain,
         icon: const Icon(Icons.refresh_rounded),
       ),
-      SessionNoticeKind.offline => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          IconButton(
-            onPressed: onCopyStartCommand,
-            tooltip: l10n.copyStartCommand,
-            icon: const Icon(Icons.copy_rounded),
-          ),
-          IconButton(
-            onPressed: onRetry,
-            tooltip: l10n.checkAgain,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
+      SessionNoticeKind.offline => IconButton(
+        onPressed: onRetry,
+        tooltip: l10n.checkAgain,
+        icon: const Icon(Icons.refresh_rounded),
       ),
     };
 

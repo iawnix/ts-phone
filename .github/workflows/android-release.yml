@@ -32,12 +32,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.19.0"
-          cache: npm
-
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -70,14 +64,12 @@ jobs:
           printf '%s' "$RELEASE_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/ts-phone-signing/keystore.pass"
           chmod 600 "$RUNNER_TEMP/ts-phone-signing"/*
 
-      - name: Install JavaScript dependencies
-        run: npm ci
-
-      - name: Run server and release checks
+      - name: Run mobile checks
         run: |
-          npm run typecheck
-          npm test
-          npm run test:release
+          cd apps/mobile
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
 
       - name: Build signed Android artifacts
         run: |
@@ -88,21 +80,17 @@ jobs:
           TS_PHONE_JAVA_HOME="$JAVA_HOME" \
           apps/mobile/tool/build_release_android.sh
 
-      - name: Build the validated Phone component archive
-        run: python3 deploy/build-component-release.py --output-dir dist/component --apksigner "$ANDROID_HOME/build-tools/36.0.0/apksigner" --json
-
       - name: Verify tag and package versions
         run: |
           mobile_version=$(awk '$1 == "version:" { print $2; exit }' apps/mobile/pubspec.yaml)
           expected_tag="ts-phone-v${mobile_version}"
           test "$RELEASE_TAG" = "$expected_tag"
-          test -f dist/component/ts-phone-component-release.json
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mapfile -t assets < <(find -L dist/android-current dist/component -maxdepth 1 -type f -print | sort)
+          mapfile -t assets < <(find -L dist/android-current -maxdepth 1 -type f -print | sort)
           test "${#assets[@]}" -gt 0
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber

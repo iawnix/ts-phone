@@ -4,7 +4,7 @@ import 'package:ts_phone/models/connection_settings.dart';
 void main() {
   const token = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
-  test('normalizes HTTPS origins and builds API endpoints', () {
+  test('normalizes HTTPS origins and builds App Server routes', () {
     final settings = ConnectionSettings(
       serverUrl: 'https://tsphone.iawnix.xyz/',
       token: token,
@@ -12,7 +12,7 @@ void main() {
     expect(settings.serverUrl, 'https://tsphone.iawnix.xyz');
     expect(
       settings.endpoint('workspaces').toString(),
-      'https://tsphone.iawnix.xyz/api/v4/workspaces',
+      'https://tsphone.iawnix.xyz/workspaces',
     );
   });
 

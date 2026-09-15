@@ -8,13 +8,13 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/app_server_gateway.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/chat_message.dart';
 import '../../models/connection_settings.dart';
 import '../../models/session_timeline.dart';
 import '../../models/workspace.dart';
-import '../../navigation/adaptive_page_route.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/chat_message_view.dart';
@@ -28,8 +28,6 @@ import 'session_notice.dart';
 import 'session_view_state.dart';
 import 'timeline_widgets.dart';
 import 'model_picker.dart';
-import 'command_queue_sheet.dart';
-import '../management/management_dialogs.dart';
 
 enum _ChatScrollMode { following, reading }
 
@@ -93,7 +91,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _aborting = false;
   bool _abortConfirmationOpen = false;
   bool _hasDraft = false;
-  bool _activating = false;
   TimelineViewFilter _timelineFilter = TimelineViewFilter.all;
   bool _initialTimelinePositioned = false;
   bool _bottomDockMeasureScheduled = false;
@@ -108,7 +105,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       api:
           widget.gateway ??
           widget.gatewayFactory?.call() ??
-          TsPhoneApi(widget.settings),
+          PiAppServerGateway(widget.settings),
       workspaceId: widget.workspace.id,
       sessionId: widget.session.sessionId,
       initialSession: widget.session,
@@ -597,146 +594,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
   }
 
-  bool get _canActivate =>
-      _controller.api is TsPhoneManagementGateway &&
-      !_controller.viewingInactiveBranch &&
-      _controller.canActivate;
-
-  Future<void> _activateSession({SessionAccessMode? mode}) async {
-    mode ??= _controller.accessMode;
-    if (_activating || _controller.viewingInactiveBranch) return;
-    setState(() => _activating = true);
-    try {
-      final current = await _controller.refreshSessionMetadata();
-      if (!mounted) return;
-      if (!current.capabilities.contains('session.activate_mode')) {
-        _showActionMessage(context.l10n.activationUpgradeRequired);
-        return;
-      }
-      final activation = current.activation;
-      final conflict = activation?.conflict;
-      final needsSwitch =
-          conflict != null &&
-          ((conflict.sessionId == current.sessionId &&
-                  current.currentAccessMode != mode) ||
-              (conflict.sessionId != current.sessionId &&
-                  mode == SessionAccessMode.controller));
-      if (!needsSwitch && activation?.modes.contains(mode) != true) {
-        _showActionMessage(
-          describeTsPhoneProblem(
-            TsPhoneApiException(
-              'Session activation is unavailable',
-              code: activation?.problem ?? 'session_not_ready',
-            ),
-          ).localizedMessage(context.l10n),
-        );
-        return;
-      }
-      if (needsSwitch) {
-        final sameSession = conflict.sessionId == current.sessionId;
-        final action = await showDialog<String>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(
-              sameSession
-                  ? context.l10n.switchAssistantMode(
-                      mode!.localizedLabel(context.l10n),
-                    )
-                  : context.l10n.activationSwitchTitle,
-            ),
-            content: Text(
-              conflict.switchable
-                  ? sameSession
-                        ? context.l10n.switchAssistantModeBody
-                        : context.l10n.activationSwitchBody(
-                            (conflict.sessionName ??
-                                    context.l10n.unnamedConversation)
-                                .characters
-                                .take(60)
-                                .toString(),
-                          )
-                  : '${conflict.sessionName ?? context.l10n.unnamedConversation}\n\n${conflict.owner == 'external' ? context.l10n.activationExternalOwner : context.l10n.problemResourcesBusy}',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(context.l10n.cancel),
-              ),
-              if (conflict.sessionId != widget.session.sessionId)
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'open'),
-                  child: Text(context.l10n.activationOpenOwner),
-                ),
-              if (conflict.switchable)
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'switch'),
-                  child: Text(context.l10n.activationSwitchConfirm),
-                ),
-            ],
-          ),
-        );
-        if (!mounted) return;
-        if (action == 'open') {
-          final sessions = await _controller.api.listSessions(
-            widget.workspace.id,
-          );
-          if (!mounted) return;
-          final target = sessions
-              .where((value) => value.sessionId == conflict.sessionId)
-              .firstOrNull;
-          if (target == null) {
-            throw const TsPhoneApiException(
-              'Conversation is unavailable',
-              code: 'session_offline',
-            );
-          }
-          if (widget.onOpenSession case final open?) {
-            open(target);
-          } else {
-            await pushTsPhonePage<void>(
-              context: context,
-              builder: (_) => ChatPage(
-                settings: widget.settings,
-                workspace: widget.workspace,
-                session: target,
-                gatewayFactory: widget.gatewayFactory,
-              ),
-            );
-          }
-          return;
-        }
-        if (action != 'switch') return;
-      }
-      final selected = await (_controller.api as TsPhoneManagementGateway)
-          .activateSession(
-            widget.workspace.id,
-            widget.session.sessionId,
-            current.managementRevision,
-            accessMode: mode,
-            requestId: createTsPhoneClientMessageId(),
-            switchFrom: needsSwitch ? conflict : null,
-          );
-      if (!mounted) return;
-      await _controller.acceptActivation(selected);
-    } on Object catch (error) {
-      if (mounted) {
-        _showActionMessage(
-          describeTsPhoneProblem(error).localizedMessage(context.l10n),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _activating = false);
-    }
-  }
-
   Future<void> _sync() async {
     if (_syncing) return;
     ActionFeedback.tap();
     setState(() => _syncing = true);
     try {
-      if (_controller.api is TsPhoneManagementGateway) {
-        await _controller.refreshSessionMetadata();
-      }
       await _controller.refreshMessages();
       if (!mounted || _controller.problem != null) return;
       _showActionMessage(context.l10n.messagesSynced);
@@ -834,15 +696,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     Navigator.of(context).maybePop();
   }
 
-  Future<void> _copyStartCommand() async {
-    ActionFeedback.tap();
-    await Clipboard.setData(ClipboardData(text: _startCommand));
-    if (mounted) _showActionMessage(context.l10n.startCommandCopied);
-  }
-
-  String get _startCommand =>
-      './TSPi --workspace ${widget.workspace.id} --phone';
-
   String get _navigationTitle {
     final sessionTitle = _controller.sessionTitle?.trim();
     if (sessionTitle?.isNotEmpty == true) return sessionTitle!;
@@ -876,48 +729,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       isScrollControlled: true,
       builder: (context) => _SessionDetailsSheet(
         title: _navigationTitle,
-        onRename: _controller.api is TsPhoneManagementGateway
-            ? () {
-                Navigator.of(context).pop();
-                unawaited(_renameSession());
-              }
-            : null,
         runtime: _controller.sessionRuntime,
         configuredModel: _controller.selectedModelReference,
-        queueEnabled: _controller.queueEnabled,
         workspaceName: widget.workspace.name,
-        accessMode: _controller.accessMode,
         runtimeState: _controller.runtimeState,
         sessionId: widget.session.sessionId,
       ),
     );
-  }
-
-  Future<void> _renameSession() async {
-    final name = await showNameEditor(
-      context,
-      title: context.l10n.rename,
-      fieldLabel: context.l10n.sessionNameOptional,
-      actionLabel: context.l10n.rename,
-      initialValue: _navigationTitle,
-    );
-    if (!mounted || name == null) return;
-    try {
-      final current = await _controller.refreshSessionMetadata();
-      await (_controller.api as TsPhoneManagementGateway).renameSession(
-        widget.workspace.id,
-        widget.session.sessionId,
-        current.managementRevision,
-        name,
-      );
-      await _controller.refreshSessionMetadata();
-    } catch (error) {
-      if (mounted) {
-        _showActionMessage(
-          describeTsPhoneProblem(error).localizedMessage(context.l10n),
-        );
-      }
-    }
   }
 
   Future<void> _chooseModel() async {
@@ -943,70 +761,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   String get _modelSelectionHint =>
-      _controller.queueEnabled && _controller.canSelectModel
-      ? context.l10n.modelNextTurn
-      : _controller.canSelectModel
-      ? _controller.selectingModelPreference
-            ? context.l10n.modelPreference
-            : context.l10n.chooseModel
+      _controller.canSelectModel
+      ? context.l10n.chooseModel
       : _controller.runtimeState == RuntimeState.running ||
             _controller.commandInFlight
       ? context.l10n.modelSelectionBusy
-      : _controller.runtimeState == RuntimeState.offline &&
-            _controller.canActivate
-      ? context.l10n.modelSelectionStartRequired
-      : _controller.runtimeState == RuntimeState.offline ||
-            _controller.runtimeOwner == 'external'
-      ? context.l10n.modelSelectionHostRequired
       : context.l10n.modelSelectionUnavailable;
-
-  Future<void> _chooseMode() async {
-    if (_activating) return;
-    final selected = await showModalBottomSheet<SessionAccessMode>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              context.l10n.sessionMode,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          for (final mode in SessionAccessMode.values)
-            ListTile(
-              key: ValueKey('session-mode-${mode.name}'),
-              leading: Icon(
-                mode == SessionAccessMode.observer
-                    ? Icons.visibility_outlined
-                    : Icons.science_outlined,
-              ),
-              title: Text(mode.localizedLabel(context.l10n)),
-              subtitle: Text(
-                mode == SessionAccessMode.observer
-                    ? context.l10n.workspaceReadOnly
-                    : context.l10n.workspaceReadWrite,
-              ),
-              trailing: _controller.accessMode == mode
-                  ? const Icon(Icons.check_rounded)
-                  : null,
-              onTap: () => Navigator.of(context).pop(mode),
-            ),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-    if (!mounted ||
-        selected == null ||
-        (_controller.runtimeState.isAvailable &&
-            selected == _controller.accessMode)) {
-      return;
-    }
-    await _activateSession(mode: selected);
-  }
 
   void _queueUiRequest(ExtensionUiRequest request) {
     _pendingUiRequests.add(request);
@@ -1092,10 +852,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               child: _ChatNavigationTitle(
                 title: _navigationTitle,
                 state: viewState,
-                canActivate: _canActivate,
                 workspace: widget.workspace.name,
-                accessMode: _controller.accessMode,
-                queueEnabled: _controller.queueEnabled,
               ),
             ),
             actions: <Widget>[
@@ -1110,8 +867,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     unawaited(_sync());
                   } else if (action == 'sidebar') {
                     widget.onOpenNavigation?.call();
-                  } else if (action == 'mode') {
-                    unawaited(_chooseMode());
                   } else {
                     _showSessionDetails();
                   }
@@ -1126,20 +881,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           const Icon(Icons.view_sidebar_outlined, size: 20),
                           const SizedBox(width: 12),
                           Flexible(child: Text(l10n.openSidebar)),
-                        ],
-                      ),
-                    ),
-                  if (!_controller.queueEnabled &&
-                      _controller.supportsModeActivation &&
-                      !_controller.viewingInactiveBranch)
-                    PopupMenuItem(
-                      value: 'mode',
-                      enabled: !_activating,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.visibility_outlined, size: 20),
-                          const SizedBox(width: 12),
-                          Flexible(child: Text(l10n.sessionMode)),
                         ],
                       ),
                     ),
@@ -1296,37 +1037,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       label: Text(context.l10n.pendingApprovals),
                     ),
                   ),
-                if (_controller.queueEnabled)
-                  PendingCommandsStrip(controller: _controller),
-                if (!_controller.queueEnabled && (_canActivate || _activating))
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      key: const ValueKey('continue-session'),
-                      onPressed: _activating ? null : _activateSession,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant,
-                        textStyle: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      icon: _activating
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.play_arrow_outlined, size: 20),
-                      label: Text(
-                        _activating
-                            ? context.l10n.preparingSession
-                            : context.l10n.continueSession,
-                      ),
-                    ),
-                  ),
-                if (_controller.queueEnabled ||
-                    !viewState.isHistorical ||
-                    _canActivate ||
-                    _activating)
+                if (!viewState.isHistorical)
                   _buildComposer(
                     context,
                     maxLines: _composerMaxLines(
@@ -1350,9 +1061,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     final scaler = MediaQuery.textScalerOf(context);
     final scaledLineHeight = scaler.scale(16) * 1.45;
     final navigationReserve = _showJumpToLatest ? 52.0 : 0;
-    final activationReserve = _canActivate || _activating
-        ? (16 + scaler.scale(12) * 1.4 * 2).clamp(44, double.infinity)
-        : 0;
     // A multiline composer reserves its own action row below the text.
     final dockChrome =
         78.0 +
@@ -1361,7 +1069,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     final lineBudget =
         availableHeight -
         navigationReserve -
-        activationReserve -
         (_approvalDeferred ? 48 : 0) -
         (_controller.outbox.messages.any(
               (value) => value.state == ChatDeliveryState.uncertain,
@@ -1394,18 +1101,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         _controller.timelineItems.isNotEmpty;
     final hasStreaming = _controller.hasStreamingText;
     if (messages.isEmpty && !hasTimelineItems && !hasStreaming) {
-      if (_canActivate && _controller.problem == null) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              context.l10n.chatWelcome,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-        );
-      }
       if (_controller.problem case final problem?) {
         return _ConnectionProblemView(
           message: problem.localizedMessage(context.l10n),
@@ -1421,26 +1116,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         return const _SessionConnectingView();
       }
       if (viewState.phase == SessionUiPhase.offline) {
-        return _OfflineWorkspaceView(
-          command: _startCommand,
-          retrying:
-              _controller.eventConnectionState ==
-                  EventConnectionState.connecting ||
-              _controller.eventConnectionState ==
-                  EventConnectionState.reconnecting,
-          onCopy: _copyStartCommand,
+        return _ConnectionProblemView(
+          message: context.l10n.chatOffline,
+          retrying: false,
           onRetry: _retryConnection,
         );
       }
       if (viewState.phase == SessionUiPhase.recovery) {
-        return _RecoveryWorkspaceView(
-          command: _startCommand,
-          retrying:
-              _controller.eventConnectionState ==
-                  EventConnectionState.connecting ||
-              _controller.eventConnectionState ==
-                  EventConnectionState.reconnecting,
-          onCopy: _copyStartCommand,
+        return _ConnectionProblemView(
+          message: context.l10n.chatRecovery,
+          retrying: false,
           onRetry: _retryConnection,
         );
       }
@@ -1492,12 +1177,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Widget _buildComposer(BuildContext context, {required int maxLines}) {
     final viewState = SessionViewState.fromController(_controller);
-    final canDraft =
-        _controller.queueEnabled ||
-        _canActivate ||
-        _activating ||
-        (!viewState.isHistorical &&
-            _controller.accessMode == SessionAccessMode.controller);
+    final canDraft = !viewState.isHistorical;
     return ChatComposer(
       controller: _composer,
       focusNode: _composerFocus,
@@ -1529,7 +1209,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       state: SessionViewState.fromController(_controller),
       problem: _controller.problem,
       onRetry: _retryConnection,
-      onCopyStartCommand: _copyStartCommand,
     );
   }
 
@@ -1553,18 +1232,12 @@ class _ChatNavigationTitle extends StatelessWidget {
   const _ChatNavigationTitle({
     required this.title,
     required this.state,
-    required this.canActivate,
     required this.workspace,
-    required this.accessMode,
-    this.queueEnabled = false,
   });
 
   final String title;
   final SessionViewState state;
-  final bool canActivate;
   final String workspace;
-  final SessionAccessMode accessMode;
-  final bool queueEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1598,12 +1271,7 @@ class _ChatNavigationTitle extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Flexible(
-              child: _SessionStatusLine(
-                state: state,
-                canActivate: canActivate,
-                accessMode: accessMode,
-                queueEnabled: queueEnabled,
-              ),
+              child: _SessionStatusLine(state: state),
             ),
           ],
         ),
@@ -1613,17 +1281,9 @@ class _ChatNavigationTitle extends StatelessWidget {
 }
 
 class _SessionStatusLine extends StatelessWidget {
-  const _SessionStatusLine({
-    required this.state,
-    required this.canActivate,
-    required this.accessMode,
-    this.queueEnabled = false,
-  });
+  const _SessionStatusLine({required this.state});
 
   final SessionViewState state;
-  final bool canActivate;
-  final SessionAccessMode accessMode;
-  final bool queueEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1633,15 +1293,12 @@ class _SessionStatusLine extends StatelessWidget {
     final label = switch (state.phase) {
       SessionUiPhase.failed => l10n.chatFailed,
       SessionUiPhase.recovery => l10n.chatRecovery,
-      SessionUiPhase.history =>
-        canActivate ? l10n.chatCanContinue : l10n.chatHistory,
-      SessionUiPhase.offline =>
-        canActivate ? l10n.chatCanContinue : l10n.chatOffline,
+      SessionUiPhase.history => l10n.chatHistory,
+      SessionUiPhase.offline => l10n.chatOffline,
       SessionUiPhase.synchronizing => l10n.chatConnecting,
       SessionUiPhase.reconnecting => l10n.chatReconnecting,
       SessionUiPhase.running => l10n.chatRunning,
-      SessionUiPhase.ready =>
-        queueEnabled ? l10n.chatReady : accessMode.localizedLabel(l10n),
+      SessionUiPhase.ready => l10n.chatReady,
     };
     final (icon, color) = switch (state.phase) {
       SessionUiPhase.failed ||
@@ -1695,23 +1352,17 @@ class _SessionStatusLine extends StatelessWidget {
 class _SessionDetailsSheet extends StatelessWidget {
   const _SessionDetailsSheet({
     required this.title,
-    this.onRename,
     required this.runtime,
     required this.workspaceName,
-    required this.accessMode,
     required this.runtimeState,
     required this.sessionId,
     this.configuredModel,
-    this.queueEnabled = false,
   });
 
   final String title;
-  final VoidCallback? onRename;
   final SessionRuntimeSnapshot? runtime;
   final String? configuredModel;
-  final bool queueEnabled;
   final String workspaceName;
-  final SessionAccessMode accessMode;
   final RuntimeState runtimeState;
   final String sessionId;
 
@@ -1770,12 +1421,6 @@ class _SessionDetailsSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onRename != null)
-                IconButton(
-                  onPressed: onRename,
-                  tooltip: l10n.rename,
-                  icon: const Icon(Icons.edit_outlined),
-                ),
             ],
           ),
           if (lastKnown) ...<Widget>[
@@ -1811,13 +1456,6 @@ class _SessionDetailsSheet extends StatelessWidget {
                   label: l10n.approvalWorkspace,
                   value: workspaceName,
                 ),
-                if (!queueEnabled) const _RuntimeDetailDivider(),
-                if (!queueEnabled)
-                  _RuntimeDetailRow(
-                    icon: Icons.shield_outlined,
-                    label: l10n.accessPermission,
-                    value: accessMode.localizedLabel(l10n),
-                  ),
               ],
             ),
           ),
@@ -2355,157 +1993,6 @@ class _EarlierMessagesControl extends StatelessWidget {
                 : context.l10n.loadEarlierMessages,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _OfflineWorkspaceView extends StatelessWidget {
-  const _OfflineWorkspaceView({
-    required this.command,
-    required this.retrying,
-    required this.onCopy,
-    required this.onRetry,
-  });
-
-  final String command;
-  final bool retrying;
-  final VoidCallback onCopy;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return _WorkspaceWaitingView(
-      icon: Icons.terminal_outlined,
-      title: l10n.tspiNotStartedTitle,
-      description: l10n.tspiNotStartedDescription,
-      command: command,
-      status: l10n.waitingForTspi,
-      retrying: retrying,
-      onCopy: onCopy,
-      onRetry: onRetry,
-    );
-  }
-}
-
-class _RecoveryWorkspaceView extends StatelessWidget {
-  const _RecoveryWorkspaceView({
-    required this.command,
-    required this.retrying,
-    required this.onCopy,
-    required this.onRetry,
-  });
-
-  final String command;
-  final bool retrying;
-  final VoidCallback onCopy;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return _WorkspaceWaitingView(
-      icon: Icons.warning_amber_rounded,
-      title: l10n.generationDisconnectedTitle,
-      description: l10n.generationDisconnectedDescription,
-      command: command,
-      status: l10n.waitingForRecovery,
-      retrying: retrying,
-      onCopy: onCopy,
-      onRetry: onRetry,
-      warning: true,
-    );
-  }
-}
-
-class _WorkspaceWaitingView extends StatelessWidget {
-  const _WorkspaceWaitingView({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.command,
-    required this.status,
-    required this.retrying,
-    required this.onCopy,
-    required this.onRetry,
-    this.warning = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-  final String command;
-  final String status;
-  final bool retrying;
-  final VoidCallback onCopy;
-  final VoidCallback onRetry;
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 44, 24, 24),
-      child: Column(
-        children: <Widget>[
-          Icon(icon, size: 48, color: warning ? colors.error : colors.outline),
-          const SizedBox(height: 16),
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Text(description, textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest,
-              borderRadius: const BorderRadius.all(Radius.circular(8)),
-            ),
-            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: SelectableText(
-                    command,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
-                  ),
-                ),
-                IconButton(
-                  onPressed: onCopy,
-                  tooltip: context.l10n.copyStartCommand,
-                  icon: const Icon(Icons.copy_rounded),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              if (retrying)
-                const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(
-                  Icons.hourglass_top_rounded,
-                  size: 18,
-                  color: colors.outline,
-                ),
-              const SizedBox(width: 8),
-              Text(status),
-            ],
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: retrying ? null : onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(context.l10n.checkAgain),
-          ),
-        ],
       ),
     );
   }

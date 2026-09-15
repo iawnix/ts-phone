@@ -43,7 +43,6 @@ final class SessionViewState {
       hasActiveAgentRun: controller.activeAgentRunId != null,
       commandInFlight: controller.commandInFlight,
       canRefresh: controller.canRefresh,
-      canQueue: controller.queueEnabled,
     );
   }
 
@@ -72,17 +71,14 @@ SessionViewState resolveSessionViewState({
   required bool hasActiveAgentRun,
   required bool commandInFlight,
   required bool canRefresh,
-  bool canQueue = false,
 }) {
   final phase = _resolvePhase(
-    runtimeState: canQueue && runtimeState == RuntimeState.offline
-        ? RuntimeState.idle
-        : runtimeState,
+    runtimeState: runtimeState,
     eventConnectionState: eventConnectionState,
     isSynchronizing: isSynchronizing,
     problem: problem,
     recoveredSession: recoveredSession,
-    historyOnly: historyOnly && !canQueue,
+    historyOnly: historyOnly,
     viewingInactiveBranch: viewingInactiveBranch,
   );
   final notice = switch (phase) {
@@ -91,16 +87,14 @@ SessionViewState resolveSessionViewState({
     SessionUiPhase.offline => SessionNoticeKind.offline,
     _ => null,
   };
-  final isHistorical = (historyOnly && !canQueue) || viewingInactiveBranch;
+  final isHistorical = historyOnly || viewingInactiveBranch;
   return SessionViewState(
     phase: phase,
     notice: notice,
     canCompose:
         canSend &&
         !commandInFlight &&
-        (canQueue ||
-            phase == SessionUiPhase.ready ||
-            phase == SessionUiPhase.running),
+        (phase == SessionUiPhase.ready || phase == SessionUiPhase.running),
     // ChatController routes abort through the same live-command guard as
     // prompt. Keep the affordance in lock-step with that guard so a
     // read-only, stale, or disconnected session never exposes a no-op stop
@@ -130,7 +124,7 @@ SessionUiPhase _resolvePhase({
   if (problem != null) return SessionUiPhase.failed;
   // Recovery is a live runtime condition. A page-open recovery marker is only
   // historical metadata, so it must not keep a successfully recovered session
-  // blocked after the bridge reports idle/running.
+  // blocked after the App Server reports idle/running.
   final runtimeRecovery = runtimeState == RuntimeState.recoveryRequired;
   // Keep the route-level marker in the decision for API compatibility, but
   // never let it promote an already recovered idle/running session.  The

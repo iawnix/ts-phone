@@ -1003,7 +1003,7 @@ void main() {
     },
   );
 
-  test('tracks the bridge-issued agent run identity', () async {
+  test('tracks the App Server agent run identity', () async {
     final api = FakeGateway();
     final controller = ChatController(
       api: api,
@@ -1155,7 +1155,7 @@ void main() {
     expect(api.abortCalls, 0);
   });
 
-  test('sends abort only for the matching bridge-issued agent run', () async {
+  test('sends abort only for the matching App Server agent run', () async {
     final api = FakeGateway();
     final controller = ChatController(
       api: api,
@@ -1430,7 +1430,7 @@ void main() {
     expect((await secondFuture).sessionRevision, nextRevision);
   });
 
-  test('does not send while the TSPi bridge is offline', () async {
+  test('does not send while the Pi App Server is offline', () async {
     final api = FakeGateway();
     final controller = ChatController(
       api: api,

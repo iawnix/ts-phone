@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app_identity.dart';
+import '../../data/app_server_gateway.dart';
 import '../../data/ts_phone_api.dart';
 import '../../models/app_theme_preference.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -57,6 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final previous = oldWidget.connectionSettings;
     final current = widget.connectionSettings;
     if (previous?.serverUrl != current?.serverUrl ||
+        previous?.serverId != current?.serverId ||
         previous?.token != current?.token) {
       _diagnosticsGeneration += 1;
       _diagnostics = null;
@@ -110,7 +112,8 @@ class _SettingsPageState extends State<SettingsPage> {
     TsPhoneGateway? gateway;
     try {
       gateway =
-          widget.gatewayBuilder?.call(connection) ?? TsPhoneApi(connection);
+          widget.gatewayBuilder?.call(connection) ??
+          PiAppServerGateway(connection);
       final version = await gateway.version();
       if (!mounted || generation != _diagnosticsGeneration) return;
       setState(() {
@@ -318,7 +321,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     ),
                                     const _SettingsDivider(),
                                     _DiagnosticRow(
-                                      label: l10n.hostVersion,
+                                      label: l10n.appServerVersion,
                                       value:
                                           diagnostics?.serviceVersion ??
                                           l10n.diagnosticNotChecked,

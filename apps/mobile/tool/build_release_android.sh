@@ -16,7 +16,7 @@ readonly BUILD_TOOLS="${TS_PHONE_BUILD_TOOLS:-${ANDROID_SDK}/build-tools/36.0.0}
 readonly JAVA_HOME_PATH="${TS_PHONE_JAVA_HOME:-${JAVA_HOME:-/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64}}"
 readonly JARSIGNER="${TS_PHONE_JARSIGNER:-${JAVA_HOME_PATH}/bin/jarsigner}"
 readonly KEYTOOL="${TS_PHONE_KEYTOOL:-${JAVA_HOME_PATH}/bin/keytool}"
-readonly CAPTURE_BOOTSTRAP="${SOURCE_ROOT}/deploy/mobile-build-attestation.py"
+readonly CAPTURE_BOOTSTRAP="${SOURCE_ROOT}/apps/mobile/tool/mobile-build-attestation.py"
 readonly RELEASE_CERTIFICATE_SHA256="${TS_PHONE_RELEASE_CERTIFICATE_SHA256:-41998c3f13ee6a2b5e370b3ded25de4dc2af4e0de7172dbcc33e63bfa9fdc19f}"
 
 die() {
@@ -88,7 +88,7 @@ python3 "$CAPTURE_BOOTSTRAP" capture \
     --destination "$CAPTURED_SOURCE_ROOT" \
     --output "$SOURCE_SNAPSHOT_FILE" \
     "${capture_arguments[@]}" >/dev/null
-readonly CAPTURED_ATTESTATION_TOOL="${CAPTURED_SOURCE_ROOT}/deploy/mobile-build-attestation.py"
+readonly CAPTURED_ATTESTATION_TOOL="${CAPTURED_SOURCE_ROOT}/apps/mobile/tool/mobile-build-attestation.py"
 [[ -f "$CAPTURED_ATTESTATION_TOOL" && ! -L "$CAPTURED_ATTESTATION_TOOL" ]] ||
     die "captured build attestation tool is missing or unsafe"
 

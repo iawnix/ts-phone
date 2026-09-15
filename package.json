@@ -3,23 +3,16 @@
   "version": "0.9.1",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "services/server"
-  ],
   "scripts": {
-    "build": "npm run build --workspace @iawnix/ts-phone-server",
-    "dev": "npm run dev --workspace @iawnix/ts-phone-server",
-    "release:component": "python3 deploy/build-component-release.py --json",
+    "format": "cd apps/mobile && dart format --output=none --set-exit-if-changed lib test",
+    "analyze": "cd apps/mobile && flutter analyze",
+    "test:mobile": "cd apps/mobile && flutter test",
+    "release:android": "apps/mobile/tool/build_release_android.sh",
     "iterate": "./tool/iterate.sh",
     "iterate:dev": "./tool/iterate.sh dev",
     "iterate:candidate": "./tool/iterate.sh candidate",
     "iterate:release": "./tool/iterate.sh release",
-    "smoke": "npm run build && npm run smoke --workspace @iawnix/ts-phone-server",
-    "test:fast": "npm run test:fast --workspace @iawnix/ts-phone-server",
-    "test": "npm run test --workspace @iawnix/ts-phone-server",
-    "test:release": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s deploy/tests -p 'test_*.py'",
-    "typecheck": "npm run typecheck --workspace @iawnix/ts-phone-server",
-    "ctl": "npm run ctl --workspace @iawnix/ts-phone-server --"
+    "test": "npm run test:mobile"
   },
   "engines": {
     "node": ">=22.19.0"

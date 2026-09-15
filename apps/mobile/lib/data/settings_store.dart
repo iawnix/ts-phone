@@ -37,6 +37,7 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
           );
 
   static const _serverKey = 'server_url';
+  static const _serverIdKey = 'app_server_id';
   static const _tokenKey = 'auth_token';
   static const _themeKey = 'theme_mode';
   static const _localeKey = 'locale_mode';
@@ -47,11 +48,18 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
   Future<ConnectionSettings?> load() async {
     final values = await Future.wait(<Future<String?>>[
       _storage.read(key: _serverKey),
+      _storage.read(key: _serverIdKey),
       _storage.read(key: _tokenKey),
     ]);
-    if (values[0] == null || values[1] == null) return null;
+    if (values[0] == null || values[1] == null || values[2] == null) {
+      return null;
+    }
     try {
-      return ConnectionSettings(serverUrl: values[0]!, token: values[1]!);
+      return ConnectionSettings(
+        serverUrl: values[0]!,
+        serverId: values[1]!,
+        token: values[2]!,
+      );
     } on FormatException {
       await clear();
       return null;
@@ -62,10 +70,12 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
   Future<void> save(ConnectionSettings settings) async {
     final previous = await load();
     if (previous?.serverUrl != settings.serverUrl ||
+        previous?.serverId != settings.serverId ||
         previous?.token != settings.token) {
       await _storage.delete(key: _conversationKey);
     }
     await _storage.write(key: _serverKey, value: settings.serverUrl);
+    await _storage.write(key: _serverIdKey, value: settings.serverId);
     await _storage.write(key: _tokenKey, value: settings.token);
   }
 
@@ -127,6 +137,7 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
   Future<void> clear() async {
     await Future.wait(<Future<void>>[
       _storage.delete(key: _serverKey),
+      _storage.delete(key: _serverIdKey),
       _storage.delete(key: _tokenKey),
       _storage.delete(key: _conversationKey),
     ]);

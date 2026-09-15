@@ -30,7 +30,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get server => 'Server';
 
   @override
-  String get serverHint => 'https://tsphone.example.com';
+  String get serverHint => 'https://radius.pi.dev';
+
+  @override
+  String get appServerId => 'App Server ID';
+
+  @override
+  String get appServerIdHint => '00000000-0000-4000-8000-000000000000';
+
+  @override
+  String get validationServerId =>
+      'Enter the lowercase UUID shown by the TSPi App Server.';
 
   @override
   String get accessToken => 'Access token';
@@ -104,7 +114,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionDetails => 'Connection details';
 
   @override
-  String get tsPhoneService => 'TS Phone service';
+  String get tsPhoneService => 'Pi App Server';
 
   @override
   String get notConfigured => 'Not configured';
@@ -123,7 +133,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'TS Phone server address';
+  String get endpoint => 'Pi Radius gateway';
 
   @override
   String get copyServerAddress => 'Copy server address';
@@ -139,15 +149,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemModelUnavailable =>
-      'No model is ready in this TSPi session. Check the model selection on the host.';
+      'No model is ready in this TSPi session. Check the model selection on the App Server.';
 
   @override
   String get problemModelAuthMissing =>
-      'The model needs authentication on the TSPi host. Your TS Phone connection is still valid.';
+      'The model needs authentication on the Pi App Server. Your TS Phone connection is still valid.';
 
   @override
   String get problemModelCheckFailed =>
-      'The TSPi host could not verify the model configuration.';
+      'The Pi App Server could not verify the model configuration.';
 
   @override
   String get problemProviderUnavailable =>
@@ -159,11 +169,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemProviderAuthFailed =>
-      'The model service rejected authentication. Check the Host\'s upstream credentials; this is separate from your phone connection.';
+      'The model service rejected authentication. Check the App Server\'s upstream credentials; this is separate from your phone connection.';
 
   @override
   String get problemProviderError =>
-      'The model service returned an error and this generation failed. Details remain in the Host\'s session history.';
+      'The model service returned an error and this generation failed. Details remain in the App Server\'s session history.';
 
   @override
   String get problemGenerationIncomplete =>
@@ -171,11 +181,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemModelStorageUnavailable =>
-      'TSPi cannot access its model credentials or cache. Check the host service\'s Pi directory permissions.';
+      'TSPi cannot access its model credentials or cache. Check the App Server\'s Pi directory permissions.';
 
   @override
   String get problemRuntimeExtensionError =>
-      'An extension failed in this TSPi session. Check the latest messages and host logs.';
+      'An extension failed in this TSPi session. Check the latest messages and App Server logs.';
 
   @override
   String get problemPromptRejected =>
@@ -207,7 +217,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lastSync => 'Last sync';
 
   @override
-  String get runDiagnostics => 'Check Phone service';
+  String get runDiagnostics => 'Check App Server';
 
   @override
   String get diagnosticsRunning => 'Checking';
@@ -357,14 +367,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemPreflightUnavailable =>
-      'TSPi could not verify this operation. Check the Host\'s TSPi configuration and try again.';
+      'TSPi could not verify this operation. Check the App Server\'s TSPi configuration and try again.';
 
   @override
   String get problemManagementUnsupported =>
-      'This Phone service does not support creating projects or sessions yet. Update the server installation; updating the app alone is not enough.';
+      'This Pi App Server does not support that operation. Update the App Server runtime; updating the app alone is not enough.';
 
   @override
-  String get hostVersion => 'Server version';
+  String get appServerVersion => 'App Server version';
 
   @override
   String get problemManagementCapacity =>
@@ -728,13 +738,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveSyncClosed => 'Live synchronization closed';
 
   @override
-  String get liveSyncFailed => 'Could not connect to the TS Phone service';
+  String get liveSyncFailed => 'Could not connect to the Pi App Server';
 
   @override
   String get liveSyncRestoring => 'Restoring live synchronization';
 
   @override
-  String get liveSyncConnecting => 'Connecting to the TS Phone service';
+  String get liveSyncConnecting => 'Connecting to the Pi App Server';
 
   @override
   String get generationDisconnectedBanner =>
@@ -996,11 +1006,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemServiceUnavailable =>
-      'The TS Phone service is temporarily unavailable';
+      'The Pi App Server is temporarily unavailable';
 
   @override
   String get problemConnectionFailed =>
-      'Could not connect to the TS Phone service';
+      'Could not connect to the Pi App Server';
 
   @override
   String get problemRequestTimeout => 'Synchronization timed out. Try again';
@@ -1010,19 +1020,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemApiRouteMissing =>
-      'The requested API endpoint does not exist. Check that the app and Host are up to date.';
+      'The requested App Server service is unavailable. Check that the app and Pi runtime are up to date.';
 
   @override
   String get problemQueueStorage =>
-      'Host could not confirm request storage. Check its state directory before retrying.';
+      'The App Server could not confirm request storage. Check its state directory before retrying.';
 
   @override
   String get problemQueueCapacity =>
-      'The request queue or its receipt storage is full. Finish pending requests or check Host storage.';
+      'The App Server request storage is full. Finish pending requests or check its state directory.';
 
   @override
   String get problemQueueRecovery =>
-      'A previous request has an uncertain outcome. Review its history and outputs before continuing the queue.';
+      'A previous request has an uncertain outcome. Review its history and outputs before continuing.';
 
   @override
   String get commandQueue => 'Up next';
@@ -1128,19 +1138,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activationUpgradeRequired =>
-      'Update the TSPi Host to choose a session mode. History remains available.';
+      'Update the Pi App Server to choose a session mode. History remains available.';
 
   @override
   String get activationWriterActive =>
-      'Another process owns this workspace or conversation. Close it on the Host before continuing. History and drafts are kept.';
+      'Another process owns this workspace or conversation. Close it on the App Server before continuing. History and drafts are kept.';
 
   @override
   String get activationInspectionFailed =>
-      'The Host could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.';
+      'The App Server could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.';
 
   @override
   String get activationGuardInvalid =>
-      'The Host could not validate the session history or its writer locks. Inspect the session files on the Host. Do not delete history or lock files to bypass this check.';
+      'The App Server could not validate the session history or its writer locks. Inspect the session files on the App Server. Do not delete history or lock files to bypass this check.';
 
   @override
   String get activationExternalOwner =>
@@ -1162,19 +1172,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activationFailed =>
-      'The conversation did not become ready. Refresh and check the Host configuration. A runtime stopped during switching will stay offline; history and drafts are kept.';
+      'The conversation did not become ready. Refresh and check the App Server configuration. A runtime stopped during switching will stay offline; history and drafts are kept.';
 
   @override
   String get activationOutcomeUnknown =>
-      'The activation result was not received. The Host may still be preparing this conversation. Refresh its state before trying again.';
+      'The activation result was not received. The App Server may still be preparing this conversation. Refresh its state before trying again.';
 
   @override
   String get activationCapacity =>
-      'The Host\'s activation records are full. Wait for active runs to settle, arrange a Host restart, then refresh.';
+      'The App Server\'s activation records are full. Wait for active runs to settle, restart the App Server, then refresh.';
 
   @override
   String get activationRecoveryRequired =>
-      'The conversation process could not be confirmed. Inspect it on the Host before continuing. No message will be resent automatically.';
+      'The conversation process could not be confirmed. Inspect it on the App Server before continuing. No message will be resent automatically.';
 
   @override
   String get preparingSession => 'Preparing conversation';
@@ -1243,7 +1253,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noModelsAvailable => 'No available models';
 
   @override
-  String get hostDefaultModel => 'Host default model';
+  String get appServerDefaultModel => 'App Server default model';
 
   @override
   String get modelSelectionUnavailable =>
@@ -1254,8 +1264,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'The assistant is busy. Switch models after this response finishes.';
 
   @override
-  String get modelSelectionHostRequired =>
-      'Only Host-managed conversations can switch models here.';
+  String get modelSelectionAppServerRequired =>
+      'Only Pi App Server conversations can switch models here.';
 
   @override
   String get modelSelectionStartRequired =>

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'data/settings_store.dart';
+import 'data/ts_phone_api.dart';
 import 'features/connection/connection_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/sessions/conversation_shell.dart';
@@ -22,10 +23,16 @@ class TsPhoneApp extends StatefulWidget {
     super.key,
     required this.settingsStore,
     this.accessibilityController,
+    this.gatewayBuilder,
   });
 
   final SettingsStore settingsStore;
   final TsAccessibilityController? accessibilityController;
+  /// Injects a gateway for tests and embedded clients.
+  ///
+  /// Production leaves this unset so the app connects directly to the Pi App
+  /// Server configured by the user.
+  final TsPhoneGateway Function(ConnectionSettings settings)? gatewayBuilder;
 
   @override
   State<TsPhoneApp> createState() => _TsPhoneAppState();
@@ -120,6 +127,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
     if (!mounted) return;
     setState(() {
       if (_settings?.serverUrl != settings.serverUrl ||
+          _settings?.serverId != settings.serverId ||
           _settings?.token != settings.token) {
         _connectionGeneration += 1;
       }
@@ -147,6 +155,16 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
         context: context,
         builder: (routeContext) => ConnectionPage(
           initialSettings: _settings,
+          verifier: widget.gatewayBuilder == null
+              ? null
+              : (settings) async {
+                  final gateway = widget.gatewayBuilder!(settings);
+                  try {
+                    await gateway.version();
+                  } finally {
+                    gateway.close();
+                  }
+                },
           onConnected: (settings) async {
             await _save(settings);
             if (routeContext.mounted) Navigator.of(routeContext).pop();
@@ -170,6 +188,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
             connectionSettings: _settings,
             themePreference: _themePreference,
             localePreference: _localePreference,
+            gatewayBuilder: widget.gatewayBuilder,
             onThemeChanged: (preference) async {
               await _saveTheme(preference);
               if (routeContext.mounted) refreshRoute(() {});
@@ -212,6 +231,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
       key: ValueKey(_connectionGeneration),
       settings: settings,
       onOpenSettings: () => unawaited(_openSettings(context)),
+      gatewayBuilder: widget.gatewayBuilder,
       selectionStore: widget.settingsStore is ConversationSelectionStore
           ? widget.settingsStore as ConversationSelectionStore
           : null,

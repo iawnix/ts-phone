@@ -1,5 +1,3 @@
-import 'queued_command.dart';
-
 enum RuntimeState {
   offline,
   connecting,
@@ -7,36 +5,20 @@ enum RuntimeState {
   running,
   recoveryRequired;
 
-  static RuntimeState parse(Object? value) {
-    return switch (value) {
-      'offline' => RuntimeState.offline,
-      'connecting' => RuntimeState.connecting,
-      'idle' => RuntimeState.idle,
-      'running' => RuntimeState.running,
-      'recovery_required' => RuntimeState.recoveryRequired,
-      _ => throw FormatException('Unknown runtime state: $value'),
-    };
-  }
+  static RuntimeState parse(Object? value) => switch (value) {
+    'offline' => RuntimeState.offline,
+    'connecting' => RuntimeState.connecting,
+    'idle' => RuntimeState.idle,
+    'running' => RuntimeState.running,
+    'recovery_required' => RuntimeState.recoveryRequired,
+    _ => throw FormatException('Unknown runtime state: $value'),
+  };
 
   bool get isAvailable =>
       this == RuntimeState.idle || this == RuntimeState.running;
 }
 
-enum LifecycleState {
-  active,
-  archived,
-  trashed;
-
-  static LifecycleState parse(Object? value) => switch (value) {
-    'active' => LifecycleState.active,
-    'archived' => LifecycleState.archived,
-    'trashed' => LifecycleState.trashed,
-    _ => throw FormatException('Unknown lifecycle state: $value'),
-  };
-
-  String get wireName => name;
-}
-
+/// Presentation metadata for the single App Server selected in settings.
 class WorkspaceSummary {
   const WorkspaceSummary({
     required this.id,
@@ -45,48 +27,8 @@ class WorkspaceSummary {
     required this.isStreaming,
     required this.liveSessionCount,
     required this.sessionCount,
-    this.lifecycleState = LifecycleState.active,
-    this.managementRevision = 'unmanaged',
-    this.managed = false,
     this.updatedAt,
-    this.deletedAt,
   });
-
-  factory WorkspaceSummary.fromJson(Map<String, Object?> json) {
-    final id = json['id'];
-    final name = json['name'];
-    final isStreaming = json['isStreaming'];
-    final liveSessionCount = json['liveSessionCount'];
-    final sessionCount = json['sessionCount'];
-    final rawLifecycleState = json['lifecycleState'];
-    final managementRevision = json['managementRevision'];
-    final managed = json['managed'];
-    if (id is! String ||
-        name is! String ||
-        isStreaming is! bool ||
-        liveSessionCount is! int ||
-        sessionCount is! int ||
-        (rawLifecycleState != null && rawLifecycleState is! String) ||
-        (managementRevision != null && managementRevision is! String) ||
-        (managed != null && managed is! bool)) {
-      throw const FormatException('Workspace response is invalid');
-    }
-    return WorkspaceSummary(
-      id: id,
-      name: name,
-      runtimeState: RuntimeState.parse(json['runtimeState']),
-      isStreaming: isStreaming,
-      liveSessionCount: liveSessionCount,
-      sessionCount: sessionCount,
-      lifecycleState: rawLifecycleState == null
-          ? LifecycleState.active
-          : LifecycleState.parse(rawLifecycleState),
-      managementRevision: managementRevision as String? ?? 'unmanaged',
-      managed: managed as bool? ?? false,
-      updatedAt: _optionalDateTime(json['updatedAt'], 'workspace updatedAt'),
-      deletedAt: _optionalDateTime(json['deletedAt'], 'workspace deletedAt'),
-    );
-  }
 
   final String id;
   final String name;
@@ -94,11 +36,7 @@ class WorkspaceSummary {
   final bool isStreaming;
   final int liveSessionCount;
   final int sessionCount;
-  final LifecycleState lifecycleState;
-  final String managementRevision;
-  final bool managed;
   final DateTime? updatedAt;
-  final DateTime? deletedAt;
 }
 
 enum SessionAccessMode {
@@ -160,7 +98,7 @@ class SessionContextUsage {
   final int limitTokens;
 
   double? get percent =>
-      usedTokens == null ? null : (usedTokens! / limitTokens * 100);
+      usedTokens == null ? null : usedTokens! / limitTokens * 100;
 
   int? get remainingTokens {
     final used = usedTokens;
@@ -209,83 +147,16 @@ class SessionRuntimeSnapshot {
   final DateTime updatedAt;
 }
 
-class SessionActivationConflict {
-  const SessionActivationConflict({
-    required this.sessionId,
-    required this.sessionRevision,
-    required this.owner,
-    required this.switchable,
-    this.sessionName,
-  });
-
-  factory SessionActivationConflict.fromJson(Map<String, Object?> json) {
-    if (json['sessionId'] is! String ||
-        json['sessionRevision'] is! String ||
-        !{'host', 'external'}.contains(json['owner']) ||
-        json['switchable'] is! bool ||
-        (json['sessionName'] != null && json['sessionName'] is! String)) {
-      throw const FormatException('Session activation conflict is invalid');
-    }
-    return SessionActivationConflict(
-      sessionId: json['sessionId']! as String,
-      sessionRevision: json['sessionRevision']! as String,
-      owner: json['owner']! as String,
-      switchable: json['switchable']! as bool,
-      sessionName: json['sessionName'] as String?,
-    );
-  }
-
-  final String sessionId;
-  final String sessionRevision;
-  final String owner;
-  final bool switchable;
-  final String? sessionName;
-
-  Map<String, Object?> get confirmation => {
-    'sessionId': sessionId,
-    'sessionRevision': sessionRevision,
-  };
-}
-
-class SessionActivation {
-  const SessionActivation({this.modes = const {}, this.problem, this.conflict});
-
-  factory SessionActivation.fromJson(Map<String, Object?> json) {
-    final modes = json['modes'];
-    final conflict = json['conflict'];
-    if (modes is! List ||
-        (json['problem'] != null && json['problem'] is! String) ||
-        (conflict != null && conflict is! Map)) {
-      throw const FormatException('Session activation state is invalid');
-    }
-    return SessionActivation(
-      modes: Set.unmodifiable(modes.map(SessionAccessMode.parse)),
-      problem: json['problem'] as String?,
-      conflict: conflict == null
-          ? null
-          : SessionActivationConflict.fromJson(
-              Map<String, Object?>.from(conflict as Map),
-            ),
-    );
-  }
-
-  final Set<SessionAccessMode> modes;
-  final String? problem;
-  final SessionActivationConflict? conflict;
-}
-
+/// A Pi App Server session as projected for the mobile presentation.
 class SessionSummary {
   const SessionSummary({
     required this.sessionId,
     required this.sessionRevision,
     required this.runtimeState,
     required this.isStreaming,
-    required this.accessMode,
+    this.accessMode = SessionAccessMode.controller,
     this.sessionName,
     this.model,
-    this.nextModel,
-    this.commands = const [],
-    this.queueProblem,
     this.promptProblem,
     this.runtime,
     this.activeAgentRunId,
@@ -293,118 +164,13 @@ class SessionSummary {
     this.historyOnly = false,
     this.canPrompt = true,
     this.capabilities = const <String>{},
-    this.lifecycleState = LifecycleState.active,
-    this.managementRevision = 'unmanaged',
-    this.managed = false,
-    this.canActivate = false,
-    this.activation,
-    this.currentAccessMode,
-    this.runtimeOwner,
     this.updatedAt,
-    this.deletedAt,
   }) : assert(!historyOnly || historyAvailable);
-
-  factory SessionSummary.fromJson(Map<String, Object?> json) {
-    final sessionId = json['sessionId'];
-    final sessionRevision = json['sessionRevision'];
-    final isStreaming = json['isStreaming'];
-    final historyAvailable = json['historyAvailable'];
-    final historyOnly = json['historyOnly'];
-    final canPrompt = json['canPrompt'];
-    final rawCapabilities = json['capabilities'];
-    final rawRuntime = json['runtime'];
-    final activeAgentRunId = json['activeAgentRunId'];
-    final rawLifecycleState = json['lifecycleState'];
-    final managementRevision = json['managementRevision'];
-    final managed = json['managed'];
-    final canActivate = json['canActivate'];
-    if (sessionId is! String ||
-        sessionRevision is! String ||
-        isStreaming is! bool ||
-        (historyAvailable != null && historyAvailable is! bool) ||
-        (historyOnly != null && historyOnly is! bool) ||
-        (canPrompt != null && canPrompt is! bool) ||
-        (rawRuntime != null && rawRuntime is! Map) ||
-        (rawLifecycleState != null && rawLifecycleState is! String) ||
-        (managementRevision != null && managementRevision is! String) ||
-        (managed != null && managed is! bool) ||
-        (canActivate != null && canActivate is! bool) ||
-        !json.containsKey('activeAgentRunId') ||
-        (activeAgentRunId != null &&
-            (activeAgentRunId is! String ||
-                !RegExp(
-                  r'^[A-Za-z0-9._:-]{1,160}$',
-                ).hasMatch(activeAgentRunId))) ||
-        (rawCapabilities != null &&
-            (rawCapabilities is! List ||
-                rawCapabilities.any((value) => value is! String)))) {
-      throw const FormatException('Session response is invalid');
-    }
-    final runtimeState = RuntimeState.parse(json['runtimeState']);
-    if ((runtimeState == RuntimeState.running) !=
-        (activeAgentRunId is String && activeAgentRunId.isNotEmpty)) {
-      throw const FormatException('Session agent run identity is invalid');
-    }
-    final hasHistory = historyAvailable == true;
-    final promptAvailable = canPrompt is bool
-        ? canPrompt
-        : runtimeState.isAvailable;
-    final parsedCapabilities = rawCapabilities == null
-        ? const <String>{}
-        : Set<String>.unmodifiable((rawCapabilities as List).cast<String>());
-    return SessionSummary(
-      sessionId: sessionId,
-      sessionRevision: sessionRevision,
-      sessionName: json['sessionName'] as String?,
-      model: json['model'] as String?,
-      nextModel: json['nextModel'] as String?,
-      commands: QueuedCommand.parseList(json['commands']),
-      queueProblem: json['queueProblem'] as String?,
-      promptProblem: json['promptProblem'] as String?,
-      runtime: rawRuntime == null
-          ? null
-          : SessionRuntimeSnapshot.fromJson(
-              Map<String, Object?>.from(rawRuntime as Map),
-            ),
-      activeAgentRunId: activeAgentRunId as String?,
-      runtimeState: runtimeState,
-      isStreaming: isStreaming,
-      accessMode: SessionAccessMode.parse(json['accessMode']),
-      currentAccessMode: json['currentAccessMode'] == null
-          ? null
-          : SessionAccessMode.parse(json['currentAccessMode']),
-      runtimeOwner: json['runtimeOwner'] as String?,
-      activation: json['activation'] == null
-          ? null
-          : SessionActivation.fromJson(
-              Map<String, Object?>.from(json['activation']! as Map),
-            ),
-      historyAvailable: hasHistory,
-      historyOnly:
-          historyOnly == true ||
-          (runtimeState == RuntimeState.offline &&
-              hasHistory &&
-              !promptAvailable),
-      canPrompt: promptAvailable,
-      capabilities: parsedCapabilities,
-      lifecycleState: rawLifecycleState == null
-          ? LifecycleState.active
-          : LifecycleState.parse(rawLifecycleState),
-      managementRevision: managementRevision as String? ?? 'unmanaged',
-      managed: managed as bool? ?? false,
-      canActivate: canActivate as bool? ?? false,
-      updatedAt: _optionalDateTime(json['updatedAt'], 'session updatedAt'),
-      deletedAt: _optionalDateTime(json['deletedAt'], 'session deletedAt'),
-    );
-  }
 
   final String sessionId;
   final String sessionRevision;
   final String? sessionName;
   final String? model;
-  final String? nextModel;
-  final List<QueuedCommand> commands;
-  final String? queueProblem;
   final String? promptProblem;
   final SessionRuntimeSnapshot? runtime;
   final String? activeAgentRunId;
@@ -415,15 +181,7 @@ class SessionSummary {
   final bool historyOnly;
   final bool canPrompt;
   final Set<String> capabilities;
-  final LifecycleState lifecycleState;
-  final String managementRevision;
-  final bool managed;
-  final bool canActivate;
-  final SessionActivation? activation;
-  final SessionAccessMode? currentAccessMode;
-  final String? runtimeOwner;
   final DateTime? updatedAt;
-  final DateTime? deletedAt;
 
   bool hasCapability(String capability) => capabilities.contains(capability);
 
@@ -440,93 +198,6 @@ class SessionSummary {
   String get shortId =>
       sessionId.substring(0, sessionId.length < 8 ? sessionId.length : 8);
 }
-
-class WorkspaceCreationResult {
-  const WorkspaceCreationResult({
-    required this.workspace,
-    required this.session,
-  });
-
-  factory WorkspaceCreationResult.fromJson(Map<String, Object?> json) {
-    final workspace = json['workspace'];
-    final session = json['session'];
-    if (workspace is! Map || session is! Map) {
-      throw const FormatException('Workspace creation response is invalid');
-    }
-    return WorkspaceCreationResult(
-      workspace: WorkspaceSummary.fromJson(
-        Map<String, Object?>.from(workspace),
-      ),
-      session: SessionSummary.fromJson(Map<String, Object?>.from(session)),
-    );
-  }
-
-  final WorkspaceSummary workspace;
-  final SessionSummary session;
-}
-
-class WorkspaceDeletionPreflight {
-  const WorkspaceDeletionPreflight({
-    required this.workspaceId,
-    required this.managementRevision,
-    required this.activeWorkers,
-    required this.remoteCalculations,
-    required this.pendingApprovals,
-    required this.unresolvedRemoteEffects,
-    required this.canDelete,
-    this.pendingCommands = 0,
-  });
-
-  factory WorkspaceDeletionPreflight.fromJson(Map<String, Object?> json) {
-    final workspaceId = json['workspaceId'];
-    final managementRevision = json['managementRevision'];
-    final activeWorkers = json['activeWorkers'];
-    final remoteCalculations = json['remoteCalculations'];
-    final pendingApprovals = json['pendingApprovals'];
-    final unresolvedRemoteEffects = json['unresolvedRemoteEffects'];
-    final pendingCommands = json['pendingCommands'] ?? 0;
-    final canDelete = json['canDelete'];
-    if (workspaceId is! String ||
-        managementRevision is! String ||
-        !_isCount(activeWorkers) ||
-        !_isCount(remoteCalculations) ||
-        !_isCount(pendingApprovals) ||
-        !_isCount(unresolvedRemoteEffects) ||
-        !_isCount(pendingCommands) ||
-        canDelete is! bool) {
-      throw const FormatException('Workspace deletion preflight is invalid');
-    }
-    return WorkspaceDeletionPreflight(
-      workspaceId: workspaceId,
-      managementRevision: managementRevision,
-      activeWorkers: activeWorkers as int,
-      remoteCalculations: remoteCalculations as int,
-      pendingApprovals: pendingApprovals as int,
-      unresolvedRemoteEffects: unresolvedRemoteEffects as int,
-      pendingCommands: pendingCommands as int,
-      canDelete: canDelete,
-    );
-  }
-
-  final String workspaceId;
-  final String managementRevision;
-  final int activeWorkers;
-  final int remoteCalculations;
-  final int pendingApprovals;
-  final int unresolvedRemoteEffects;
-  final int pendingCommands;
-  final bool canDelete;
-}
-
-DateTime? _optionalDateTime(Object? value, String label) {
-  if (value == null) return null;
-  if (value is! String) throw FormatException('$label is invalid');
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null) throw FormatException('$label is invalid');
-  return parsed;
-}
-
-bool _isCount(Object? value) => value is int && value >= 0;
 
 String? _knownModelValue(String? value) {
   final text = value?.trim();

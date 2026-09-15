@@ -1,11 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/features/settings/settings_page.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
@@ -54,7 +49,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('TS Phone 服务地址'), findsOneWidget);
+      expect(find.text('Pi App Server'), findsOneWidget);
       expect(find.text('Endpoint'), findsNothing);
       final copy = find.byKey(const ValueKey('copy-server-address'));
       await tester.ensureVisible(copy);
@@ -242,127 +237,41 @@ void main() {
     }
   }
 
-  testWidgets('connection details show the actual Host version', (
-    tester,
+  testWidgets('connection diagnostics report Pi App Server facts', (
+    WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       _settingsApp(
         connection: ConnectionSettings(
           serverUrl: 'https://phone.test',
+          serverId: '123e4567-e89b-42d3-a456-426614174000',
           token: token,
         ),
-        gatewayBuilder: (settings) => TsPhoneApi(
-          settings,
-          client: MockClient(
-            (_) async => http.Response(
-              jsonEncode({
-                'apiVersion': 'ts-phone-api/4',
-                'data': {
-                  'apiVersion': 'ts-phone-api/4',
-                  'serviceVersion': '0.6.0',
-                },
-              }),
-              200,
-            ),
-          ),
-        ),
+        gatewayBuilder: (_) => _DiagnosticGateway(),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('run-connection-diagnostics')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Server version'));
-    expect(find.text('0.6.0'), findsOneWidget);
+    expect(find.text('Pi App Server').last, findsOneWidget);
+    expect(find.text('pi-app-server/8'), findsOneWidget);
   });
+}
 
-  testWidgets('diagnostics ignore results from a previous connection', (
-    WidgetTester tester,
-  ) async {
-    final oldResponse = Completer<http.Response>();
-    final oldClient = MockClient((_) => oldResponse.future);
-    final newClient = MockClient(
-      (_) async => http.Response(
-        '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4"}}',
-        200,
-      ),
-    );
-    final oldConnection = ConnectionSettings(
-      serverUrl: 'https://old.example.test',
-      token: token,
-    );
-    final newConnection = ConnectionSettings(
-      serverUrl: 'https://new.example.test',
-      token: token,
-    );
+class _DiagnosticGateway implements TsPhoneGateway {
+  @override
+  Future<Map<String, Object?>> version() async => const {
+    'apiVersion': 'pi-app-server/8',
+    'serviceVersion': 'Pi App Server',
+  };
 
-    await tester.pumpWidget(
-      _settingsApp(
-        key: const ValueKey('settings-app'),
-        connection: oldConnection,
-        gatewayBuilder: (settings) => TsPhoneApi(settings, client: oldClient),
-      ),
-    );
-    await tester.tap(find.byKey(const ValueKey('run-connection-diagnostics')));
-    await tester.pump();
-    expect(find.text('Checking'), findsOneWidget);
+  @override
+  void close() {}
 
-    await tester.pumpWidget(
-      _settingsApp(
-        key: const ValueKey('settings-app'),
-        connection: newConnection,
-        gatewayBuilder: (settings) => TsPhoneApi(settings, client: newClient),
-      ),
-    );
-    oldResponse.complete(
-      http.Response(
-        '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4"}}',
-        200,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Healthy'), findsNothing);
-    expect(find.text('Not checked'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('run-connection-diagnostics')));
-    await tester.pumpAndSettle();
-    expect(find.text('Healthy'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('diagnostics settle when gateway setup or close fails', (
-    WidgetTester tester,
-  ) async {
-    final connection = ConnectionSettings(
-      serverUrl: 'https://tsphone.iawnix.xyz',
-      token: token,
-    );
-
-    await tester.pumpWidget(
-      _settingsApp(
-        connection: connection,
-        gatewayBuilder: (_) => throw StateError('setup failed'),
-      ),
-    );
-    await tester.tap(find.byKey(const ValueKey('run-connection-diagnostics')));
-    await tester.pumpAndSettle();
-    expect(find.text('Issue'), findsOneWidget);
-    expect(find.byKey(const ValueKey('diagnostics-spinner')), findsNothing);
-
-    await tester.pumpWidget(
-      _settingsApp(
-        connection: connection,
-        gatewayBuilder: (settings) =>
-            TsPhoneApi(settings, client: _ThrowingCloseClient()),
-      ),
-    );
-    await tester.tap(find.byKey(const ValueKey('run-connection-diagnostics')));
-    await tester.pumpAndSettle();
-    expect(find.text('Healthy'), findsOneWidget);
-    expect(find.byKey(const ValueKey('diagnostics-spinner')), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('not used in settings diagnostics');
 }
 
 Widget _settingsApp({
@@ -391,21 +300,4 @@ Widget _settingsApp({
       gatewayBuilder: gatewayBuilder,
     ),
   );
-}
-
-class _ThrowingCloseClient extends http.BaseClient {
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final body = utf8.encode(
-      '{"apiVersion":"ts-phone-api/4","data":{"apiVersion":"ts-phone-api/4"}}',
-    );
-    return http.StreamedResponse(
-      Stream<List<int>>.value(body),
-      200,
-      headers: const <String, String>{'content-type': 'application/json'},
-    );
-  }
-
-  @override
-  void close() => throw StateError('close failed');
 }

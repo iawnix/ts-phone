@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/app_server_gateway.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
@@ -33,6 +34,7 @@ class ConnectionPage extends StatefulWidget {
 class _ConnectionPageState extends State<ConnectionPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _serverController;
+  late final TextEditingController _serverIdController;
   late final TextEditingController _tokenController;
   bool _obscureToken = true;
   bool _connecting = false;
@@ -43,7 +45,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
   void initState() {
     super.initState();
     _serverController = TextEditingController(
-      text: widget.initialSettings?.serverUrl ?? 'https://tsphone.iawnix.xyz',
+      text: widget.initialSettings?.serverUrl ?? 'https://radius.pi.dev',
+    );
+    _serverIdController = TextEditingController(
+      text: widget.initialSettings?.serverId ?? '',
     );
     _tokenController = TextEditingController(
       text: widget.initialSettings?.token ?? '',
@@ -53,6 +58,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   @override
   void dispose() {
     _serverController.dispose();
+    _serverIdController.dispose();
     _tokenController.dispose();
     super.dispose();
   }
@@ -67,12 +73,13 @@ class _ConnectionPageState extends State<ConnectionPage> {
     try {
       final settings = ConnectionSettings(
         serverUrl: _serverController.text,
+        serverId: _serverIdController.text,
         token: _tokenController.text,
       );
       if (widget.verifier != null) {
         await widget.verifier!(settings);
       } else {
-        final api = TsPhoneApi(settings);
+        final api = PiAppServerGateway(settings);
         try {
           await api.version();
         } finally {
@@ -198,6 +205,29 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             validator: (value) {
                               try {
                                 ConnectionSettings.normalizeServerUrl(
+                                  value ?? '',
+                                );
+                                return null;
+                              } on ConnectionValidationException catch (error) {
+                                return error.reason.localizedMessage(l10n);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: TsPhoneSpacing.medium),
+                          TextFormField(
+                            controller: _serverIdController,
+                            keyboardType: TextInputType.text,
+                            textInputAction: TextInputAction.next,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            decoration: InputDecoration(
+                              labelText: l10n.appServerId,
+                              hintText: l10n.appServerIdHint,
+                              prefixIcon: const Icon(Icons.hub_outlined),
+                            ),
+                            validator: (value) {
+                              try {
+                                ConnectionSettings.validateServerId(
                                   value ?? '',
                                 );
                                 return null;

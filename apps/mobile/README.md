@@ -1,63 +1,44 @@
 # TS Phone Mobile
 
 Flutter client for Android and iOS. The app stores its Bearer token in Android
-Keystore-backed secure storage or the iOS Keychain, rejects remote plain HTTP,
-and refuses redirects on authenticated HTTP and SSE requests.
+Keystore-backed secure storage or the iOS Keychain. It connects directly to a
+Pi native App Server through the Radius session-relay WebSocket protocol,
+rejects remote plain HTTP, and never starts or embeds a TS Phone server.
 
 ## Conversations
 
-Cold start opens a work home with recent conversations and projects. It reads
-summary lists only; selecting a project opens its conversation list, even when
-there is just one conversation. The sidebar switches conversations in the
-current project and returns home. Archive and recently deleted are list menus;
-Settings is on the home toolbar. The sidebar stays visible on wide screens.
-New conversations use the Host default model and belong to the current
-workspace. Advanced creation can select another model explicitly.
+Cold start opens the single configured App Server's session directory. The
+server owns durable sessions, transcripts, model configuration, and the Root
+Agent; the phone keeps only connection settings, UI state, and the last selected
+session. Creating, attaching, removing, prompting, following up, aborting, and
+selecting a model all call Pi native services over the same connection.
 
-Opening history is read-only and does not start a Pi Worker. **Continue
-conversation** explicitly activates an offline managed session. Draft text stays
-editable while activation is pending; it is never sent automatically. Sending
-and stopping still require a current server-confirmed session and event stream.
+Opening history never starts a second worker. A session is ready when the App
+Server reports a live attachment. Draft text stays local until a prompt is
+accepted by that attached session, and a lost connection is surfaced as an
+uncertain result rather than silently retried.
 
-The chat header contains Back, a bounded title, workspace/status and More.
-Tap the title for the full name, rename and runtime details. More contains
-the sidebar, message synchronization and jump-to-start; new conversations live
-in the sidebar/list. Running activity stays in the timeline, not above the keyboard.
+The chat header contains Back, a bounded session title, App Server status and
+More. Running activity stays in the transcript, not above the keyboard.
 
 The composer shows the current model and a picker above the system keyboard.
-Only Host-managed Controllers advertise model switching. Immediate changes wait
-for Pi's exact receipt, preserve the draft/selection, and never change global Pi
-defaults; pending messages, running work and approvals block that mode. Queue
-capable conversations can choose a next-turn model while a turn runs, and the
-Host retargets messages that are still waiting. A lost receipt requires state
-reconciliation before sending; the app does not retry the change automatically.
-External CLI sessions show their model without a working switch control. The
-picker reads the Host's available-model catalog; credentials remain on the Host.
-Advanced creation uses the same picker. A request already running keeps the
-model it started with and remains visible as such in request history.
+The picker reads the native `pi.models` catalog and selection is sent to the
+attached Session; credentials never leave the App Server. A request already
+running keeps the model it started with and remains visible in the replicated
+transcript. Pi's `AgentController` is the only prompt/abort authority; there is
+no phone-side queue, approval broker, REST API, SSE stream, or bridge protocol.
 
-When a message is admitted while another turn is running, the composer shows a
-small `Up next`/`接下来` strip. It opens a short sheet containing only messages
-that have not started and requests whose execution needs manual review. Running
-turns and finished receipts stay in the timeline and history, so the queue does
-not duplicate the conversation state. A waiting message can be cancelled; an
-uncertain request can only be acknowledged after its history and outputs have
-been checked. Requests from another conversation are labelled without exposing
-internal session IDs.
+The App Server publishes a complete active transcript through `pi.transcript`.
+The client keeps a bounded in-memory display cache for drafts and scroll
+positions and discards it when the connection identity changes. Only the last
+selected session identifier is saved in secure storage. Backgrounding the app
+retains the current screen and draft, while reconnecting explicitly reattaches
+to the selected Session.
 
-History starts with the latest 50 items. Earlier pages load on demand, with the
-existing explicit load-all action available for an audit. A bounded in-memory
-display cache preserves recently viewed history, drafts and scroll positions
-within the app; it is discarded when the connection identity changes. Only the
-last selected project/session identifiers are saved in secure storage.
-The last selection ranks first on home but is never opened automatically.
-Briefly backgrounding the app retains the current screen and draft.
-
-Unnamed histories use their first user question when a bounded server preview
-is available, otherwise a date or an untitled label. Technical IDs remain in
-details. Consecutive activity-only records fold into an expandable summary;
-failed and stopped generation remain visible and distinct. Empty assistant
-records no longer render a logo-only reply. No history records are deleted.
+Unnamed sessions use their first user question when available, otherwise a date
+or untitled label. Technical IDs remain in details. Transcript entries are
+rendered as published by Pi; failed and stopped generations remain distinct.
+The phone never deletes transcript records.
 
 ## Validate
 

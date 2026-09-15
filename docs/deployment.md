@@ -1,372 +1,59 @@
 # Deployment
 
-Production traffic follows this path:
+TS Phone is deployed as a signed Flutter application. The runtime it connects
+to is the Pi App Server shipped by TSPi; this repository has no server daemon
+to install or expose.
 
-~~~text
-Flutter -> HTTPS :443 -> Aliyun Nginx -> 127.0.0.1:22113 (frps)
-                                      -> encrypted FRP tunnel
-                                      -> 127.0.0.1:22113 (TS Phone)
-~~~
+## Pi App Server prerequisites
 
-The application and FRP data ports remain on loopback. The Aliyun security
-group must not expose 22113; only Nginx 443 is public. FRP's control port should
-be restricted to known clients.
+On the machine that owns a research workspace, install TSPi and start one App
+Server for that workspace:
 
-Server version 0.7.0 adds persistent project/session management and guarded
-Worker activation and deletion. Mobile version 0.14.0 adds matching management
-screens, localized lifecycle views, and an accessible connection icon. Existing
-history, research timelines, active model, and context usage remain available.
-Mobile and server release numbers are independent; compatibility is governed by
-the protocol versions in this table:
+```bash
+./TSPi --app-server --workspace reaction-a
+```
 
-| Component | Required version | Contract |
-| --- | ---: | --- |
-| TS Phone server | 0.9.1 | API v4, Events v3, Bridge v3, durable workspace queue, next-message model selection and terminal attach |
-| TSPi package | 0.15.0 | Shared terminal/Phone Host, exact session Workers, model readiness and guard/1 |
-| Mobile app | 0.18.3+48 | Queued sends, composer model selection and explicit model-service failure messages |
+The App Server's UUID is stored in
+`workspaces/reaction-a/.pi/app-server/server-id`. Configure Pi Radius to relay
+that server and issue a bearer token with access to the relay. The App Server
+must be reachable by the Radius service; the local terminal uses its private
+Unix socket and never needs a public HTTP port.
 
-This is the source compatibility set for this change; it does not assert that
-production has been upgraded. Previous installed releases remain recorded in
-`artifacts.md`. Each release is bound to its manifest's protocol set.
+## Android build
 
-App 0.16.0 opens a work home, not the previous conversation. Recent entries use
-summary requests only; project/session management remains in lists and menus.
-Explicitly opened history does not activate a Worker and loads
-the latest 50 items first. On a queue-capable Host, Send admits a request and
-starts execution only when the workspace is idle; Continue and mode selection
-remain compatibility actions for older Hosts. Settings retain full-label
-choice sheets and show the actual Host version. An older Host can
-still serve API v4 history while lacking the new creation endpoints; a successful
-health check alone is not proof that project/session management is installed.
+Create or provision the release keystore in the private signing directory,
+then run:
 
-Keep `TS_PHONE_TSPI` pointed at the stable installation launcher, for example
-`/home/iaw/TS-pi-agent/TSPi`, not its resolved release target. TSPi uses the invoked
-launcher's directory as the installation root. The Host validates the real target
-without replacing that entrypoint when starting Workers or lifecycle checks.
+```bash
+TS_PHONE_SIGNING_DIR=/secure/ts-phone-signing \
+  apps/mobile/tool/build_release_android.sh
+```
 
-## 1. Build The TS Phone Component
+The script captures the Git source, embeds its snapshot in each APK/AAB,
+builds split APKs and an app bundle, verifies package/version/ABI metadata and
+the pinned certificate, and publishes a content-addressed set below
+`dist/android-current`. Use `--allow-dirty` only for a local candidate.
 
-开发、候选和正式发布使用不同入口。日常改动运行：
+The CI workflow `.github/workflows/android-release.yml` performs the same
+checks for a `ts-phone-v<version>+<build>` tag and uploads only Android
+artifacts to the GitHub release. No Node dependencies, server archive, systemd
+unit, reverse proxy, or FRP configuration is involved.
 
-~~~bash
-npm run iterate:dev
-~~~
+## Mobile configuration
 
-它按改动路径只检查受影响的组件；服务端开发检查使用低延迟 fast 测试，
-完整生命周期和队列测试留给候选/正式发布流程。发布前运行：
+At first launch the user supplies:
 
-~~~bash
-npm run iterate:candidate
-~~~
+- the Radius origin (`https://...`);
+- the App Server UUID (lowercase UUIDv4);
+- the Radius bearer token.
 
-候选流程会执行服务端和发布工具测试、服务端生产构建、完整 Flutter 检查，
-并只生成一个本地 arm64 release APK。候选 APK 不会进入
-`dist/android-current`，也不触发组件归档或服务重启。
+The app stores these values in platform secure storage. It derives the relay
+WebSocket URL and sends the token as an Authorization header. Changing any of
+the three values creates a new client connection; the old connection is
+closed before the new session directory is loaded.
 
-正式交付才运行下面的完整流程：
+## Updates and rollback
 
-~~~bash
-cd /home/iaw/Codex/Project/2026-08-14/ts-phone
-npm run iterate:release
-~~~
-
-如需在构建完成后切换服务，必须在升级窗口显式追加
-`npm run iterate -- release --install`。`--allow-dirty` 只允许本地验证，不能
-和 `--install` 一起使用。
-
-以下命令仍可单独运行，用于排查某一层：
-
-~~~bash
-env NPM_CONFIG_CACHE=.npm-cache npm ci
-npm run test:release
-~~~
-
-Validate Flutter from `apps/mobile`:
-
-~~~bash
-cd apps/mobile
-/home/iaw/soft/flutter/bin/dart format --output=none --set-exit-if-changed lib test
-/home/iaw/soft/flutter/bin/flutter analyze
-/home/iaw/soft/flutter/bin/flutter test
-tool/build_release_android.sh
-cd ../..
-python3 deploy/build-component-release.py \
-  --output-dir dist/component \
-  --json
-~~~
-
-The component builder owns the server typecheck, tests, and production build,
-all from a private capture of the committed source. Android source capture
-checks that the Settings identity matches `pubspec.yaml` before invoking Gradle.
-The Android build embeds
-that source identity in each signed artifact and writes a matching attestation.
-It validates the complete APK/AAB set in private staging, publishes it under a
-content-addressed `dist/android-releases/` directory, and only then atomically
-switches `dist/android-current`. A failed build never changes the current set.
-The component builder verifies the production arm64 APK's Signature Scheme v2
-record, pinned certificate, package name, version, build code, ABI, embedded
-source identity, and attestation before writing a deterministic archive plus
-`ts-phone-component-release.json`. Production builds require a clean committed
-checkout. `--allow-dirty` is only for local probes.
-
-The AAB boundary is intentionally narrower. The build verifies strict JAR
-signature integrity, exactly one pinned signer, its embedded source identity,
-and its attestation, but it does not independently decode the AAB binary
-manifest to confirm application ID and version. Run a pinned `bundletool`
-validation before store upload. The script also selects fixed local Flutter,
-Android SDK, and JDK paths but does not attest those tool binaries, so source
-provenance is reproducible while bit-for-bit cross-machine output is not yet a
-release claim.
-
-## 2. Build The Complete TSPi Package
-
-Run these commands in the authored TSPi checkout, not the active installed
-release:
-
-~~~bash
-cd /home/iaw/Codex/Project/2026-06-13/TSPi
-export TSPI_ANDROID_BUILD_TOOLS=/home/iaw/soft/android/sdk/build-tools/36.0.0
-python3 scripts/test_source.py \
-  --conda-root /home/iaw/soft/conda/2026.03.05 \
-  --with-render \
-  -- -q
-npm run typecheck
-python3 scripts/build_package.py \
-  --phone-manifest /home/iaw/Codex/Project/2026-08-14/ts-phone/dist/component/ts-phone-component-release.json \
-  --output-dir dist/package \
-  --json
-~~~
-
-The suite builder creates the Agent component internally, independently
-verifies the Phone APK and attestation, checks Agent, Web, and Phone
-compatibility, and produces one `tspi-package-release/2` manifest and one
-content-addressed archive. Both source identities and both component IDs are
-bound into that result.
-
-## 3. Install The Package Without Service Activation
-
-Install the complete component set into the TSPi root. Runtime preparation and
-the scientific capability probe complete before the release is selected:
-
-~~~bash
-cd /home/iaw/Codex/Project/2026-06-13/TSPi
-python3 scripts/install_package.py \
-  --manifest dist/package/tspi-package-release.json \
-  --install-root /home/iaw/TS-pi-agent \
-  --conda-root /home/iaw/soft/conda/2026.03.05 \
-  --with-render \
-  --json
-
-readlink -f /home/iaw/TS-pi-agent/.pi/packages/tspi/current
-/home/iaw/TS-pi-agent/TSPi --help
-/home/iaw/TS-pi-agent/TSWeb --help
-/home/iaw/TS-pi-agent/TSPhoneCtl --help
-/home/iaw/TS-pi-agent/TSPhoneServer --help
-~~~
-
-The Package install atomically selects one Agent, Web, Phone server, and APK set.
-It does not start or restart the broker, alter its token/configuration, or push
-the APK to a device. Existing TSPi and Phone processes retain the code they
-already loaded. A Web process using the stable `TSWeb` entrypoint restarts only
-after the selected Agent runtime is ready.
-
-## 4. Coordinated Activation
-
-Wait until all active research turns finish. Do not terminate a running
-scientific turn merely to upgrade transport.
-
-1. Confirm the selected Package and managed Agent runtime passed the checks
-   above.
-2. Preserve installation `.pi/ts-phone/server.env`, `auth.token`, and
-   `bridge.secret` outside the release. The suite's three conversation aliases
-   share one configuration reader. Launcher and workspace bindings default to
-   the installation root; explicit environment overrides must refer to that
-   same installation. Existing credentials are not copied or regenerated.
-3. Make the user service invoke the suite-owned stable launcher. For the
-   standard installation, its effective service settings must include:
-
-~~~ini
-[Service]
-WorkingDirectory=/home/iaw/TS-pi-agent
-ExecStart=
-ExecStart=/home/iaw/TS-pi-agent/TSPhoneServer
-ReadWritePaths=/home/iaw/.local/state/ts-phone
-ReadWritePaths=/home/iaw/TS-pi-agent/workspaces
-ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/runtime-cache
-ReadWritePaths=-/home/iaw/TS-pi-agent/.pi/session-host
-ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/runtime
-ReadWritePaths=-/home/iaw/TS-pi-agent/.agents/envs
-ReadWritePaths=-%h/.pi/agent
-~~~
-
-Prefer the installer-generated `.pi/ts-phone/ts-phone.service` template for
-new deployments; it uses actual installation/state/Pi paths rather than the
-example paths above. Existing templates are preserved. `TSPhoneServer --print-service`
-prints a fresh template without starting the Host. Review legacy systemd
-EnvironmentFile/drop-in overrides before changing configuration: explicit
-environment still takes precedence over the installation dotenv file.
-
-`ProtectHome=read-only` applies to TSPi child processes too. The explicit paths
-above are required for workspace/Pi sessions and the managed Python/cache state.
-The TSPi installer creates the owner-only `.pi/session-host` directory before
-service activation; its guards must remain writable for Worker children.
-Source testing outside the installer must prepare this directory explicitly.
-Pi also locks `auth.json` and `models-store.json` when reading them. The service
-must allow writing to the actual Pi agent directory, not just reading the
-credential file. The standard directory is `~/.pi/agent` for the user running
-the Host. In a user service, `%h` expands to that user's Home; do not write
-literal `~` or `$HOME` in `ReadWritePaths`, which is not a shell command.
-When using `PI_CODING_AGENT_DIR`, set it in the Host environment and replace
-this one `ReadWritePaths` entry with the selected absolute directory. Changing
-the environment variable does not update systemd's filesystem allowlist.
-TUI, Workers and subagents must use the same selection. Do not copy credentials
-into each workspace.
-Prepare a private directory before activation; preserve existing credentials.
-Workers use `PI_OFFLINE=1` to avoid startup catalog/package downloads. Model
-requests and required provider authentication still use the network.
-Keep all other Home paths read-only. If a notification provider must refresh a
-credential, add only that provider's private state directory through a local
-systemd drop-in; do not make the whole skill, config tree, or Home writable.
-
-4. Reload and restart the broker, then verify the exact API contract:
-
-~~~bash
-systemctl --user daemon-reload
-systemctl --user restart ts-phone.service
-systemctl --user status ts-phone.service --no-pager
-curl --fail --silent --show-error http://127.0.0.1:22113/healthz
-~~~
-
-A healthy HTTP service is not proof of model readiness. In a disposable test
-workspace, explicitly activate a Worker without sending a prompt and inspect
-`promptProblem`, the selected model and `canPrompt`. Do this under the service's
-actual sandbox, not just from an interactive shell. A storage failure requires
-fixing the scoped service permissions and restarting the Host, not a new Phone
-token or a model fallback.
-
-5. Exit legacy phone-mode TSPi processes only after their active turn has
-   finished. The app can then activate a managed controller through the Host.
-   Manual startup remains available for diagnostics:
-
-~~~bash
-cd /home/iaw/TS-pi-agent
-./TSPi --workspace ts_006 --standalone --phone
-~~~
-
-6. A second Controller launch must fail. For a separate read-only assistant use
-   `./TSPi --workspace ts_006 --phone --phone-access observer` explicitly.
-7. On a typical 64-bit Android phone, install the APK at the suite manifest's
-   `components.phone.mobile_artifact.path` under
-   `.pi/packages/tspi/current/phone/`, then reconnect.
-
-The production certificate differs from earlier debug/profile builds. Android
-cannot update those test builds in place: uninstall the old app before the first
-production install, then reconnect with the server URL and Bearer token. This
-clears the old app's local token and settings. Later production releases can
-update this release in place as long as the release keystore is preserved.
-
-The suite installer intentionally does not own service rollback because a
-service restart is an external effect. If health validation fails, stop the
-activation and select the previous complete Package; do not mix the new Agent
-with the old Phone component. `deploy/install-local.sh` and the source-tree unit
-are standalone development/legacy tools and must not establish a second
-production `current` pointer beside the suite.
-
-For boot without an interactive login, an administrator can enable lingering
-once:
-
-~~~bash
-loginctl enable-linger iaw
-~~~
-
-Display the Bearer token only on the local machine:
-
-~~~bash
-/home/iaw/TS-pi-agent/TSPhoneCtl token
-~~~
-
-## 5. FRP
-
-Reuse the versioned FRP service and shared config under
-/home/iaw/soft/frp/config/frpc.toml. Do not install a second FRP unit.
-
-~~~toml
-[[proxies]]
-name = "ts_phone_server"
-type = "tcp"
-localIP = "127.0.0.1"
-localPort = 22113
-remotePort = 22113
-transport.useEncryption = true
-~~~
-
-The Aliyun FRP server must use proxyBindAddr = "127.0.0.1". The FRP token and
-TS Phone Bearer token are different credentials.
-
-## 6. HTTPS
-
-The public origin is https://tsphone.iawnix.xyz. Nginx must disable proxy
-buffering for /api/ so SSE deltas arrive immediately.
-
-~~~bash
-curl --fail --silent --show-error https://tsphone.iawnix.xyz/healthz
-~~~
-
-Nginx access logs must not include authorization headers, bodies, prompts,
-responses, or tool output.
-
-## 7. Functional Validation
-
-In the app, verify:
-
-1. The workspace shows one controller after the first TSPi launch.
-2. A second Controller launch fails without replacing or downgrading it. An
-   explicitly requested Observer uses another session; the same JSONL cannot
-   be opened by two processes.
-3. Prompts sent to each session appear only in that session.
-4. CLI input appears in the matching phone session.
-5. Observer read tools work and write-capable tools are blocked.
-6. Controller phone-origin tools run without a phone approval prompt.
-7. Disconnecting one session does not affect the other session.
-8. A stale revision causes resynchronization instead of command delivery.
-9. Stop a session and verify its history remains readable but cannot send.
-10. Restart TS Phone and verify persisted sessions return before TSPi starts.
-11. Open a research session with TS activities and verify the first request
-    loads at most 50 items without starting a Worker. Verify older pages remain
-    accessible and load-all reaches the total count.
-12. Select a historical Pi branch and verify the composer becomes read-only,
-    then return to the current branch and verify sending is restored.
-13. Create and rename a project and conversation, then archive and restore both.
-14. Move a project with no remote work to Recently Deleted, restart the Host,
-    restore it, and confirm its scientific state and Pi history are unchanged.
-15. Verify a project with an active Worker or unresolved remote effect cannot be
-    moved to Recently Deleted. Permanently delete only a disposable test project
-    after entering its exact ID.
-16. Without a visible CLI, open existing history, choose Continue research,
-    verify the current model and send one harmless prompt. Background/reconnect
-    and confirm the same session and history. Activation itself must not send.
-17. Confirm idle mode/session switches, refuse busy or external CLI switches,
-    and check model/auth failures preserve the draft and release only the new
-    Worker. Check Observer occupancy blocks destructive lifecycle operations.
-
-Use harmless read-only prompts for the first transport checks.
-
-## Rollback
-
-Rollback to the previous complete TSPi Package:
-
-1. Exit all affected TSPi writers after active turns finish, including Observers
-   without a Bridge. A suite without `tspi-session-guard/1` cannot safely coexist
-   with new guarded writers. It restores its previous limited behavior, not
-   Session Host ownership or durable delivery guarantees.
-2. Run `install_package.py` with the retained previous suite manifest and
-   archive.
-3. Refresh that selected Agent runtime, restart the suite-owned Phone service,
-   and verify health.
-4. Reinstall the previous manifest-bound arm64 APK if mobile compatibility
-   changed.
-5. Start phone sessions and verify the selected API and Bridge protocols.
-
-Keep at least one verified complete Package archive and manifest until
-authenticated local and public checks pass. Component archives alone are not a
-supported production rollback selector.
+Android releases are immutable. Install a previous APK/AAB from the GitHub
+release if a rollback is required. App Server sessions and workspace data are
+not part of the mobile artifact and are unaffected by an app update.

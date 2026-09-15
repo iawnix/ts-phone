@@ -17,7 +17,6 @@ from release_builder import (
     publish_android_release_set,
     read_mobile_version,
     read_object,
-    read_server_version,
     validate_source_snapshot,
     verify_apk_metadata,
     verify_clean_captured_source_tree,
@@ -25,7 +24,7 @@ from release_builder import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,7 +79,6 @@ def main(argv: list[str] | None = None) -> int:
             # Fail before Gradle if the Settings identity and Android version
             # differ. Validate the same captured source that will be built.
             read_mobile_version(captured_source / "apps" / "mobile" / "pubspec.yaml")
-            read_server_version(captured_source)
             atomic_write_json(destination, snapshot)
         elif args.command == "verify-source":
             expected_source = read_object(

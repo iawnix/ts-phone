@@ -167,7 +167,7 @@ void main() {
             supportedLocales: AppLocalizations.supportedLocales,
             home: ChatPage(
               settings: shell.settings,
-              workspace: shell.workspace,
+              workspace: shell.appServer,
               gateway: api,
               session: const SessionSummary(
                 sessionId: 'session-test',
