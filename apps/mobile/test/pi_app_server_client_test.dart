@@ -243,6 +243,71 @@ void main() {
     await removing;
   });
 
+  test('lists Host workspaces and creates a session in the selected workspace', () async {
+    final server = _FakeRadiusServer();
+    final client = server.client();
+    final gateway = PiAppServerGateway(_settings, client: client);
+    addTearDown(gateway.close);
+    await server.connect(client);
+
+    final listing = gateway.listWorkspaces();
+    final workspaceRequest = await server.nextMessage();
+    expect(workspaceRequest['call'], {
+      'serviceId': 'tspi.workspace-directory',
+      'member': 'list',
+      'args': const [],
+    });
+    server.respond(workspaceRequest, [
+      {
+        'workspaceId': 'project-a',
+        'name': 'project-a',
+        'root': '/srv/tspi/workspaces/project-a',
+      },
+      {
+        'workspaceId': 'project-b',
+        'name': 'project-b',
+        'root': '/srv/tspi/workspaces/project-b',
+      },
+    ]);
+    final subscribe = await server.nextMessage();
+    server.respond(
+      subscribe,
+      _serviceSnapshot('pi.session-directory', {
+        'revision': 4,
+        'sessions': [
+          {
+            'serverId': _serverId,
+            'sessionId': 'session-a',
+            'createdAt': 1700000000000,
+            'cwd': '/srv/tspi/workspaces/project-a',
+          },
+        ],
+      }),
+    );
+    final unsubscribe = await server.nextMessage();
+    server.respond(unsubscribe, null);
+    final workspaces = await listing;
+    expect(workspaces.map((workspace) => workspace.id), ['project-a', 'project-b']);
+    expect(workspaces.first.sessionCount, 1);
+
+    final creating = gateway.createWorkspaceSession('project-b');
+    final create = await server.nextMessage();
+    expect(create['call'], {
+      'serviceId': 'pi.session-management',
+      'member': 'create',
+      'args': [
+        {'cwd': '/srv/tspi/workspaces/project-b'},
+      ],
+    });
+    server.respond(create, {
+      'serverId': _serverId,
+      'sessionId': 'session-b',
+      'createdAt': 1700000001000,
+      'cwd': '/srv/tspi/workspaces/project-b',
+    });
+    expect((await creating).sessionId, 'session-b');
+  });
+
   test(
     'projects transcripts and sends native prompt and followUp calls',
     () async {

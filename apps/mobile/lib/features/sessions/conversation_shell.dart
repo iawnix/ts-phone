@@ -13,7 +13,7 @@ import '../chat/chat_page.dart';
 import '../chat/chat_view_memory.dart';
 import 'session_list_page.dart';
 
-/// One App Server owns one session directory; navigation starts at that directory.
+/// One Host owns the session directory for every installed workspace.
 class ConversationShell extends StatefulWidget {
   const ConversationShell({
     super.key,
@@ -37,7 +37,9 @@ class _ConversationShellState extends State<ConversationShell> {
   final _scaffold = GlobalKey<ScaffoldState>();
   final _memory = ConversationMemory();
   late final TsPhoneGateway _api;
-  late final WorkspaceSummary _server;
+  List<WorkspaceSummary>? _workspaces;
+  WorkspaceSummary? _workspace;
+  TsPhoneProblem? _workspaceProblem;
   SessionSummary? _session;
   List<SessionSummary>? _sessions;
   bool _creating = false;
@@ -55,14 +57,7 @@ class _ConversationShellState extends State<ConversationShell> {
     _api =
         widget.gatewayBuilder?.call(widget.settings) ??
         PiAppServerGateway(widget.settings);
-    _server = WorkspaceSummary(
-      id: appServerWorkspaceId,
-      name: 'App Server',
-      runtimeState: RuntimeState.idle,
-      isStreaming: false,
-      liveSessionCount: 0,
-      sessionCount: 0,
-    );
+    unawaited(_loadWorkspaces());
   }
 
   @override
@@ -76,6 +71,33 @@ class _ConversationShellState extends State<ConversationShell> {
     setState(() {
       _generation += 1;
       _session = null;
+      _workspace = null;
+      _sessions = null;
+    });
+  }
+
+  Future<void> _loadWorkspaces() async {
+    try {
+      final workspaces = await _api.listWorkspaces();
+      if (!mounted) return;
+      setState(() {
+        _workspaces = workspaces;
+        _workspace = workspaces.length == 1 ? workspaces.single : null;
+        _workspaceProblem = null;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _workspaceProblem = describeTsPhoneProblem(error));
+    }
+  }
+
+  void _selectWorkspace(WorkspaceSummary workspace) {
+    _scaffold.currentState?.closeDrawer();
+    setState(() {
+      _workspace = workspace;
+      _session = null;
+      _sessions = null;
+      _generation += 1;
     });
   }
 
@@ -107,7 +129,9 @@ class _ConversationShellState extends State<ConversationShell> {
     final generation = _generation;
     setState(() => _creating = true);
     try {
-      final session = await management.createSession();
+      final workspace = _workspace;
+      if (workspace == null) return;
+      final session = await management.createWorkspaceSession(workspace.id);
       if (!mounted) return;
       setState(() {
         _sessions = [
@@ -133,16 +157,17 @@ class _ConversationShellState extends State<ConversationShell> {
   }
 
   Widget _sessionList({required bool sidebar}) {
+    final workspace = _workspace;
+    if (workspace == null) return _workspaceDirectory(sidebar: sidebar);
     final revision = _sidebarRevision;
     final selectedId = _session?.sessionId;
     return SessionListPage(
-      key: ValueKey((appServerWorkspaceId, sidebar)),
+      key: ValueKey((workspace.id, sidebar)),
       settings: widget.settings,
-      workspace: _server,
+      workspace: workspace,
       initialSessions: _sessions,
       gatewayBuilder: widget.gatewayBuilder,
       sidebar: sidebar,
-      onBack: sidebar ? _showDirectory : null,
       onOpenSettings: widget.onOpenSettings,
       selectedSessionId: selectedId,
       refreshToken: revision,
@@ -159,6 +184,7 @@ class _ConversationShellState extends State<ConversationShell> {
       },
       onCreateSession: managementAvailable ? _newSession : null,
       creatingSession: _creating,
+      onBack: _showDirectory,
       sidebarHeader: sidebar
           ? ListTile(
               key: const ValueKey('sidebar-directory'),
@@ -178,6 +204,67 @@ class _ConversationShellState extends State<ConversationShell> {
   }
 
   bool get managementAvailable => _management != null;
+
+  Widget _workspaceDirectory({required bool sidebar}) {
+    final workspaces = _workspaces;
+    return Scaffold(
+      appBar: sidebar
+          ? null
+          : AppBar(
+              title: Text(context.l10n.projectViews),
+              actions: [
+                IconButton(
+                  onPressed: () => unawaited(_loadWorkspaces()),
+                  tooltip: context.l10n.refreshSessions,
+                  icon: const Icon(Icons.refresh),
+                ),
+                IconButton(
+                  onPressed: widget.onOpenSettings,
+                  tooltip: context.l10n.settings,
+                  icon: const Icon(Icons.settings_outlined),
+                ),
+              ],
+            ),
+      body: workspaces == null
+          ? _workspaceProblem == null
+                ? const Center(child: CircularProgressIndicator())
+                : Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        _workspaceProblem!.localizedMessage(context.l10n),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+          : workspaces.isEmpty
+          ? Center(
+              child: Text(
+                context.l10n.noWorkspacesMessage,
+                textAlign: TextAlign.center,
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(12),
+              itemCount: workspaces.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final workspace = workspaces[index];
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.folder_outlined),
+                    title: Text(workspace.name),
+                    subtitle: Text(
+                      context.l10n.sessionCount(workspace.sessionCount),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _selectWorkspace(workspace),
+                  ),
+                );
+              },
+            ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -207,15 +294,15 @@ class _ConversationShellState extends State<ConversationShell> {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final session = _session!;
     final content = ChatPage(
-      key: ValueKey((appServerWorkspaceId, session.sessionId, _generation)),
+      key: ValueKey((_workspace!.id, session.sessionId, _generation)),
       settings: widget.settings,
-      workspace: _server,
+      workspace: _workspace!,
       session: session,
       onOpenSession: _selectSession,
       gatewayFactory: widget.gatewayBuilder == null
           ? null
           : () => widget.gatewayBuilder!(widget.settings),
-      memory: _memory.view(appServerWorkspaceId, session.sessionId),
+      memory: _memory.view(_workspace!.id, session.sessionId),
       onOpenNavigation: wide
           ? null
           : () => _scaffold.currentState?.openDrawer(),

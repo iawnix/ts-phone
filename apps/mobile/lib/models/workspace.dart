@@ -18,7 +18,7 @@ enum RuntimeState {
       this == RuntimeState.idle || this == RuntimeState.running;
 }
 
-/// Presentation metadata for the single App Server selected in settings.
+/// Presentation metadata for one project exposed by the connected Host.
 class WorkspaceSummary {
   const WorkspaceSummary({
     required this.id,

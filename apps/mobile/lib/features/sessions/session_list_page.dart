@@ -180,7 +180,7 @@ class _SessionListPageState extends State<SessionListPage>
     if (_busy || gateway == null) return;
     setState(() => _creatingSession = true);
     try {
-      final session = await gateway.createSession();
+      final session = await gateway.createWorkspaceSession(widget.workspace.id);
       await _refresh(force: true);
       if (mounted) await _open(session);
     } on Object catch (error) {
@@ -213,7 +213,10 @@ class _SessionListPageState extends State<SessionListPage>
     if (!mounted || confirmed != true) return;
     setState(() => _removingSessionId = session.sessionId);
     try {
-      await gateway.removeSession(session.sessionId);
+      await gateway.removeWorkspaceSession(
+        widget.workspace.id,
+        session.sessionId,
+      );
       if (mounted) await _refresh(force: true);
     } on Object catch (error) {
       if (mounted) _showProblem(error);

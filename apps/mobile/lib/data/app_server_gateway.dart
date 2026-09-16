@@ -13,6 +13,22 @@ abstract interface class AppServerSessionGateway {
   Future<void> removeSession(String sessionId);
 }
 
+extension AppServerWorkspaceSessionGateway on AppServerSessionGateway {
+  Future<SessionSummary> createWorkspaceSession(String workspaceId) {
+    final gateway = this;
+    return gateway is PiAppServerGateway
+        ? gateway.createWorkspaceSession(workspaceId)
+        : gateway.createSession();
+  }
+
+  Future<void> removeWorkspaceSession(String workspaceId, String sessionId) {
+    final gateway = this;
+    return gateway is PiAppServerGateway
+        ? gateway.removeWorkspaceSession(workspaceId, sessionId)
+        : gateway.removeSession(sessionId);
+  }
+}
+
 class PiAppServerGateway
     implements TsPhoneGateway, TsPhoneModelGateway, AppServerSessionGateway {
   PiAppServerGateway(this.settings, {PiAppServerClient? client})
@@ -28,6 +44,9 @@ class PiAppServerGateway
   final PiAppServerClient _client;
   final Map<String, Map<String, Object?>> _transcripts = {};
   final Map<String, String> _sessionRevisions = {};
+  final Map<String, WorkspaceSummary> _workspaces = {};
+  final Map<String, String> _workspaceRoots = {};
+  final Map<String, String> _sessionWorkspaces = {};
   int _eventSequence = 0;
   bool _closed = false;
 
@@ -43,63 +62,142 @@ class PiAppServerGateway
 
   @override
   Future<List<WorkspaceSummary>> listWorkspaces() async {
-    final sessions = await listSessions(appServerWorkspaceId);
-    return [
-      WorkspaceSummary(
+    try {
+      return await _guard(() async {
+        final raw = await _client.request(
+          _client.serverTarget,
+          'tspi.workspace-directory',
+          'list',
+          const [],
+        );
+        if (raw is! List) {
+          throw const FormatException('Workspace directory is invalid');
+        }
+        final roots = <String, String>{};
+        final workspaces = <WorkspaceSummary>[];
+        for (final value in raw) {
+          final item = _object(value, 'workspace');
+          final id = _string(item['workspaceId'], 'workspace id');
+          final name = _string(item['name'], 'workspace name');
+          final root = _string(item['root'], 'workspace root');
+          roots[id] = root;
+          workspaces.add(
+            WorkspaceSummary(
+              id: id,
+              name: name,
+              runtimeState: RuntimeState.idle,
+              isStreaming: false,
+              liveSessionCount: 0,
+              sessionCount: 0,
+            ),
+          );
+        }
+        _workspaceRoots
+          ..clear()
+          ..addAll(roots);
+        final sessions = await _listSessionSummaries();
+        final counts = <String, List<SessionSummary>>{};
+        for (final session in sessions) {
+          final workspaceId = _sessionWorkspaces[session.sessionId];
+          if (workspaceId != null) {
+            counts.putIfAbsent(workspaceId, () => []).add(session);
+          }
+        }
+        final projected = workspaces
+            .map((workspace) {
+              final matching = counts[workspace.id] ?? const <SessionSummary>[];
+              return WorkspaceSummary(
+                id: workspace.id,
+                name: workspace.name,
+                runtimeState: RuntimeState.idle,
+                isStreaming: matching.any((session) => session.isStreaming),
+                liveSessionCount: matching.length,
+                sessionCount: matching.length,
+              );
+            })
+            .toList(growable: false);
+        _workspaces
+          ..clear()
+          ..addEntries(
+            projected.map((workspace) => MapEntry(workspace.id, workspace)),
+          );
+        return projected;
+      });
+    } on TsPhoneApiException catch (error) {
+      // Older App Server builds exposed no workspace directory. Keep a
+      // compatibility presentation until the managed Host is upgraded.
+      if (error.code != 'service_not_found' &&
+          error.code != 'service_member_not_found') {
+        rethrow;
+      }
+      final sessions = await _guard(_listSessionSummaries);
+      for (final session in sessions) {
+        _sessionWorkspaces[session.sessionId] = appServerWorkspaceId;
+      }
+      final fallback = WorkspaceSummary(
         id: appServerWorkspaceId,
         name: 'App Server',
         runtimeState: RuntimeState.idle,
         isStreaming: sessions.any((session) => session.isStreaming),
         liveSessionCount: sessions.length,
         sessionCount: sessions.length,
-      ),
-    ];
+      );
+      _workspaces[appServerWorkspaceId] = fallback;
+      return [fallback];
+    }
   }
 
   @override
   Future<List<SessionSummary>> listSessions(String workspaceId) async {
-    _requireWorkspace(workspaceId);
-    return _guard(() async {
-      final state = await _client.subscribe(
-        _client.serverTarget,
-        'pi.session-directory',
-      );
-      try {
-        final directory = _object(state.value, 'session directory');
-        _positiveInt(directory['revision'], 'directory revision');
-        final rawSessions = directory['sessions'];
-        if (rawSessions is! List) {
-          throw const FormatException('Session directory is invalid');
-        }
-        return rawSessions.map(_sessionSummary).toList(growable: false);
-      } finally {
-        await state.close();
-      }
-    });
+    await _ensureWorkspace(workspaceId);
+    final sessions = await _guard(_listSessionSummaries);
+    if (workspaceId == appServerWorkspaceId) return sessions;
+    return sessions
+        .where(
+          (session) => _sessionWorkspaces[session.sessionId] == workspaceId,
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<SessionSummary> createSession() => _guard(() async {
-    final result = await _client.request(
-      _client.serverTarget,
-      'pi.session-management',
-      'create',
-      const [<String, Object?>{}],
-    );
-    return _sessionSummary(result);
-  });
+  Future<SessionSummary> createSession() =>
+      createWorkspaceSession(_defaultWorkspaceId);
+
+  Future<SessionSummary> createWorkspaceSession(String workspaceId) =>
+      _guard(() async {
+        final selectedWorkspace = workspaceId;
+        await _ensureWorkspace(selectedWorkspace);
+        final root = _workspaceRoots[selectedWorkspace];
+        final options = <String, Object?>{};
+        if (root != null) options['cwd'] = root;
+        final result = await _client.request(
+          _client.serverTarget,
+          'pi.session-management',
+          'create',
+          [options],
+        );
+        final summary = _sessionSummary(result);
+        _sessionWorkspaces[summary.sessionId] = selectedWorkspace;
+        return summary;
+      });
 
   @override
-  Future<void> removeSession(String sessionId) => _guard(() async {
-    await _client.request(
-      _client.serverTarget,
-      'pi.session-management',
-      'remove',
-      [sessionId],
-    );
-    _transcripts.remove(sessionId);
-    _sessionRevisions.remove(sessionId);
-  });
+  Future<void> removeSession(String sessionId) =>
+      removeWorkspaceSession('', sessionId);
+
+  Future<void> removeWorkspaceSession(String workspaceId, String sessionId) =>
+      _guard(() async {
+        final selectedSession = sessionId;
+        await _client.request(
+          _client.serverTarget,
+          'pi.session-management',
+          'remove',
+          [selectedSession],
+        );
+        _transcripts.remove(selectedSession);
+        _sessionRevisions.remove(selectedSession);
+        _sessionWorkspaces.remove(selectedSession);
+      });
 
   @override
   Future<TsPhoneMessageSnapshot> getMessages(
@@ -153,7 +251,7 @@ class PiAppServerGateway
     String message, {
     required String clientMessageId,
   }) async {
-    _requireWorkspace(workspaceId);
+    await _ensureWorkspace(workspaceId);
     await _guard(() async {
       await _client.attach(sessionId);
       final current = _transcripts[sessionId];
@@ -192,7 +290,7 @@ class PiAppServerGateway
     required String sessionRevision,
     required String agentRunId,
   }) async {
-    _requireWorkspace(workspaceId);
+    await _ensureWorkspace(workspaceId);
     await _guard(() async {
       await _client.attach(sessionId);
       await _client.request(
@@ -345,7 +443,7 @@ class PiAppServerGateway
     final eventId = 'pi-${++_eventSequence}';
     return TsPhoneEvent(
       id: eventId,
-      workspaceId: appServerWorkspaceId,
+      workspaceId: _sessionWorkspaces[sessionId] ?? appServerWorkspaceId,
       sessionId: sessionId,
       sessionRevision: _revision(sessionId),
       instanceEpoch: settings.serverId,
@@ -402,6 +500,14 @@ class PiAppServerGateway
     }
     if (session['serverId'] != settings.serverId) {
       throw const FormatException('Session belongs to another App Server');
+    }
+    final cwd = session['cwd'];
+    if (cwd is String && cwd.isNotEmpty) {
+      final workspaceId = _workspaceRoots.entries
+          .where((entry) => entry.value == cwd)
+          .map((entry) => entry.key)
+          .firstOrNull;
+      if (workspaceId != null) _sessionWorkspaces[sessionId] = workspaceId;
     }
     _sessionRevisions[sessionId] =
         'pi-app-server-$piAppServerProtocolVersion-${settings.serverId}-$sessionId-${createdAt.toInt()}';
@@ -492,13 +598,53 @@ class PiAppServerGateway
     return _ProjectedMessages(messages, ids);
   }
 
-  static void _requireWorkspace(String workspaceId) {
-    if (workspaceId != appServerWorkspaceId) {
+  String get _defaultWorkspaceId =>
+      _workspaces.keys.firstOrNull ?? appServerWorkspaceId;
+
+  Future<void> _ensureWorkspace(String workspaceId) async {
+    if (workspaceId == appServerWorkspaceId && _workspaces.isEmpty) {
+      _workspaces[workspaceId] = const WorkspaceSummary(
+        id: appServerWorkspaceId,
+        name: 'App Server',
+        runtimeState: RuntimeState.idle,
+        isStreaming: false,
+        liveSessionCount: 0,
+        sessionCount: 0,
+      );
+      return;
+    }
+    if (!_workspaces.containsKey(workspaceId)) {
+      await listWorkspaces();
+    }
+    _requireWorkspace(workspaceId);
+  }
+
+  void _requireWorkspace(String workspaceId) {
+    if (!_workspaces.containsKey(workspaceId) &&
+        workspaceId != appServerWorkspaceId) {
       throw const TsPhoneApiException(
-        'TS Phone is connected to one App Server, not a workspace catalog',
+        'Workspace is not present in the connected Host',
         code: 'workspace_not_found',
         statusCode: 404,
       );
+    }
+  }
+
+  Future<List<SessionSummary>> _listSessionSummaries() async {
+    final state = await _client.subscribe(
+      _client.serverTarget,
+      'pi.session-directory',
+    );
+    try {
+      final directory = _object(state.value, 'session directory');
+      _positiveInt(directory['revision'], 'directory revision');
+      final rawSessions = directory['sessions'];
+      if (rawSessions is! List) {
+        throw const FormatException('Session directory is invalid');
+      }
+      return rawSessions.map(_sessionSummary).toList(growable: false);
+    } finally {
+      await state.close();
     }
   }
 }
