@@ -80,6 +80,31 @@ void main() {
   });
 
   test(
+    'creates a workspace through the Host workspace directory service',
+    () async {
+      final server = _FakeRadiusServer();
+      final client = server.client();
+      final gateway = PiAppServerGateway(_settings, client: client);
+      addTearDown(gateway.close);
+      await server.connect(client);
+
+      final creating = gateway.createWorkspace('project-c');
+      final request = await server.nextMessage();
+      expect(request['call'], {
+        'serviceId': 'tspi.workspace-directory',
+        'member': 'create',
+        'args': ['project-c'],
+      });
+      server.respond(request, {
+        'workspaceId': 'project-c',
+        'name': 'project-c',
+        'root': '/srv/tspi/workspaces/project-c',
+      });
+      expect((await creating).id, 'project-c');
+    },
+  );
+
+  test(
     'hydrates Chord state after an early update and applies path ids',
     () async {
       final server = _FakeRadiusServer();
@@ -296,7 +321,7 @@ void main() {
       'serviceId': 'pi.session-management',
       'member': 'create',
       'args': [
-        {'cwd': '/srv/tspi/workspaces/project-b'},
+        {'workspaceId': 'project-b'},
       ],
     });
     server.respond(create, {

@@ -1,8 +1,8 @@
 # TS Phone
 
-TS Phone 是 Pi App Server 的 Flutter 客户端。本仓库不再包含共享 Host、
-worker supervisor、REST/SSE broker 或本地 bridge。每个工作区运行一个 Pi
-App Server，由它独占会话目录、对话历史、模型状态和工作区锁。
+TS Phone 是 TSPi Pi App Server Host 的 Flutter 客户端。本仓库不再包含共享
+Host、worker supervisor、REST/SSE broker 或本地 bridge。一个 Host 管理安装
+目录下的多个工作区，Pi App Server 独占会话目录、对话历史、模型状态和工作区锁。
 
 ## 运行架构
 
@@ -16,10 +16,10 @@ TS Phone（Flutter） ---- Pi App Server ---- 本地 TSPi 终端
                            工作区
 ```
 
-使用 TSPi 为每个工作区启动 App Server：
+使用 TSPi 启动安装 Host：
 
 ```bash
-./TSPi --app-server --workspace reaction-a
+./TSPi --service-host
 ```
 
 本地终端自动连接该工作区的 App Server：
@@ -28,8 +28,9 @@ TS Phone（Flutter） ---- Pi App Server ---- 本地 TSPi 终端
 ./TSPi --workspace reaction-a
 ```
 
-手机通过 Pi Radius 连接同一个 App Server。在 App 的连接页面配置 Radius
-网关、App Server UUID 和 bearer token。手机使用
+手机通过 Pi Radius 连接该 Host，通过 `tspi.workspace-directory` 浏览或创建项目，
+并使用绑定的 `workspaceId` 创建会话。在 App 的连接页面配置 Radius 网关、
+App Server UUID 和 bearer token。手机使用
 `pi-session-relay.client.v1` WebSocket 子协议和 Pi protocol v8，不再连接
 TS Phone 服务。
 

@@ -51,6 +51,11 @@ class _ConversationShellState extends State<ConversationShell> {
   AppServerSessionGateway? get _management =>
       _api is AppServerSessionGateway ? _api as AppServerSessionGateway : null;
 
+  AppServerWorkspaceGateway? get _workspaceManagement =>
+      _api is AppServerWorkspaceGateway
+      ? _api as AppServerWorkspaceGateway
+      : null;
+
   @override
   void initState() {
     super.initState();
@@ -156,6 +161,52 @@ class _ConversationShellState extends State<ConversationShell> {
     }
   }
 
+  Future<void> _newWorkspace() async {
+    final management = _workspaceManagement;
+    if (management == null) return;
+    final controller = TextEditingController();
+    final workspaceId = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.newProject),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(labelText: context.l10n.projectName),
+          onSubmitted: (_) => Navigator.of(context).pop(controller.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(context.l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: Text(context.l10n.createProject),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final normalized = workspaceId?.trim() ?? '';
+    if (normalized.isEmpty) return;
+    try {
+      final created = await management.createWorkspace(normalized);
+      await _loadWorkspaces();
+      if (mounted) _selectWorkspace(created);
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            describeTsPhoneProblem(error).localizedMessage(context.l10n),
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _sessionList({required bool sidebar}) {
     final workspace = _workspace;
     if (workspace == null) return _workspaceDirectory(sidebar: sidebar);
@@ -218,6 +269,12 @@ class _ConversationShellState extends State<ConversationShell> {
                   tooltip: context.l10n.refreshSessions,
                   icon: const Icon(Icons.refresh),
                 ),
+                if (_workspaceManagement != null)
+                  IconButton(
+                    onPressed: () => unawaited(_newWorkspace()),
+                    tooltip: context.l10n.newProject,
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                  ),
                 IconButton(
                   onPressed: widget.onOpenSettings,
                   tooltip: context.l10n.settings,
@@ -239,9 +296,22 @@ class _ConversationShellState extends State<ConversationShell> {
                   )
           : workspaces.isEmpty
           ? Center(
-              child: Text(
-                context.l10n.noWorkspacesMessage,
-                textAlign: TextAlign.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.l10n.noWorkspacesMessage,
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_workspaceManagement != null) ...[
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: () => unawaited(_newWorkspace()),
+                      icon: const Icon(Icons.create_new_folder_outlined),
+                      label: Text(context.l10n.newProject),
+                    ),
+                  ],
+                ],
               ),
             )
           : ListView.separated(

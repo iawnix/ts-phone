@@ -1,9 +1,9 @@
 # TS Phone
 
-TS Phone is the Flutter client for a Pi App Server. It does not contain a
-shared Host, worker supervisor, REST API, SSE broker, or local bridge. A Pi App
-Server is the single owner of sessions, transcript history, model state, and
-the workspace lock.
+TS Phone is the Flutter client for a TSPi Pi App Server Host. It does not
+contain a shared Host, worker supervisor, REST API, SSE broker, or local
+bridge. One Host owns the installed workspace directory; the App Server is the
+single owner of sessions, transcript history, model state, and workspace locks.
 
 ## Runtime model
 
@@ -17,10 +17,10 @@ TS Phone (Flutter) ---- Pi App Server ---- local TSPi terminal
                          workspace
 ```
 
-Run one App Server for each workspace with the TSPi launcher:
+Run the installation Host with the TSPi launcher:
 
 ```bash
-./TSPi --app-server --workspace reaction-a
+./TSPi --service-host
 ```
 
 The local terminal attaches to that server automatically:
@@ -29,9 +29,10 @@ The local terminal attaches to that server automatically:
 ./TSPi --workspace reaction-a
 ```
 
-The phone connects to the same server through Pi Radius. Configure the Radius
-gateway, the App Server UUID, and the bearer token in the app's connection
-screen. The phone speaks Pi protocol v8 over the
+The phone connects to that Host through Pi Radius, lists projects through
+`tspi.workspace-directory`, and creates sessions with a bound `workspaceId`.
+Configure the Radius gateway, the App Server UUID, and the bearer token in the
+app's connection screen. The phone speaks Pi protocol v8 over the
 `pi-session-relay.client.v1` WebSocket subprotocol; it does not talk to a
 TS Phone service.
 

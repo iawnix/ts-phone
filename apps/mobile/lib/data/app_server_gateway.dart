@@ -13,6 +13,10 @@ abstract interface class AppServerSessionGateway {
   Future<void> removeSession(String sessionId);
 }
 
+abstract interface class AppServerWorkspaceGateway {
+  Future<WorkspaceSummary> createWorkspace(String workspaceId);
+}
+
 extension AppServerWorkspaceSessionGateway on AppServerSessionGateway {
   Future<SessionSummary> createWorkspaceSession(String workspaceId) {
     final gateway = this;
@@ -30,7 +34,11 @@ extension AppServerWorkspaceSessionGateway on AppServerSessionGateway {
 }
 
 class PiAppServerGateway
-    implements TsPhoneGateway, TsPhoneModelGateway, AppServerSessionGateway {
+    implements
+        TsPhoneGateway,
+        TsPhoneModelGateway,
+        AppServerSessionGateway,
+        AppServerWorkspaceGateway {
   PiAppServerGateway(this.settings, {PiAppServerClient? client})
     : _client =
           client ??
@@ -163,18 +171,46 @@ class PiAppServerGateway
   Future<SessionSummary> createSession() =>
       createWorkspaceSession(_defaultWorkspaceId);
 
+  @override
+  Future<WorkspaceSummary> createWorkspace(String workspaceId) =>
+      _guard(() async {
+        final value = await _client.request(
+          _client.serverTarget,
+          'tspi.workspace-directory',
+          'create',
+          [workspaceId],
+        );
+        final item = _object(value, 'workspace');
+        final id = _string(item['workspaceId'], 'workspace id');
+        final name = _string(item['name'], 'workspace name');
+        final root = _string(item['root'], 'workspace root');
+        final workspace = WorkspaceSummary(
+          id: id,
+          name: name,
+          runtimeState: RuntimeState.idle,
+          isStreaming: false,
+          liveSessionCount: 0,
+          sessionCount: 0,
+        );
+        _workspaceRoots[id] = root;
+        _workspaces[id] = workspace;
+        return workspace;
+      });
+
   Future<SessionSummary> createWorkspaceSession(String workspaceId) =>
       _guard(() async {
         final selectedWorkspace = workspaceId;
         await _ensureWorkspace(selectedWorkspace);
-        final root = _workspaceRoots[selectedWorkspace];
-        final options = <String, Object?>{};
-        if (root != null) options['cwd'] = root;
         final result = await _client.request(
           _client.serverTarget,
           'pi.session-management',
           'create',
-          [options],
+          [
+            <String, Object?>{
+              if (_workspaceRoots[selectedWorkspace] != null)
+                'workspaceId': selectedWorkspace,
+            },
+          ],
         );
         final summary = _sessionSummary(result);
         _sessionWorkspaces[summary.sessionId] = selectedWorkspace;

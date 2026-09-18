@@ -1,7 +1,8 @@
 # Architecture
 
-TS Phone is a thin presentation client. Pi App Server is the runtime and the
-only session owner. There is one App Server process per TSPi workspace.
+TS Phone is a thin presentation client. The TSPi Host owns one Pi App Server
+for the installation and exposes all validated workspaces below its workspace
+root. The phone never becomes a session owner.
 
 ## Ownership
 
@@ -10,7 +11,7 @@ The App Server owns:
 - the session directory and session creation/removal;
 - Pi JSONL transcript history and live agent state;
 - prompt, follow-up, abort, and model-selection operations;
-- the workspace Root lock and the App Server identity;
+- the workspace directory, Root locks, and the App Server identity;
 - local Unix-socket and Radius relay endpoints.
 
 TS Phone owns only connection settings, presentation state, and a recent
@@ -39,17 +40,21 @@ Chord subscriptions carry transcript, model, and session-directory state.
 
 ## Session lifecycle
 
-1. TSPi starts the App Server with a workspace path and creates its stable UUID
-   under `.pi/app-server/server-id`.
-2. The App Server opens or creates Pi sessions below its private session
+1. TSPi starts the installation Host and creates its stable UUID under
+   `.pi/app-server-host/server-id`.
+2. The Host publishes `tspi.workspace-directory`; the phone lists projects or
+   creates one through its `list`/`create` members.
+3. The phone creates a Pi session through `pi.session-management.create` with
+   a `workspaceId`; the Host resolves and validates the workspace cwd.
+4. The App Server opens or restores Pi sessions below its private session
    directory and publishes `pi.session-directory`.
-3. A terminal or phone attaches a session with
+5. A terminal or phone attaches a session with
    `pi.session-management.attach`.
-4. The client subscribes to `pi.transcript`, renders the snapshot, and applies
+6. The client subscribes to `pi.transcript`, renders the snapshot, and applies
    ordered Chord updates.
-5. Prompt, follow-up, abort, and model changes are sent to
+7. Prompt, follow-up, abort, and model changes are sent to
    `pi.agent-controller` or `pi.models` for that attached session.
-6. Detaching a client does not stop the App Server or delete its history.
+8. Detaching a client does not stop the App Server or delete its history.
 
 There is no activation mode, controller/observer split, phone worker, or
 shared Host process. Concurrency is enforced by the App Server's workspace
