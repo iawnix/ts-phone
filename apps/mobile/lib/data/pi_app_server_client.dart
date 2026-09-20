@@ -6,7 +6,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 const piAppServerProtocolVersion = 8;
-const piRadiusClientProtocol = 'pi-session-relay.client.v1';
+const tspiLinkProtocol = 'tspi-link.v1';
 const _maxFrameLength = 16 * 1024 * 1024;
 
 class PiAppServerException implements Exception {
@@ -85,7 +85,7 @@ class PiAppServerClient {
     final generation = ++_connectionGeneration;
     final hello = Completer<void>();
     _hello = hello;
-    final channel = _channelFactory(_radiusUri(), {
+    final channel = _channelFactory(_linkUri(), {
       'Authorization': 'Bearer $token',
     });
     _channel = channel;
@@ -94,7 +94,7 @@ class PiAppServerClient {
       onError: (Object error) => _fail(generation, error),
       onDone: () => _fail(
         generation,
-        const PiAppServerException('Radius App Server connection closed'),
+        const PiAppServerException('TSPi Link connection closed'),
       ),
       cancelOnError: true,
     );
@@ -225,15 +225,15 @@ class PiAppServerClient {
     _rejectPending(const PiAppServerException('App Server client is closed'));
   }
 
-  Uri _radiusUri() {
+  Uri _linkUri() {
     final scheme = switch (gateway.scheme) {
       'https' => 'wss',
       'http' => 'ws',
-      _ => throw const PiAppServerException('Radius gateway must use HTTPS'),
+      _ => throw const PiAppServerException('TSPi Relay must use HTTPS'),
     };
     return gateway.replace(
       scheme: scheme,
-      path: '/v1/session-relays/$serverId/connect',
+      path: '/v1/link',
       query: null,
       fragment: null,
     );
@@ -257,7 +257,7 @@ class PiAppServerClient {
         Uint8List bytes => bytes,
         List<int> bytes => Uint8List.fromList(bytes),
         _ => throw const PiAppServerException(
-          'Radius returned a non-binary App Server frame',
+          'TSPi Link returned a non-binary App Server frame',
         ),
       };
       for (final frame in _frames.add(bytes)) {
@@ -399,7 +399,7 @@ class PiAppServerClient {
     Map<String, dynamic> headers,
   ) => IOWebSocketChannel.connect(
     uri,
-    protocols: const [piRadiusClientProtocol],
+    protocols: const [tspiLinkProtocol],
     headers: headers,
     pingInterval: const Duration(seconds: 20),
     connectTimeout: const Duration(seconds: 20),

@@ -4,6 +4,7 @@ enum ConnectionValidationReason {
   originOnly,
   httpsRequired,
   invalidServerId,
+  invalidDeviceId,
   invalidToken,
 }
 
@@ -16,23 +17,18 @@ class ConnectionValidationException extends FormatException {
 class ConnectionSettings {
   ConnectionSettings({
     required String serverUrl,
-    String serverId = '00000000-0000-4000-8000-000000000000',
+    required String serverId,
+    required String deviceId,
     required String token,
   }) : serverUrl = normalizeServerUrl(serverUrl),
        serverId = validateServerId(serverId),
+       deviceId = validateDeviceId(deviceId),
        token = validateToken(token);
 
   final String serverUrl;
   final String serverId;
+  final String deviceId;
   final String token;
-
-  /// Returns a path on the configured Radius origin for diagnostics and
-  /// tooling. App Server traffic itself always uses the Pi Radius WebSocket
-  /// route built by [PiAppServerClient], never a legacy REST endpoint.
-  Uri endpoint(String path) {
-    final normalizedPath = path.startsWith('/') ? path : '/$path';
-    return Uri.parse(serverUrl).replace(path: normalizedPath);
-  }
 
   static String normalizeServerUrl(String value) {
     final trimmed = value.trim();
@@ -70,9 +66,7 @@ class ConnectionSettings {
 
   static String validateToken(String value) {
     final trimmed = value.trim();
-    if (trimmed.length < 40 ||
-        trimmed.length > 4096 ||
-        trimmed.codeUnits.any((value) => value <= 32 || value == 127)) {
+    if (!RegExp(r'^tspd_[A-Za-z0-9_-]{40,80}$').hasMatch(trimmed)) {
       throw const ConnectionValidationException(
         ConnectionValidationReason.invalidToken,
       );
@@ -87,6 +81,18 @@ class ConnectionSettings {
     ).hasMatch(trimmed)) {
       throw const ConnectionValidationException(
         ConnectionValidationReason.invalidServerId,
+      );
+    }
+    return trimmed;
+  }
+
+  static String validateDeviceId(String value) {
+    final trimmed = value.trim().toLowerCase();
+    if (!RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    ).hasMatch(trimmed)) {
+      throw const ConnectionValidationException(
+        ConnectionValidationReason.invalidDeviceId,
       );
     }
     return trimmed;

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../app_identity.dart';
 import '../../data/app_server_gateway.dart';
+import '../../data/pi_app_server_client.dart';
 import '../../data/ts_phone_api.dart';
 import '../../models/app_theme_preference.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -59,6 +60,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final current = widget.connectionSettings;
     if (previous?.serverUrl != current?.serverUrl ||
         previous?.serverId != current?.serverId ||
+        previous?.deviceId != current?.deviceId ||
         previous?.token != current?.token) {
       _diagnosticsGeneration += 1;
       _diagnostics = null;
@@ -163,7 +165,8 @@ class _SettingsPageState extends State<SettingsPage> {
         : diagnostics?.problem == null && diagnostics != null
         ? statusTheme.connected
         : Theme.of(context).colorScheme.onSurfaceVariant;
-    final protocolValue = diagnostics?.apiVersion ?? l10n.diagnosticNotChecked;
+    final appServerProtocolValue =
+        diagnostics?.apiVersion ?? l10n.diagnosticNotChecked;
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: widget.onClose),
@@ -310,14 +313,39 @@ class _SettingsPageState extends State<SettingsPage> {
                                     ),
                                     const _SettingsDivider(),
                                     _DiagnosticRow(
+                                      label: l10n.hostId,
+                                      value:
+                                          connection?.serverId ??
+                                          l10n.notConfigured,
+                                      stacked: true,
+                                      selectable: connection != null,
+                                    ),
+                                    const _SettingsDivider(),
+                                    _DiagnosticRow(
+                                      label: l10n.deviceId,
+                                      value:
+                                          connection?.deviceId ??
+                                          l10n.notConfigured,
+                                      stacked: true,
+                                      selectable: connection != null,
+                                    ),
+                                    const _SettingsDivider(),
+                                    _DiagnosticRow(
                                       label: l10n.auth,
                                       value: authValue,
                                       valueColor: authColor,
                                     ),
                                     const _SettingsDivider(),
                                     _DiagnosticRow(
-                                      label: l10n.protocol,
-                                      value: protocolValue,
+                                      label: l10n.linkProtocol,
+                                      value: connection == null
+                                          ? l10n.diagnosticNotChecked
+                                          : tspiLinkProtocol,
+                                    ),
+                                    const _SettingsDivider(),
+                                    _DiagnosticRow(
+                                      label: l10n.appServerProtocol,
+                                      value: appServerProtocolValue,
                                     ),
                                     const _SettingsDivider(),
                                     _DiagnosticRow(

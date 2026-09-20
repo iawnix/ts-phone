@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../data/app_server_gateway.dart';
 import '../../data/ts_phone_api.dart';
+import '../../data/tspi_link_pairing.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../theme/ts_phone_theme.dart';
@@ -19,6 +20,7 @@ class ConnectionPage extends StatefulWidget {
     this.onBack,
     this.onOpenSettings,
     this.verifier,
+    this.pairingRedeemer,
   });
 
   final ConnectionSettings? initialSettings;
@@ -26,6 +28,7 @@ class ConnectionPage extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onOpenSettings;
   final ConnectionVerifier? verifier;
+  final TspiLinkPairingRedeemer? pairingRedeemer;
 
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
@@ -33,33 +36,30 @@ class ConnectionPage extends StatefulWidget {
 
 class _ConnectionPageState extends State<ConnectionPage> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _serverController;
-  late final TextEditingController _serverIdController;
-  late final TextEditingController _tokenController;
-  bool _obscureToken = true;
+  late final TextEditingController _relayController;
+  late final TextEditingController _pairingCodeController;
+  late final TextEditingController _deviceNameController;
   bool _connecting = false;
   bool _committing = false;
   String? _error;
+  ConnectionSettings? _redeemedSettings;
+  String? _redeemedInput;
 
   @override
   void initState() {
     super.initState();
-    _serverController = TextEditingController(
-      text: widget.initialSettings?.serverUrl ?? 'https://radius.pi.dev',
+    _relayController = TextEditingController(
+      text: widget.initialSettings?.serverUrl ?? '',
     );
-    _serverIdController = TextEditingController(
-      text: widget.initialSettings?.serverId ?? '',
-    );
-    _tokenController = TextEditingController(
-      text: widget.initialSettings?.token ?? '',
-    );
+    _pairingCodeController = TextEditingController();
+    _deviceNameController = TextEditingController(text: 'TS Phone');
   }
 
   @override
   void dispose() {
-    _serverController.dispose();
-    _serverIdController.dispose();
-    _tokenController.dispose();
+    _relayController.dispose();
+    _pairingCodeController.dispose();
+    _deviceNameController.dispose();
     super.dispose();
   }
 
@@ -71,20 +71,14 @@ class _ConnectionPageState extends State<ConnectionPage> {
       _error = null;
     });
     try {
-      final settings = ConnectionSettings(
-        serverUrl: _serverController.text,
-        serverId: _serverIdController.text,
-        token: _tokenController.text,
-      );
+      final input = _pairingInputIdentity();
+      final settings = _redeemedInput == input && _redeemedSettings != null
+          ? _redeemedSettings!
+          : await _redeemPairing();
+      _redeemedInput = input;
+      _redeemedSettings = settings;
       if (widget.verifier != null) {
         await widget.verifier!(settings);
-      } else {
-        final api = PiAppServerGateway(settings);
-        try {
-          await api.version();
-        } finally {
-          api.close();
-        }
       }
       if (!mounted) return;
       setState(() => _committing = true);
@@ -93,7 +87,14 @@ class _ConnectionPageState extends State<ConnectionPage> {
       if (!mounted) return;
       ActionFeedback.error();
       setState(() {
-        _error = describeTsPhoneProblem(error).localizedMessage(context.l10n);
+        _error = switch (error) {
+          TspiLinkPairingException pairing => pairing.localizedMessage(
+            context.l10n,
+          ),
+          ConnectionValidationException validation =>
+            validation.reason.localizedMessage(context.l10n),
+          _ => describeTsPhoneProblem(error).localizedMessage(context.l10n),
+        };
       });
     } finally {
       if (mounted) {
@@ -102,6 +103,36 @@ class _ConnectionPageState extends State<ConnectionPage> {
           _committing = false;
         });
       }
+    }
+  }
+
+  String _pairingInputIdentity() => <String>[
+    _relayController.text.trim(),
+    _pairingCodeController.text.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    ),
+    _deviceNameController.text.trim(),
+  ].join('\n');
+
+  Future<ConnectionSettings> _redeemPairing() async {
+    final redeem = widget.pairingRedeemer;
+    if (redeem != null) {
+      return redeem(
+        relayUrl: _relayController.text,
+        pairingCode: _pairingCodeController.text,
+        deviceName: _deviceNameController.text,
+      );
+    }
+    final client = TspiLinkPairingClient();
+    try {
+      return await client.redeem(
+        relayUrl: _relayController.text,
+        pairingCode: _pairingCodeController.text,
+        deviceName: _deviceNameController.text,
+      );
+    } finally {
+      client.close();
     }
   }
 
@@ -191,15 +222,16 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           ),
                           const SizedBox(height: TsPhoneSpacing.xLarge),
                           TextFormField(
-                            controller: _serverController,
+                            key: const ValueKey<String>('relay-url-field'),
+                            controller: _relayController,
                             keyboardType: TextInputType.url,
                             textInputAction: TextInputAction.next,
                             autocorrect: false,
                             enableSuggestions: false,
                             autofillHints: const <String>[AutofillHints.url],
                             decoration: InputDecoration(
-                              labelText: l10n.server,
-                              hintText: l10n.serverHint,
+                              labelText: l10n.relay,
+                              hintText: l10n.relayHint,
                               prefixIcon: const Icon(Icons.dns_outlined),
                             ),
                             validator: (value) {
@@ -215,64 +247,54 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           ),
                           const SizedBox(height: TsPhoneSpacing.medium),
                           TextFormField(
-                            controller: _serverIdController,
+                            key: const ValueKey<String>('pairing-code-field'),
+                            controller: _pairingCodeController,
                             keyboardType: TextInputType.text,
+                            textCapitalization: TextCapitalization.characters,
                             textInputAction: TextInputAction.next,
                             autocorrect: false,
                             enableSuggestions: false,
+                            inputFormatters: <TextInputFormatter>[
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[A-Za-z0-9-]'),
+                              ),
+                              LengthLimitingTextInputFormatter(9),
+                            ],
                             decoration: InputDecoration(
-                              labelText: l10n.appServerId,
-                              hintText: l10n.appServerIdHint,
-                              prefixIcon: const Icon(Icons.hub_outlined),
+                              labelText: l10n.pairingCode,
+                              hintText: l10n.pairingCodeHint,
+                              prefixIcon: const Icon(Icons.pin_outlined),
                             ),
                             validator: (value) {
-                              try {
-                                ConnectionSettings.validateServerId(
-                                  value ?? '',
-                                );
-                                return null;
-                              } on ConnectionValidationException catch (error) {
-                                return error.reason.localizedMessage(l10n);
-                              }
+                              final normalized = (value ?? '')
+                                  .replaceAll(RegExp(r'[^A-Za-z0-9]'), '')
+                                  .toUpperCase();
+                              return normalized.length == 8
+                                  ? null
+                                  : l10n.validationPairingCode;
                             },
                           ),
                           const SizedBox(height: TsPhoneSpacing.medium),
                           TextFormField(
-                            controller: _tokenController,
-                            obscureText: _obscureToken,
+                            key: const ValueKey<String>('device-name-field'),
+                            controller: _deviceNameController,
+                            textInputAction: TextInputAction.done,
                             autocorrect: false,
                             enableSuggestions: false,
-                            autofillHints: const <String>[
-                              AutofillHints.password,
-                            ],
                             decoration: InputDecoration(
-                              labelText: l10n.accessToken,
-                              prefixIcon: const Icon(Icons.key_outlined),
-                              suffixIcon: IconButton(
-                                onPressed: () {
-                                  ActionFeedback.selection();
-                                  setState(
-                                    () => _obscureToken = !_obscureToken,
-                                  );
-                                },
-                                tooltip: _obscureToken
-                                    ? l10n.showToken
-                                    : l10n.hideToken,
-                                icon: Icon(
-                                  _obscureToken
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                ),
-                              ),
+                              labelText: l10n.deviceName,
+                              hintText: l10n.deviceNameHint,
+                              prefixIcon: const Icon(Icons.smartphone_outlined),
                             ),
                             validator: (value) {
-                              try {
-                                ConnectionSettings.validateToken(value ?? '');
-                                return null;
-                              } on ConnectionValidationException catch (error) {
-                                return error.reason.localizedMessage(l10n);
-                              }
+                              final name = (value ?? '').trim();
+                              return name.isNotEmpty &&
+                                      name.length <= 80 &&
+                                      !name.codeUnits.any((v) => v < 32)
+                                  ? null
+                                  : l10n.validationDeviceName;
                             },
+                            onFieldSubmitted: (_) => _connect(),
                           ),
                           if (_error case final message?) ...<Widget>[
                             const SizedBox(height: TsPhoneSpacing.medium),
@@ -306,7 +328,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                       ),
                               ),
                               label: Text(
-                                _connecting ? l10n.connecting : l10n.connect,
+                                _connecting ? l10n.pairing : l10n.pair,
                                 textAlign: TextAlign.center,
                               ),
                             ),

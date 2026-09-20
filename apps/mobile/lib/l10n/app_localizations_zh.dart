@@ -21,40 +21,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionSettings => '连接设置';
 
   @override
-  String get connectTsPhone => '连接 TS Phone';
+  String get connectTsPhone => '配对 TS Phone';
 
   @override
-  String get mobileCompanion => 'TSPi 移动终端';
+  String get mobileCompanion => '将此设备连接到你的 TSPi Host';
 
   @override
-  String get server => '服务器';
+  String get relay => 'TSPi Relay';
 
   @override
-  String get serverHint => 'https://radius.pi.dev';
+  String get relayHint => 'https://link.example.com';
 
   @override
-  String get appServerId => 'App Server ID';
+  String get pairingCode => '配对码';
 
   @override
-  String get appServerIdHint => '00000000-0000-4000-8000-000000000000';
+  String get pairingCodeHint => 'ABCD-EFGH';
 
   @override
-  String get validationServerId => '请输入 TSPi App Server 显示的小写 UUID。';
+  String get deviceName => '设备名称';
 
   @override
-  String get accessToken => '访问令牌';
+  String get deviceNameHint => 'TS Phone';
 
   @override
-  String get showToken => '显示令牌';
+  String get pair => '配对';
 
   @override
-  String get hideToken => '隐藏令牌';
-
-  @override
-  String get connect => '连接';
-
-  @override
-  String get connecting => '正在连接';
+  String get pairing => '正在配对';
 
   @override
   String get validationCompleteServerAddress => '请输入完整的服务器地址';
@@ -69,7 +63,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get validationHttpsRequired => '远程服务器必须使用 HTTPS';
 
   @override
-  String get validationTokenInvalid => '访问令牌格式无效';
+  String get validationServerId => 'TSPi Relay 返回的 Host ID 无效。';
+
+  @override
+  String get validationDeviceId => 'TSPi Relay 返回的 Device ID 无效。';
+
+  @override
+  String get validationTokenInvalid => 'TSPi Relay 返回的设备授权无效。';
+
+  @override
+  String get validationPairingCode => '请输入 TSPi 显示的 8 位配对码。';
+
+  @override
+  String get validationDeviceName => '请输入不超过 80 个字符的设备名称。';
+
+  @override
+  String get pairingInvalidOrExpired => '配对码无效、已过期或已被使用。';
+
+  @override
+  String get pairingRelayUnavailable => '无法连接 TSPi Relay。';
+
+  @override
+  String get pairingRelayResponseInvalid => 'TSPi Relay 返回了无效响应。';
+
+  @override
+  String get pairingProtocolUnsupported => '当前 App 不支持 Relay 使用的 Link 协议。';
+
+  @override
+  String get pairingRejected => 'TSPi Relay 拒绝了配对请求。';
 
   @override
   String get preferences => '偏好设置';
@@ -111,7 +132,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionDetails => '连接详情';
 
   @override
-  String get tsPhoneService => 'Pi App Server';
+  String get tsPhoneService => 'TSPi Link';
 
   @override
   String get notConfigured => '尚未配置';
@@ -130,7 +151,19 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'Pi Radius 网关';
+  String get endpoint => 'TSPi Relay';
+
+  @override
+  String get hostId => 'Host ID';
+
+  @override
+  String get deviceId => 'Device ID';
+
+  @override
+  String get linkProtocol => 'Link 协议';
+
+  @override
+  String get appServerProtocol => 'App Server 协议';
 
   @override
   String get copyServerAddress => '复制服务地址';
@@ -200,9 +233,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get auth => '认证';
-
-  @override
-  String get protocol => '协议';
 
   @override
   String get latency => '延迟';
@@ -936,7 +966,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemIncompatible => '服务器数据格式与当前 App 不兼容';
 
   @override
-  String get problemAuthentication => '认证失败，请检查访问令牌';
+  String get problemAuthentication => '设备授权失败，请重新配对此手机';
 
   @override
   String get problemSessionOffline => 'TSPi 会话已断开';

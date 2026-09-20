@@ -8,38 +8,31 @@ single owner of sessions, transcript history, model state, and workspace locks.
 ## Runtime model
 
 ```text
-                         Pi Radius
-                             |
-                         WebSocket
-                             |
-TS Phone (Flutter) ---- Pi App Server ---- local TSPi terminal
-                             |
-                         workspace
+TS Phone -- outbound WSS --> TSPi Relay <-- outbound WSS -- TSPi Host
+                                                        |
+                                                  Pi App Server
+                                                        |
+                                           workspace / local terminal
 ```
 
-Run the installation Host with the TSPi launcher:
-
-```bash
-./TSPi --service-host
-```
-
-The local terminal attaches to that server automatically:
+Open a workspace with the TSPi launcher; it starts the installation Host when
+needed:
 
 ```bash
 ./TSPi --workspace reaction-a
 ```
 
-The phone connects to that Host through Pi Radius, lists projects through
+Run `TSPi phone pair` on that installation, then enter the printed TSPi Relay
+URL and eight-character code in the app. The app redeems the one-time code for
+its own revocable device authorization. It carries Pi protocol v8 over the
+`tspi-link.v1` WebSocket subprotocol, lists projects through
 `tspi.workspace-directory`, and creates sessions with a bound `workspaceId`.
-Configure the Radius gateway, the App Server UUID, and the bearer token in the
-app's connection screen. The phone speaks Pi protocol v8 over the
-`pi-session-relay.client.v1` WebSocket subprotocol; it does not talk to a
-TS Phone service.
 
 ## Repository layout
 
 - `apps/mobile` — Flutter Android/iOS application.
-- `apps/mobile/lib/data/pi_app_server_client.dart` — Pi v8 framing and Chord
+- `apps/mobile/lib/data/tspi_link_pairing.dart` — one-time device pairing.
+- `apps/mobile/lib/data/pi_app_server_client.dart` — TSPi Link transport, Pi v8 framing, and Chord
   service client.
 - `apps/mobile/lib/data/app_server_gateway.dart` — native session and
   transcript projection used by the UI.
@@ -75,8 +68,8 @@ publish only Android files under `dist/android-current`.
 
 ## Security boundary
 
-The bearer token is used only for the Radius WebSocket. It is stored by the
-mobile platform's secure storage and is never sent to a local process. App
+The device token is used only for the TSPi Link WebSocket and is stored by the
+mobile platform's secure storage. It is never shown in the connection UI. App
 Server session state remains on the server workspace; the phone keeps only UI
 preferences and a recent session selection.
 

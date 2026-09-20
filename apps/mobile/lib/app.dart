@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'data/settings_store.dart';
 import 'data/ts_phone_api.dart';
+import 'data/tspi_link_pairing.dart';
 import 'features/connection/connection_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/sessions/conversation_shell.dart';
@@ -24,15 +25,18 @@ class TsPhoneApp extends StatefulWidget {
     required this.settingsStore,
     this.accessibilityController,
     this.gatewayBuilder,
+    this.pairingRedeemer,
   });
 
   final SettingsStore settingsStore;
   final TsAccessibilityController? accessibilityController;
+
   /// Injects a gateway for tests and embedded clients.
   ///
   /// Production leaves this unset so the app connects directly to the Pi App
   /// Server configured by the user.
   final TsPhoneGateway Function(ConnectionSettings settings)? gatewayBuilder;
+  final TspiLinkPairingRedeemer? pairingRedeemer;
 
   @override
   State<TsPhoneApp> createState() => _TsPhoneAppState();
@@ -128,6 +132,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
     setState(() {
       if (_settings?.serverUrl != settings.serverUrl ||
           _settings?.serverId != settings.serverId ||
+          _settings?.deviceId != settings.deviceId ||
           _settings?.token != settings.token) {
         _connectionGeneration += 1;
       }
@@ -155,6 +160,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
         context: context,
         builder: (routeContext) => ConnectionPage(
           initialSettings: _settings,
+          pairingRedeemer: widget.pairingRedeemer,
           verifier: widget.gatewayBuilder == null
               ? null
               : (settings) async {
@@ -225,6 +231,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
       return ConnectionPage(
         onConnected: _save,
         onOpenSettings: () => unawaited(_openSettings(context)),
+        pairingRedeemer: widget.pairingRedeemer,
       );
     }
     return ConversationShell(

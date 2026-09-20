@@ -1,9 +1,10 @@
 # TS Phone Mobile
 
 Flutter client for Android and iOS. The app stores its Bearer token in Android
-Keystore-backed secure storage or the iOS Keychain. It connects directly to a
-Pi native App Server through the Radius session-relay WebSocket protocol,
-rejects remote plain HTTP, and never starts or embeds a TS Phone server.
+Keystore-backed secure storage or the iOS Keychain. It connects to a TSPi
+Relay with `tspi-link.v1`; the Relay forwards the native Pi App Server byte
+stream to the outbound-connected Host. The app rejects remote plain HTTP and
+never starts or embeds a TS Phone server.
 
 ## Conversations
 

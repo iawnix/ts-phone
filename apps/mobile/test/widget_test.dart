@@ -26,6 +26,10 @@ import 'package:ts_phone/widgets/markdown_message.dart';
 import 'package:ts_phone/widgets/presentation.dart';
 import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
 
+const _hostId = '123e4567-e89b-42d3-a456-426614174000';
+const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
+const _deviceToken = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
 void main() {
   testWidgets('shows the connection screen without layout overflow', (
     WidgetTester tester,
@@ -38,10 +42,11 @@ void main() {
     await tester.pumpWidget(TsPhoneApp(settingsStore: MemorySettingsStore()));
     await tester.pumpAndSettle();
 
-    expect(find.text('TS Phone'), findsOneWidget);
-    expect(find.text('服务器'), findsOneWidget);
-    expect(find.text('访问令牌'), findsOneWidget);
-    expect(find.text('连接'), findsOneWidget);
+    expect(find.text('TS Phone'), findsWidgets);
+    expect(find.text('TSPi Relay'), findsOneWidget);
+    expect(find.text('配对码'), findsOneWidget);
+    expect(find.text('设备名称'), findsOneWidget);
+    expect(find.text('配对'), findsOneWidget);
     expect(find.byType(TsPhoneBrandMark), findsOneWidget);
     final connectButton = tester.getRect(
       find.byKey(const ValueKey<String>('connect-action')),
@@ -315,7 +320,9 @@ void main() {
     final store = MemorySettingsStore()
       ..value = ConnectionSettings(
         serverUrl: 'https://tsphone.iawnix.xyz',
-        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        serverId: _hostId,
+        deviceId: _deviceId,
+        token: _deviceToken,
       );
 
     await tester.pumpWidget(_appWithStore(store));
@@ -363,14 +370,16 @@ void main() {
     final store = MemorySettingsStore()
       ..value = ConnectionSettings(
         serverUrl: 'https://tsphone.iawnix.xyz',
-        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        serverId: _hostId,
+        deviceId: _deviceId,
+        token: _deviceToken,
       );
 
     await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
     await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Pi App Server').first);
+    await tester.tap(find.text('TSPi Link').first);
     await tester.pumpAndSettle();
 
     expect(find.text('连接设置'), findsOneWidget);
@@ -381,9 +390,9 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('设置'), findsOneWidget);
-    expect(find.text('Pi App Server'), findsWidgets);
+    expect(find.text('TSPi Link'), findsWidgets);
 
-    await tester.tap(find.text('Pi App Server').first);
+    await tester.tap(find.text('TSPi Link').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
@@ -398,20 +407,21 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ConnectionPage(
+          pairingRedeemer: _redeemTestPairing,
           verifier: (_) => verification.future,
           onConnected: (_) async {},
         ),
       ),
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, '访问令牌'),
-      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      find.byKey(const ValueKey<String>('relay-url-field')),
+      'https://link.example.test',
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'App Server ID'),
-      '123e4567-e89b-42d3-a456-426614174000',
+      find.byKey(const ValueKey<String>('pairing-code-field')),
+      'ABCD-EFGH',
     );
-    await tester.tap(find.widgetWithText(FilledButton, '连接'));
+    await tester.tap(find.widgetWithText(FilledButton, '配对'));
     await tester.pump();
 
     expect(find.byKey(const ValueKey<String>('connecting')), findsOneWidget);
@@ -433,16 +443,21 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ConnectionPage(
+          pairingRedeemer: _redeemTestPairing,
           verifier: (_) => verification.future,
           onConnected: (_) async => savedConnections += 1,
         ),
       ),
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, '访问令牌'),
-      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      find.byKey(const ValueKey<String>('relay-url-field')),
+      'https://link.example.test',
     );
-    await tester.tap(find.widgetWithText(FilledButton, '连接'));
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('pairing-code-field')),
+      'ABCD-EFGH',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '配对'));
     await tester.pump();
 
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
@@ -465,6 +480,7 @@ void main() {
             onPressed: () => Navigator.of(context).push<void>(
               MaterialPageRoute<void>(
                 builder: (routeContext) => ConnectionPage(
+                  pairingRedeemer: _redeemTestPairing,
                   verifier: (_) async {},
                   onConnected: (_) => save.future,
                   onBack: () => Navigator.of(routeContext).maybePop(),
@@ -481,10 +497,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextFormField, '访问令牌'),
-      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      find.byKey(const ValueKey<String>('relay-url-field')),
+      'https://link.example.test',
     );
-    await tester.tap(find.widgetWithText(FilledButton, '连接'));
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('pairing-code-field')),
+      'ABCD-EFGH',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '配对'));
     await tester.pump();
 
     await tester.binding.handlePopRoute();
@@ -685,7 +705,9 @@ void main() {
     final store = MemorySettingsStore()
       ..value = ConnectionSettings(
         serverUrl: 'https://tsphone.iawnix.xyz',
-        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        serverId: _hostId,
+        deviceId: _deviceId,
+        token: _deviceToken,
       );
 
     await tester.pumpWidget(_appWithStore(store));
@@ -700,7 +722,7 @@ void main() {
     expect(store.localePreference, AppLocalePreference.en);
     expect(find.text('Language'), findsOneWidget);
     expect(find.text('Appearance'), findsOneWidget);
-    expect(find.text('Pi App Server'), findsWidgets);
+    expect(find.text('TSPi Link'), findsWidgets);
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
       const Locale('en'),
@@ -727,9 +749,10 @@ void main() {
     await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
 
-    expect(find.text('Server'), findsOneWidget);
-    expect(find.text('Access token'), findsOneWidget);
-    expect(find.text('Connect'), findsOneWidget);
+    expect(find.text('TSPi Relay'), findsOneWidget);
+    expect(find.text('Pairing code'), findsOneWidget);
+    expect(find.text('Device name'), findsOneWidget);
+    expect(find.text('Pair'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -781,7 +804,9 @@ void main() {
       ..localePreference = AppLocalePreference.en
       ..value = ConnectionSettings(
         serverUrl: 'https://tsphone.iawnix.xyz',
-        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        serverId: _hostId,
+        deviceId: _deviceId,
+        token: _deviceToken,
       );
 
     await tester.pumpWidget(_appWithStore(store));
@@ -807,7 +832,9 @@ void main() {
     final store = MemorySettingsStore()
       ..value = ConnectionSettings(
         serverUrl: 'https://tsphone.iawnix.xyz',
-        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        serverId: _hostId,
+        deviceId: _deviceId,
+        token: _deviceToken,
       );
     final accessibility = _glassAccessibilityController();
     addTearDown(accessibility.dispose);
@@ -859,9 +886,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final settings = ConnectionSettings(
-        serverUrl:
-            'https://radius.example.test',
-        token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        serverUrl: 'https://link.example.test',
+        serverId: _hostId,
+        deviceId: _deviceId,
+        token: _deviceToken,
       );
 
       await tester.pumpWidget(
@@ -912,9 +940,10 @@ void main() {
     WidgetTester tester,
   ) async {
     final settings = ConnectionSettings(
-      serverUrl: 'https://radius.pi.dev',
-      serverId: '123e4567-e89b-42d3-a456-426614174000',
-      token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      serverUrl: 'https://link.example.test',
+      serverId: _hostId,
+      deviceId: _deviceId,
+      token: _deviceToken,
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -965,7 +994,9 @@ void main() {
         ..localePreference = locale
         ..value = ConnectionSettings(
           serverUrl: 'https://tsphone.iawnix.xyz',
-          token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+          serverId: _hostId,
+          deviceId: _deviceId,
+          token: _deviceToken,
         );
 
       await tester.pumpWidget(_appWithStore(store));
@@ -1005,7 +1036,9 @@ void main() {
         ..localePreference = AppLocalePreference.en
         ..value = ConnectionSettings(
           serverUrl: 'https://tsphone.iawnix.xyz',
-          token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+          serverId: _hostId,
+          deviceId: _deviceId,
+          token: _deviceToken,
         );
 
       await tester.pumpWidget(_appWithStore(store));
@@ -1101,6 +1134,18 @@ Widget _appWithStore(
   settingsStore: store,
   accessibilityController: accessibilityController,
   gatewayBuilder: (_) => _WidgetDiagnosticGateway(),
+  pairingRedeemer: _redeemTestPairing,
+);
+
+Future<ConnectionSettings> _redeemTestPairing({
+  required String relayUrl,
+  required String pairingCode,
+  required String deviceName,
+}) async => ConnectionSettings(
+  serverUrl: relayUrl,
+  serverId: _hostId,
+  deviceId: _deviceId,
+  token: _deviceToken,
 );
 
 Future<void> _openSettings(WidgetTester tester, String label) async {

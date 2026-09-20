@@ -10,9 +10,10 @@ import 'package:ts_phone/models/workspace.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 
 final settings = ConnectionSettings(
-  serverUrl: 'https://radius.pi.dev',
+  serverUrl: 'https://link.example.test',
   serverId: '123e4567-e89b-42d3-a456-426614174000',
-  token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+  deviceId: '223e4567-e89b-42d3-a456-426614174000',
+  token: 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
 );
 
 final appServer = WorkspaceSummary(

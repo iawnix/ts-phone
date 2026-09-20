@@ -12,7 +12,7 @@ The App Server owns:
 - Pi JSONL transcript history and live agent state;
 - prompt, follow-up, abort, and model-selection operations;
 - the workspace directory, Root locks, and the App Server identity;
-- local Unix-socket and Radius relay endpoints.
+- the local Unix-socket endpoint used by TSPi clients and the Link connector.
 
 TS Phone owns only connection settings, presentation state, and a recent
 session preference. It does not maintain a second event journal, queue,
@@ -23,17 +23,22 @@ workspace registry, or transcript database.
 The local TSPi terminal and TS Phone use the same Pi App Server protocol:
 
 ```text
-TSPi terminal -- Unix socket --> App Server <-- Pi Radius WebSocket -- TS Phone
+TSPi terminal -- Unix socket --> App Server <-- Unix socket -- Link connector
+                                                              |
+                                                       outbound WSS
+                                                              |
+TS Phone ---------- outbound WSS ----------> TSPi Relay <-----+
 ```
 
 The phone connects to:
 
 ```text
-wss://<radius>/v1/session-relays/<server-id>/connect
+wss://<relay>/v1/link
 ```
 
-with `Authorization: Bearer <token>` and the
-`pi-session-relay.client.v1` subprotocol. Frames contain a four-byte
+with `Authorization: Bearer <device-token>` and the `tspi-link.v1`
+subprotocol. The Relay uses the token to route the connection to its enrolled
+Host and forwards bytes without parsing the App Server protocol. Frames contain a four-byte
 big-endian length followed by a CBOR value. The first value is the Pi protocol
 v8 `hello` message. Requests and responses use Pi's native service catalog;
 Chord subscriptions carry transcript, model, and session-directory state.
@@ -62,13 +67,13 @@ lock and by Pi's session operations.
 
 ## Failure handling
 
-The client treats a closed Radius channel as a transport failure. A later
+The client treats a closed Link channel as a transport failure. A later
 operation creates a fresh connection and repeats `hello`; pending requests are
 failed and subscriptions are rebuilt from a new snapshot. The client never
 replays a prompt automatically, so an uncertain user message remains visible
 for review.
 
-An invalid server UUID, token, frame, or protocol version is reported as an
+An invalid Host UUID, device authorization, frame, or protocol version is reported as an
 incompatible connection. A server-side rejection is surfaced with its native
 error code. History already rendered on the phone remains available offline,
 but write controls stay disabled until a fresh transcript snapshot is received.

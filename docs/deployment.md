@@ -6,18 +6,22 @@ to install or expose.
 
 ## Pi App Server prerequisites
 
-On the machine that owns a research workspace, install TSPi and start one App
-Server for that workspace:
+On the machine that owns the TSPi installation, enable TSPi Link during
+installation and start the installation Host by opening a workspace:
 
 ```bash
-./TSPi --app-server --workspace reaction-a
+./TSPi --workspace reaction-a
 ```
 
-The App Server's UUID is stored in
-`workspaces/reaction-a/.pi/app-server/server-id`. Configure Pi Radius to relay
-that server and issue a bearer token with access to the relay. The App Server
-must be reachable by the Radius service; the local terminal uses its private
-Unix socket and never needs a public HTTP port.
+The Host ID and Link credential are stored below `.pi/app-server-host/`. The
+Host opens an outbound WSS connection to the configured TSPi Relay; the App
+Server remains on its private Unix socket and needs no public HTTP port.
+
+Create a Phone pairing on the Host:
+
+```bash
+./TSPi phone pair
+```
 
 ## Android build
 
@@ -43,14 +47,13 @@ unit, reverse proxy, or FRP configuration is involved.
 
 At first launch the user supplies:
 
-- the Radius origin (`https://...`);
-- the App Server UUID (lowercase UUIDv4);
-- the Radius bearer token.
+- the TSPi Relay origin (`https://...`);
+- the eight-character, single-use pairing code;
+- a device name shown by `TSPi phone devices`.
 
-The app stores these values in platform secure storage. It derives the relay
-WebSocket URL and sends the token as an Authorization header. Changing any of
-the three values creates a new client connection; the old connection is
-closed before the new session directory is loaded.
+The app redeems the code for a Host ID, Device ID, and device token, then stores
+them in platform secure storage. Re-pairing replaces that connection identity;
+revoke an old identity with `TSPi phone revoke <device-id>`.
 
 ## Updates and rollback
 

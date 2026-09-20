@@ -12,7 +12,9 @@ import 'package:ts_phone/widgets/presentation.dart';
 import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
 
 void main() {
-  const token = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+  const hostId = '123e4567-e89b-42d3-a456-426614174000';
+  const deviceId = '223e4567-e89b-42d3-a456-426614174000';
+  const token = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
   for (final copyFails in [false, true]) {
     testWidgets('service address copy reports its actual result: $copyFails', (
@@ -43,13 +45,18 @@ void main() {
       await tester.pumpWidget(
         _settingsApp(
           locale: const Locale('zh'),
-          connection: ConnectionSettings(serverUrl: serverUrl, token: token),
+          connection: ConnectionSettings(
+            serverUrl: serverUrl,
+            serverId: hostId,
+            deviceId: deviceId,
+            token: token,
+          ),
         ),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('Pi App Server'), findsOneWidget);
+      expect(find.text('TSPi Link'), findsOneWidget);
       expect(find.text('Endpoint'), findsNothing);
       final copy = find.byKey(const ValueKey('copy-server-address'));
       await tester.ensureVisible(copy);
@@ -69,7 +76,12 @@ void main() {
 
     await tester.pumpWidget(
       _settingsApp(
-        connection: ConnectionSettings(serverUrl: serverUrl, token: token),
+        connection: ConnectionSettings(
+          serverUrl: serverUrl,
+          serverId: hostId,
+          deviceId: deviceId,
+          token: token,
+        ),
         onEditConnection: () => editCount += 1,
       ),
     );
@@ -136,6 +148,8 @@ void main() {
       _settingsApp(
         connection: ConnectionSettings(
           serverUrl: 'https://tsphone.iawnix.xyz',
+          serverId: hostId,
+          deviceId: deviceId,
           token: token,
         ),
       ),
@@ -244,7 +258,8 @@ void main() {
       _settingsApp(
         connection: ConnectionSettings(
           serverUrl: 'https://phone.test',
-          serverId: '123e4567-e89b-42d3-a456-426614174000',
+          serverId: hostId,
+          deviceId: deviceId,
           token: token,
         ),
         gatewayBuilder: (_) => _DiagnosticGateway(),

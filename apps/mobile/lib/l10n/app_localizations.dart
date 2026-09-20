@@ -125,74 +125,62 @@ abstract class AppLocalizations {
   /// No description provided for @connectTsPhone.
   ///
   /// In en, this message translates to:
-  /// **'Connect to TS Phone'**
+  /// **'Pair TS Phone'**
   String get connectTsPhone;
 
   /// No description provided for @mobileCompanion.
   ///
   /// In en, this message translates to:
-  /// **'TSPi mobile companion'**
+  /// **'Connect this device to your TSPi Host'**
   String get mobileCompanion;
 
-  /// No description provided for @server.
+  /// No description provided for @relay.
   ///
   /// In en, this message translates to:
-  /// **'Server'**
-  String get server;
+  /// **'TSPi Relay'**
+  String get relay;
 
-  /// No description provided for @serverHint.
+  /// No description provided for @relayHint.
   ///
   /// In en, this message translates to:
-  /// **'https://radius.pi.dev'**
-  String get serverHint;
+  /// **'https://link.example.com'**
+  String get relayHint;
 
-  /// No description provided for @appServerId.
+  /// No description provided for @pairingCode.
   ///
   /// In en, this message translates to:
-  /// **'App Server ID'**
-  String get appServerId;
+  /// **'Pairing code'**
+  String get pairingCode;
 
-  /// No description provided for @appServerIdHint.
+  /// No description provided for @pairingCodeHint.
   ///
   /// In en, this message translates to:
-  /// **'00000000-0000-4000-8000-000000000000'**
-  String get appServerIdHint;
+  /// **'ABCD-EFGH'**
+  String get pairingCodeHint;
 
-  /// No description provided for @validationServerId.
+  /// No description provided for @deviceName.
   ///
   /// In en, this message translates to:
-  /// **'Enter the lowercase UUID shown by the TSPi App Server.'**
-  String get validationServerId;
+  /// **'Device name'**
+  String get deviceName;
 
-  /// No description provided for @accessToken.
+  /// No description provided for @deviceNameHint.
   ///
   /// In en, this message translates to:
-  /// **'Access token'**
-  String get accessToken;
+  /// **'TS Phone'**
+  String get deviceNameHint;
 
-  /// No description provided for @showToken.
+  /// No description provided for @pair.
   ///
   /// In en, this message translates to:
-  /// **'Show token'**
-  String get showToken;
+  /// **'Pair'**
+  String get pair;
 
-  /// No description provided for @hideToken.
+  /// No description provided for @pairing.
   ///
   /// In en, this message translates to:
-  /// **'Hide token'**
-  String get hideToken;
-
-  /// No description provided for @connect.
-  ///
-  /// In en, this message translates to:
-  /// **'Connect'**
-  String get connect;
-
-  /// No description provided for @connecting.
-  ///
-  /// In en, this message translates to:
-  /// **'Connecting'**
-  String get connecting;
+  /// **'Pairing'**
+  String get pairing;
 
   /// No description provided for @validationCompleteServerAddress.
   ///
@@ -218,11 +206,65 @@ abstract class AppLocalizations {
   /// **'Remote servers must use HTTPS'**
   String get validationHttpsRequired;
 
+  /// No description provided for @validationServerId.
+  ///
+  /// In en, this message translates to:
+  /// **'The Host ID returned by TSPi Relay is invalid.'**
+  String get validationServerId;
+
+  /// No description provided for @validationDeviceId.
+  ///
+  /// In en, this message translates to:
+  /// **'The Device ID returned by TSPi Relay is invalid.'**
+  String get validationDeviceId;
+
   /// No description provided for @validationTokenInvalid.
   ///
   /// In en, this message translates to:
-  /// **'The access token format is invalid'**
+  /// **'The device authorization returned by TSPi Relay is invalid.'**
   String get validationTokenInvalid;
+
+  /// No description provided for @validationPairingCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the eight-character pairing code shown by TSPi.'**
+  String get validationPairingCode;
+
+  /// No description provided for @validationDeviceName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a device name of up to 80 characters.'**
+  String get validationDeviceName;
+
+  /// No description provided for @pairingInvalidOrExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'The pairing code is invalid, expired, or already used.'**
+  String get pairingInvalidOrExpired;
+
+  /// No description provided for @pairingRelayUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach TSPi Relay.'**
+  String get pairingRelayUnavailable;
+
+  /// No description provided for @pairingRelayResponseInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'TSPi Relay returned an invalid response.'**
+  String get pairingRelayResponseInvalid;
+
+  /// No description provided for @pairingProtocolUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This app does not support the Relay\'s Link protocol.'**
+  String get pairingProtocolUnsupported;
+
+  /// No description provided for @pairingRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'TSPi Relay rejected the pairing request.'**
+  String get pairingRejected;
 
   /// No description provided for @preferences.
   ///
@@ -305,7 +347,7 @@ abstract class AppLocalizations {
   /// No description provided for @tsPhoneService.
   ///
   /// In en, this message translates to:
-  /// **'Pi App Server'**
+  /// **'TSPi Link'**
   String get tsPhoneService;
 
   /// No description provided for @notConfigured.
@@ -335,8 +377,32 @@ abstract class AppLocalizations {
   /// No description provided for @endpoint.
   ///
   /// In en, this message translates to:
-  /// **'Pi Radius gateway'**
+  /// **'TSPi Relay'**
   String get endpoint;
+
+  /// No description provided for @hostId.
+  ///
+  /// In en, this message translates to:
+  /// **'Host ID'**
+  String get hostId;
+
+  /// No description provided for @deviceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Device ID'**
+  String get deviceId;
+
+  /// No description provided for @linkProtocol.
+  ///
+  /// In en, this message translates to:
+  /// **'Link protocol'**
+  String get linkProtocol;
+
+  /// No description provided for @appServerProtocol.
+  ///
+  /// In en, this message translates to:
+  /// **'App Server protocol'**
+  String get appServerProtocol;
 
   /// No description provided for @copyServerAddress.
   ///
@@ -457,12 +523,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auth'**
   String get auth;
-
-  /// No description provided for @protocol.
-  ///
-  /// In en, this message translates to:
-  /// **'Protocol'**
-  String get protocol;
 
   /// No description provided for @latency.
   ///
@@ -1841,7 +1901,7 @@ abstract class AppLocalizations {
   /// No description provided for @problemAuthentication.
   ///
   /// In en, this message translates to:
-  /// **'Authentication failed. Check the access token'**
+  /// **'Device authorization failed. Pair this phone again.'**
   String get problemAuthentication;
 
   /// No description provided for @problemSessionOffline.

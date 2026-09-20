@@ -21,41 +21,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionSettings => 'Connection settings';
 
   @override
-  String get connectTsPhone => 'Connect to TS Phone';
+  String get connectTsPhone => 'Pair TS Phone';
 
   @override
-  String get mobileCompanion => 'TSPi mobile companion';
+  String get mobileCompanion => 'Connect this device to your TSPi Host';
 
   @override
-  String get server => 'Server';
+  String get relay => 'TSPi Relay';
 
   @override
-  String get serverHint => 'https://radius.pi.dev';
+  String get relayHint => 'https://link.example.com';
 
   @override
-  String get appServerId => 'App Server ID';
+  String get pairingCode => 'Pairing code';
 
   @override
-  String get appServerIdHint => '00000000-0000-4000-8000-000000000000';
+  String get pairingCodeHint => 'ABCD-EFGH';
 
   @override
-  String get validationServerId =>
-      'Enter the lowercase UUID shown by the TSPi App Server.';
+  String get deviceName => 'Device name';
 
   @override
-  String get accessToken => 'Access token';
+  String get deviceNameHint => 'TS Phone';
 
   @override
-  String get showToken => 'Show token';
+  String get pair => 'Pair';
 
   @override
-  String get hideToken => 'Hide token';
-
-  @override
-  String get connect => 'Connect';
-
-  @override
-  String get connecting => 'Connecting';
+  String get pairing => 'Pairing';
 
   @override
   String get validationCompleteServerAddress =>
@@ -72,7 +65,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get validationHttpsRequired => 'Remote servers must use HTTPS';
 
   @override
-  String get validationTokenInvalid => 'The access token format is invalid';
+  String get validationServerId =>
+      'The Host ID returned by TSPi Relay is invalid.';
+
+  @override
+  String get validationDeviceId =>
+      'The Device ID returned by TSPi Relay is invalid.';
+
+  @override
+  String get validationTokenInvalid =>
+      'The device authorization returned by TSPi Relay is invalid.';
+
+  @override
+  String get validationPairingCode =>
+      'Enter the eight-character pairing code shown by TSPi.';
+
+  @override
+  String get validationDeviceName =>
+      'Enter a device name of up to 80 characters.';
+
+  @override
+  String get pairingInvalidOrExpired =>
+      'The pairing code is invalid, expired, or already used.';
+
+  @override
+  String get pairingRelayUnavailable => 'Could not reach TSPi Relay.';
+
+  @override
+  String get pairingRelayResponseInvalid =>
+      'TSPi Relay returned an invalid response.';
+
+  @override
+  String get pairingProtocolUnsupported =>
+      'This app does not support the Relay\'s Link protocol.';
+
+  @override
+  String get pairingRejected => 'TSPi Relay rejected the pairing request.';
 
   @override
   String get preferences => 'Preferences';
@@ -114,7 +142,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionDetails => 'Connection details';
 
   @override
-  String get tsPhoneService => 'Pi App Server';
+  String get tsPhoneService => 'TSPi Link';
 
   @override
   String get notConfigured => 'Not configured';
@@ -133,7 +161,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'Pi Radius gateway';
+  String get endpoint => 'TSPi Relay';
+
+  @override
+  String get hostId => 'Host ID';
+
+  @override
+  String get deviceId => 'Device ID';
+
+  @override
+  String get linkProtocol => 'Link protocol';
+
+  @override
+  String get appServerProtocol => 'App Server protocol';
 
   @override
   String get copyServerAddress => 'Copy server address';
@@ -206,9 +246,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get auth => 'Auth';
-
-  @override
-  String get protocol => 'Protocol';
 
   @override
   String get latency => 'Latency';
@@ -992,7 +1029,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemAuthentication =>
-      'Authentication failed. Check the access token';
+      'Device authorization failed. Pair this phone again.';
 
   @override
   String get problemSessionOffline => 'The TSPi session is offline';

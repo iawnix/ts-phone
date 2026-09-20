@@ -11,23 +11,20 @@ import 'package:ts_phone/models/connection_settings.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 const _serverId = '123e4567-e89b-42d3-a456-426614174000';
+const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
+const _deviceToken = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
 void main() {
-  test('connects to Radius with the Pi relay protocol and v8 hello', () async {
-    final server = _FakeRadiusServer();
+  test('connects through TSPi Link with the Pi v8 hello', () async {
+    final server = _FakeLinkServer();
     final client = server.client();
     addTearDown(client.close);
 
     final outgoing = server.nextMessage();
     final connecting = client.connect();
     expect(await outgoing, {'type': 'hello', 'version': 8});
-    expect(
-      server.uri,
-      Uri.parse('wss://radius.pi.dev/v1/session-relays/$_serverId/connect'),
-    );
-    expect(server.headers, {
-      'Authorization': 'Bearer abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-    });
+    expect(server.uri, Uri.parse('wss://link.example.test/v1/link'));
+    expect(server.headers, {'Authorization': 'Bearer $_deviceToken'});
 
     server.send({
       'type': 'hello',
@@ -39,7 +36,7 @@ void main() {
   });
 
   test('decodes split and coalesced response and attachment frames', () async {
-    final server = _FakeRadiusServer();
+    final server = _FakeLinkServer();
     final client = server.client();
     addTearDown(client.close);
     await server.connect(client);
@@ -82,7 +79,7 @@ void main() {
   test(
     'creates a workspace through the Host workspace directory service',
     () async {
-      final server = _FakeRadiusServer();
+      final server = _FakeLinkServer();
       final client = server.client();
       final gateway = PiAppServerGateway(_settings, client: client);
       addTearDown(gateway.close);
@@ -107,7 +104,7 @@ void main() {
   test(
     'hydrates Chord state after an early update and applies path ids',
     () async {
-      final server = _FakeRadiusServer();
+      final server = _FakeLinkServer();
       final client = server.client();
       addTearDown(client.close);
       await server.connect(client);
@@ -189,7 +186,7 @@ void main() {
   );
 
   test('opens a new transport after a connection failure', () async {
-    final server = _FakeRadiusServer();
+    final server = _FakeLinkServer();
     final client = server.client();
     addTearDown(client.close);
     await server.connect(client);
@@ -212,7 +209,7 @@ void main() {
   });
 
   test('uses the native session directory and management services', () async {
-    final server = _FakeRadiusServer();
+    final server = _FakeLinkServer();
     final client = server.client();
     final gateway = PiAppServerGateway(_settings, client: client);
     addTearDown(gateway.close);
@@ -268,75 +265,81 @@ void main() {
     await removing;
   });
 
-  test('lists Host workspaces and creates a session in the selected workspace', () async {
-    final server = _FakeRadiusServer();
-    final client = server.client();
-    final gateway = PiAppServerGateway(_settings, client: client);
-    addTearDown(gateway.close);
-    await server.connect(client);
+  test(
+    'lists Host workspaces and creates a session in the selected workspace',
+    () async {
+      final server = _FakeLinkServer();
+      final client = server.client();
+      final gateway = PiAppServerGateway(_settings, client: client);
+      addTearDown(gateway.close);
+      await server.connect(client);
 
-    final listing = gateway.listWorkspaces();
-    final workspaceRequest = await server.nextMessage();
-    expect(workspaceRequest['call'], {
-      'serviceId': 'tspi.workspace-directory',
-      'member': 'list',
-      'args': const [],
-    });
-    server.respond(workspaceRequest, [
-      {
-        'workspaceId': 'project-a',
-        'name': 'project-a',
-        'root': '/srv/tspi/workspaces/project-a',
-      },
-      {
-        'workspaceId': 'project-b',
-        'name': 'project-b',
-        'root': '/srv/tspi/workspaces/project-b',
-      },
-    ]);
-    final subscribe = await server.nextMessage();
-    server.respond(
-      subscribe,
-      _serviceSnapshot('pi.session-directory', {
-        'revision': 4,
-        'sessions': [
-          {
-            'serverId': _serverId,
-            'sessionId': 'session-a',
-            'createdAt': 1700000000000,
-            'cwd': '/srv/tspi/workspaces/project-a',
-          },
+      final listing = gateway.listWorkspaces();
+      final workspaceRequest = await server.nextMessage();
+      expect(workspaceRequest['call'], {
+        'serviceId': 'tspi.workspace-directory',
+        'member': 'list',
+        'args': const [],
+      });
+      server.respond(workspaceRequest, [
+        {
+          'workspaceId': 'project-a',
+          'name': 'project-a',
+          'root': '/srv/tspi/workspaces/project-a',
+        },
+        {
+          'workspaceId': 'project-b',
+          'name': 'project-b',
+          'root': '/srv/tspi/workspaces/project-b',
+        },
+      ]);
+      final subscribe = await server.nextMessage();
+      server.respond(
+        subscribe,
+        _serviceSnapshot('pi.session-directory', {
+          'revision': 4,
+          'sessions': [
+            {
+              'serverId': _serverId,
+              'sessionId': 'session-a',
+              'createdAt': 1700000000000,
+              'cwd': '/srv/tspi/workspaces/project-a',
+            },
+          ],
+        }),
+      );
+      final unsubscribe = await server.nextMessage();
+      server.respond(unsubscribe, null);
+      final workspaces = await listing;
+      expect(workspaces.map((workspace) => workspace.id), [
+        'project-a',
+        'project-b',
+      ]);
+      expect(workspaces.first.sessionCount, 1);
+
+      final creating = gateway.createWorkspaceSession('project-b');
+      final create = await server.nextMessage();
+      expect(create['call'], {
+        'serviceId': 'pi.session-management',
+        'member': 'create',
+        'args': [
+          {'workspaceId': 'project-b'},
         ],
-      }),
-    );
-    final unsubscribe = await server.nextMessage();
-    server.respond(unsubscribe, null);
-    final workspaces = await listing;
-    expect(workspaces.map((workspace) => workspace.id), ['project-a', 'project-b']);
-    expect(workspaces.first.sessionCount, 1);
-
-    final creating = gateway.createWorkspaceSession('project-b');
-    final create = await server.nextMessage();
-    expect(create['call'], {
-      'serviceId': 'pi.session-management',
-      'member': 'create',
-      'args': [
-        {'workspaceId': 'project-b'},
-      ],
-    });
-    server.respond(create, {
-      'serverId': _serverId,
-      'sessionId': 'session-b',
-      'createdAt': 1700000001000,
-      'cwd': '/srv/tspi/workspaces/project-b',
-    });
-    expect((await creating).sessionId, 'session-b');
-  });
+      });
+      server.respond(create, {
+        'serverId': _serverId,
+        'sessionId': 'session-b',
+        'createdAt': 1700000001000,
+        'cwd': '/srv/tspi/workspaces/project-b',
+      });
+      expect((await creating).sessionId, 'session-b');
+    },
+  );
 
   test(
     'projects transcripts and sends native prompt and followUp calls',
     () async {
-      final server = _FakeRadiusServer();
+      final server = _FakeLinkServer();
       final client = server.client();
       final gateway = PiAppServerGateway(_settings, client: client);
       addTearDown(gateway.close);
@@ -402,9 +405,10 @@ void main() {
 }
 
 final _settings = ConnectionSettings(
-  serverUrl: 'https://radius.pi.dev',
+  serverUrl: 'https://link.example.test',
   serverId: _serverId,
-  token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+  deviceId: _deviceId,
+  token: _deviceToken,
 );
 
 Map<String, Object?> _serviceSnapshot(
@@ -429,7 +433,7 @@ Map<String, Object?> _serviceSnapshot(
   ],
 };
 
-class _FakeRadiusServer {
+class _FakeLinkServer {
   _FakeWebSocketChannel? _channel;
   final _outgoing = StreamController<Map<String, Object?>>.broadcast(
     sync: true,
@@ -439,9 +443,9 @@ class _FakeRadiusServer {
   int connectionCount = 0;
 
   PiAppServerClient client() => PiAppServerClient(
-    gateway: Uri.parse('https://radius.pi.dev'),
+    gateway: Uri.parse('https://link.example.test'),
     serverId: _serverId,
-    token: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+    token: _deviceToken,
     channelFactory: (uri, headers) {
       this.uri = uri;
       this.headers = Map<String, dynamic>.from(headers);
@@ -525,7 +529,7 @@ class _FakeWebSocketChannel
   String? get closeReason => null;
 
   @override
-  String? get protocol => piRadiusClientProtocol;
+  String? get protocol => tspiLinkProtocol;
 
   @override
   Future<void> get ready => Future<void>.value();

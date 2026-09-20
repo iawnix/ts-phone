@@ -36,9 +36,15 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
             ),
           );
 
-  static const _serverKey = 'server_url';
-  static const _serverIdKey = 'app_server_id';
-  static const _tokenKey = 'auth_token';
+  static const _serverKey = 'link_relay_url';
+  static const _serverIdKey = 'link_host_id';
+  static const _deviceIdKey = 'link_device_id';
+  static const _tokenKey = 'link_device_token';
+  static const _legacyConnectionKeys = <String>[
+    'server_url',
+    'app_server_id',
+    'auth_token',
+  ];
   static const _themeKey = 'theme_mode';
   static const _localeKey = 'locale_mode';
   static const _conversationKey = 'last_conversation';
@@ -46,19 +52,24 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
 
   @override
   Future<ConnectionSettings?> load() async {
+    await Future.wait(
+      _legacyConnectionKeys.map((key) => _storage.delete(key: key)),
+    );
     final values = await Future.wait(<Future<String?>>[
       _storage.read(key: _serverKey),
       _storage.read(key: _serverIdKey),
+      _storage.read(key: _deviceIdKey),
       _storage.read(key: _tokenKey),
     ]);
-    if (values[0] == null || values[1] == null || values[2] == null) {
+    if (values.any((value) => value == null)) {
       return null;
     }
     try {
       return ConnectionSettings(
         serverUrl: values[0]!,
         serverId: values[1]!,
-        token: values[2]!,
+        deviceId: values[2]!,
+        token: values[3]!,
       );
     } on FormatException {
       await clear();
@@ -71,11 +82,13 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
     final previous = await load();
     if (previous?.serverUrl != settings.serverUrl ||
         previous?.serverId != settings.serverId ||
+        previous?.deviceId != settings.deviceId ||
         previous?.token != settings.token) {
       await _storage.delete(key: _conversationKey);
     }
     await _storage.write(key: _serverKey, value: settings.serverUrl);
     await _storage.write(key: _serverIdKey, value: settings.serverId);
+    await _storage.write(key: _deviceIdKey, value: settings.deviceId);
     await _storage.write(key: _tokenKey, value: settings.token);
   }
 
@@ -138,8 +151,10 @@ class SecureSettingsStore implements SettingsStore, ConversationSelectionStore {
     await Future.wait(<Future<void>>[
       _storage.delete(key: _serverKey),
       _storage.delete(key: _serverIdKey),
+      _storage.delete(key: _deviceIdKey),
       _storage.delete(key: _tokenKey),
       _storage.delete(key: _conversationKey),
+      ..._legacyConnectionKeys.map((key) => _storage.delete(key: key)),
     ]);
   }
 }

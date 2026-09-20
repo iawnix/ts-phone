@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
 import '../data/ts_phone_api.dart';
+import '../data/tspi_link_pairing.dart';
 import '../features/chat/chat_controller.dart';
 import '../models/connection_settings.dart';
 import '../models/workspace.dart';
@@ -61,7 +62,20 @@ extension ConnectionValidationLocalizations on ConnectionValidationReason {
     ConnectionValidationReason.originOnly => l10n.validationOriginOnly,
     ConnectionValidationReason.httpsRequired => l10n.validationHttpsRequired,
     ConnectionValidationReason.invalidServerId => l10n.validationServerId,
+    ConnectionValidationReason.invalidDeviceId => l10n.validationDeviceId,
     ConnectionValidationReason.invalidToken => l10n.validationTokenInvalid,
+  };
+}
+
+extension TspiLinkPairingLocalizations on TspiLinkPairingException {
+  String localizedMessage(AppLocalizations l10n) => switch (code) {
+    'invalid_pairing_code' => l10n.validationPairingCode,
+    'invalid_device_name' => l10n.validationDeviceName,
+    'invalid_pairing' => l10n.pairingInvalidOrExpired,
+    'relay_unavailable' => l10n.pairingRelayUnavailable,
+    'invalid_response' => l10n.pairingRelayResponseInvalid,
+    'unsupported_protocol' => l10n.pairingProtocolUnsupported,
+    _ => l10n.pairingRejected,
   };
 }
 
