@@ -6,11 +6,17 @@ import '../models/session_timeline.dart';
 import '../models/workspace.dart';
 
 class TsPhoneApiException implements Exception {
-  const TsPhoneApiException(this.message, {this.statusCode, this.code});
+  const TsPhoneApiException(
+    this.message, {
+    this.statusCode,
+    this.code,
+    this.retryable,
+  });
 
   final String message;
   final int? statusCode;
   final String? code;
+  final bool? retryable;
 
   @override
   String toString() => message;
@@ -91,12 +97,22 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
     final code = switch (error.code) {
       'authentication' || 'unauthorized' => TsPhoneProblemCode.authentication,
       'request_timeout' => TsPhoneProblemCode.requestTimeout,
-      'service_unavailable' || 'connection_closed' =>
-        TsPhoneProblemCode.serviceUnavailable,
-      'session_not_found' || 'workspace_not_found' =>
-        TsPhoneProblemCode.sessionChanged,
-      'service_not_found' || 'service_member_not_found' || 'version' =>
-        TsPhoneProblemCode.incompatible,
+      'session_offline' => TsPhoneProblemCode.sessionOffline,
+      'workspace_busy' || 'session_busy' => TsPhoneProblemCode.resourcesBusy,
+      'turn_mismatch' => TsPhoneProblemCode.agentRunChanged,
+      'session_lifecycle_unavailable' =>
+        TsPhoneProblemCode.managementUnsupported,
+      'session_start_timeout' ||
+      'request_uncertain' => TsPhoneProblemCode.deliveryUncertain,
+      'service_unavailable' ||
+      'connection_closed' => TsPhoneProblemCode.serviceUnavailable,
+      'session_not_found' ||
+      'workspace_not_found' => TsPhoneProblemCode.sessionChanged,
+      'service_not_found' ||
+      'service_member_not_found' ||
+      'version' ||
+      'protocol_mismatch' ||
+      'method_not_found' => TsPhoneProblemCode.incompatible,
       'model_unavailable' => TsPhoneProblemCode.modelUnavailable,
       'model_auth_missing' => TsPhoneProblemCode.modelAuthMissing,
       'provider_unavailable' => TsPhoneProblemCode.providerUnavailable,
@@ -108,10 +124,10 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
       'generation_incomplete' => TsPhoneProblemCode.generationIncomplete,
       'approval_expired' => TsPhoneProblemCode.approvalExpired,
       'approval_stale' => TsPhoneProblemCode.approvalStale,
-      'approval_missing' || 'approval_not_found' =>
-        TsPhoneProblemCode.approvalMissing,
-      'agent_run_stale' || 'agent_not_running' =>
-        TsPhoneProblemCode.agentRunChanged,
+      'approval_missing' ||
+      'approval_not_found' => TsPhoneProblemCode.approvalMissing,
+      'agent_run_stale' ||
+      'agent_not_running' => TsPhoneProblemCode.agentRunChanged,
       _ => TsPhoneProblemCode.requestFailed,
     };
     if (error.statusCode == 401 || error.statusCode == 403) {

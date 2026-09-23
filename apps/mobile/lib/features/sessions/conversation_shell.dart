@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../data/app_server_gateway.dart';
+import '../../data/host_gateway.dart';
 import '../../data/settings_store.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -61,7 +62,7 @@ class _ConversationShellState extends State<ConversationShell> {
     super.initState();
     _api =
         widget.gatewayBuilder?.call(widget.settings) ??
-        PiAppServerGateway(widget.settings);
+        HostGateway(widget.settings);
     unawaited(_loadWorkspaces());
   }
 

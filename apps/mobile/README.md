@@ -2,34 +2,33 @@
 
 Flutter client for Android and iOS. The app stores its Bearer token in Android
 Keystore-backed secure storage or the iOS Keychain. It connects to a TSPi
-Relay with `tspi-link.v1`; the Relay forwards the native Pi App Server byte
+Relay with `tspi-link.v1`; the Relay forwards the `tspi-host/1` NDJSON byte
 stream to the outbound-connected Host. The app rejects remote plain HTTP and
 never starts or embeds a TS Phone server.
 
 ## Conversations
 
-Cold start opens the single configured App Server's session directory. The
-server owns durable sessions, transcripts, model configuration, and the Root
-Agent; the phone keeps only connection settings, UI state, and the last selected
-session. Creating, attaching, removing, prompting, following up, aborting, and
-selecting a model all call Pi native services over the same connection.
+Cold start opens the configured Host's project directory. Pi owns durable
+sessions, transcripts and execution; Host routes session operations by workspace
+and session ID. The phone keeps connection settings, UI state, and the last
+selected session. `HostGateway` maps the public JSON RPC to existing chat views.
 
-Opening history never starts a second worker. A session is ready when the App
-Server reports a live attachment. Draft text stays local until a prompt is
-accepted by that attached session, and a lost connection is surfaced as an
-uncertain result rather than silently retried.
+Opening an offline writable session requests `session/resume`; an existing
+live session is attached, while older read-only history remains read-only.
+Draft text stays local until input is accepted. A lost response remains
+uncertain; manual retry uses the same `client_message_id` for Host deduplication.
 
 The chat header contains Back, a bounded session title, App Server status and
 More. Running activity stays in the transcript, not above the keyboard.
 
 The composer shows the current model and a picker above the system keyboard.
-The picker reads the native `pi.models` catalog and selection is sent to the
-attached Session; credentials never leave the App Server. A request already
-running keeps the model it started with and remains visible in the replicated
-transcript. Pi's `AgentController` is the only prompt/abort authority; there is
-no phone-side queue, approval broker, REST API, SSE stream, or bridge protocol.
+The picker calls `models/list` and `model/select` for the selected session.
+Provider credentials stay on the Host. Input and interrupt requests are handed
+to Pi through its session bridge.
 
-The App Server publishes a complete active transcript through `pi.transcript`.
+The Host returns complete snapshots through `session/read` and `session/attach`,
+then publishes `session/event` notifications. Reconnection always reattaches;
+event IDs do not promise historical delta replay.
 The client keeps a bounded in-memory display cache for drafts and scroll
 positions and discards it when the connection identity changes. Only the last
 selected session identifier is saved in secure storage. Backgrounding the app
@@ -39,7 +38,11 @@ to the selected Session.
 Unnamed sessions use their first user question when available, otherwise a date
 or untitled label. Technical IDs remain in details. Transcript entries are
 rendered as published by Pi; failed and stopped generations remain distinct.
-The phone never deletes transcript records.
+Removing an offline session asks Host to move it to recoverable storage.
+
+The project session screen and sidebar include task monitors. The monitor page
+shows calculation status and pending delivery count, refreshes on app resume,
+and uses `monitor/enable` / `monitor/disable` to control existing registrations.
 
 ## Validate
 

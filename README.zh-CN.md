@@ -1,15 +1,14 @@
 # TS Phone
 
-TS Phone 是 TSPi Pi App Server Host 的 Flutter 客户端。本仓库不再包含共享
-Host、worker supervisor、REST/SSE broker 或本地 bridge。一个 Host 管理安装
-目录下的多个工作区，Pi App Server 独占会话目录、对话历史、模型状态和工作区锁。
+TS Phone 是 TSPi Host 的 Flutter 客户端。Host 将工作区内的请求转交普通 Pi 会话，
+Pi 负责执行和 JSONL 历史。手机展示同一会话，并提供任务监控的状态和启停入口。
 
 ## 运行架构
 
 ```text
 TS Phone -- 出站 WSS --> TSPi Relay <-- 出站 WSS -- TSPi Host
                                                     |
-                                              Pi App Server
+                                              Pi 会话 bridge
                                                     |
                                             工作区 / 本地终端
 ```
@@ -22,19 +21,22 @@ TS Phone -- 出站 WSS --> TSPi Relay <-- 出站 WSS -- TSPi Host
 
 在该安装中运行 `TSPi phone pair`，然后在 App 中输入输出的 TSPi Relay URL 和 8 位
 配对码。App 使用一次性配对码换取本设备独立、可撤销的授权。手机通过
-`tspi-link.v1` WebSocket 子协议承载 Pi protocol v8，通过
-`tspi.workspace-directory` 浏览或创建项目，并使用绑定的 `workspaceId` 创建会话。
+`tspi-link.v1` WebSocket 子协议承载 `tspi-host/1` UTF-8 NDJSON。
+会话操作始终包含工作区和会话 ID。断线后重新 attach 获取完整快照；投递不确定的
+消息重试复用原消息 ID，避免新建一次输入。
 
 ## 仓库结构
 
 - `apps/mobile`：Flutter Android/iOS 应用。
 - `apps/mobile/lib/data/tspi_link_pairing.dart`：一次性设备配对。
-- `apps/mobile/lib/data/pi_app_server_client.dart`：TSPi Link 传输、Pi v8 帧和 Chord 服务客户端。
-- `apps/mobile/lib/data/app_server_gateway.dart`：原生会话、历史和模型目录投影。
+- `apps/mobile/lib/data/host_rpc_client.dart`：通过 TSPi Link 使用 Host JSON RPC。
+- `apps/mobile/lib/data/host_gateway.dart`：会话、模型、监控接口适配。
+- `apps/mobile/lib/features/monitors/monitor_page.dart`：项目任务监控列表和启停。
+- 原 Pi v8/Chord adapter 保留用于兼容测试，应用默认使用 `HostGateway`。
 - `apps/mobile/tool/build_release_android.sh`：带源码证明的签名 APK/AAB 构建脚本。
 - `apps/mobile/tool/mobile-build-attestation.py`：可复现源码与构建产物证明工具。
 
-本仓库有意不再包含 Node 服务端或 TS Phone 协议包；App Server 实现在 TSPi
+本仓库有意不再包含 Node 服务端或 TS Phone 协议包；Host 实现在 TSPi
 包中。
 
 ## 开发

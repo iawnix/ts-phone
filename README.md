@@ -1,16 +1,15 @@
 # TS Phone
 
-TS Phone is the Flutter client for a TSPi Pi App Server Host. It does not
-contain a shared Host, worker supervisor, REST API, SSE broker, or local
-bridge. One Host owns the installed workspace directory; the App Server is the
-single owner of sessions, transcript history, model state, and workspace locks.
+TS Phone is the Flutter client for TSPi Host. The Host routes project-scoped
+requests to ordinary Pi sessions; Pi owns execution and JSONL history. The
+phone displays those sessions and manages task monitors.
 
 ## Runtime model
 
 ```text
 TS Phone -- outbound WSS --> TSPi Relay <-- outbound WSS -- TSPi Host
                                                         |
-                                                  Pi App Server
+                                               Pi session bridge
                                                         |
                                            workspace / local terminal
 ```
@@ -24,25 +23,28 @@ needed:
 
 Run `TSPi phone pair` on that installation, then enter the printed TSPi Relay
 URL and eight-character code in the app. The app redeems the one-time code for
-its own revocable device authorization. It carries Pi protocol v8 over the
-`tspi-link.v1` WebSocket subprotocol, lists projects through
-`tspi.workspace-directory`, and creates sessions with a bound `workspaceId`.
+its own revocable device authorization. It carries `tspi-host/1` UTF-8 NDJSON
+over the `tspi-link.v1` WebSocket subprotocol. Every session operation includes
+its workspace and session identity. Reconnection attaches again for a complete
+snapshot; an uncertain input retry preserves its original message ID.
 
 ## Repository layout
 
 - `apps/mobile` — Flutter Android/iOS application.
 - `apps/mobile/lib/data/tspi_link_pairing.dart` — one-time device pairing.
-- `apps/mobile/lib/data/pi_app_server_client.dart` — TSPi Link transport, Pi v8 framing, and Chord
-  service client.
-- `apps/mobile/lib/data/app_server_gateway.dart` — native session and
-  transcript projection used by the UI.
+- `apps/mobile/lib/data/host_rpc_client.dart` — Host JSON RPC through TSPi Link.
+- `apps/mobile/lib/data/host_gateway.dart` — session, model and monitor API projection.
+- `apps/mobile/lib/features/monitors/monitor_page.dart` — project task monitors.
+- `apps/mobile/lib/data/pi_app_server_client.dart` and `app_server_gateway.dart`
+  retain the legacy Pi v8 adapter for compatibility tests; application defaults
+  use `HostGateway`.
 - `apps/mobile/tool/build_release_android.sh` — signed APK/AAB build with
   source attestations.
 - `apps/mobile/tool/mobile-build-attestation.py` — reproducible source and
   artifact attestation.
 
 There is intentionally no Node server package or TS Phone protocol package in
-this repository. The App Server implementation lives in the TSPi package.
+this repository. The Host implementation lives in the TSPi package.
 
 ## Development
 

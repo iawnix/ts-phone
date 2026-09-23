@@ -862,8 +862,7 @@ class ChatController extends ChangeNotifier {
         return false;
       }
       await refreshMessages();
-      // This read obtains a fresh native App Server transcript before the
-      // replicated-state subscription is re-established.
+      // Reconcile against Host history before retrying the same outbox ID.
       if (_disposed || !_promptStateReady) return false;
       if (outbox.accepted(retry)) return true;
       if (_sessionRevision != revision) return false;
@@ -1374,7 +1373,9 @@ class ChatController extends ChangeNotifier {
           _sessionTitle = payload!['sessionName']! as String;
         }
         _applyRunState(
-          payload?['isStreaming'] == true
+          payload?['runtimeState'] is String
+              ? RuntimeState.parse(payload?['runtimeState'])
+              : payload?['isStreaming'] == true
               ? RuntimeState.running
               : RuntimeState.idle,
           payload?['activeAgentRunId'],

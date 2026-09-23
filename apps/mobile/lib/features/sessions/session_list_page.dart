@@ -3,15 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../data/app_server_gateway.dart';
+import '../../data/host_gateway.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
+import '../../models/host_monitor.dart';
 import '../../models/workspace.dart';
 import '../../navigation/adaptive_page_route.dart';
 import '../../theme/ts_phone_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
 import '../chat/chat_page.dart';
+import '../monitors/monitor_page.dart';
+import '../../l10n/host_monitor_localizations.dart';
 
 typedef SessionGatewayBuilder =
     TsPhoneGateway Function(ConnectionSettings settings);
@@ -92,7 +96,7 @@ class _SessionListPageState extends State<SessionListPage>
     WidgetsBinding.instance.addObserver(this);
     _gateway =
         widget.gatewayBuilder?.call(widget.settings) ??
-        PiAppServerGateway(widget.settings);
+        HostGateway(widget.settings);
     _sessions = widget.initialSessions == null
         ? null
         : _prioritizeSessions(widget.initialSessions!);
@@ -149,6 +153,13 @@ class _SessionListPageState extends State<SessionListPage>
     setState(() => _openingSessionId = session.sessionId);
     ActionFeedback.selection();
     try {
+      if (!session.runtimeState.isAvailable &&
+          session.accessMode == SessionAccessMode.controller &&
+          _gateway is SessionResumeGateway) {
+        session = await (_gateway as SessionResumeGateway)
+            .resumeWorkspaceSession(widget.workspace.id, session.sessionId);
+        if (!mounted) return;
+      }
       if (widget.onSelected case final select?) {
         select(session);
         return;
@@ -188,6 +199,18 @@ class _SessionListPageState extends State<SessionListPage>
     } finally {
       if (mounted) setState(() => _creatingSession = false);
     }
+  }
+
+  Future<void> _openMonitors() async {
+    final gateway = _gateway;
+    if (gateway is! HostMonitorGateway) return;
+    await pushTsPhonePage<void>(
+      context: context,
+      builder: (context) => MonitorPage(
+        workspace: widget.workspace,
+        gateway: gateway as HostMonitorGateway,
+      ),
+    );
   }
 
   Future<void> _remove(SessionSummary session) async {
@@ -250,6 +273,13 @@ class _SessionListPageState extends State<SessionListPage>
         ),
         title: Text(widget.workspace.name),
         actions: [
+          if (_gateway is HostMonitorGateway)
+            IconButton(
+              key: const ValueKey('open-monitors'),
+              onPressed: _openMonitors,
+              tooltip: l10n.hostMonitors,
+              icon: const Icon(Icons.notifications_active_outlined),
+            ),
           if (_sessionsGateway != null || widget.onCreateSession != null)
             IconButton(
               key: const ValueKey('create-session'),
@@ -363,6 +393,13 @@ class _SessionListPageState extends State<SessionListPage>
               ),
             ),
             ?widget.sidebarFooter,
+            if (_gateway is HostMonitorGateway)
+              ListTile(
+                key: const ValueKey('sidebar-monitors'),
+                leading: const Icon(Icons.notifications_active_outlined),
+                title: Text(l10n.hostMonitors),
+                onTap: _openMonitors,
+              ),
           ],
         ),
       ),

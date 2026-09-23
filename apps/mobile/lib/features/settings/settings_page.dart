@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app_identity.dart';
-import '../../data/app_server_gateway.dart';
-import '../../data/pi_app_server_client.dart';
+import '../../data/host_gateway.dart';
+import '../../data/host_rpc_client.dart';
 import '../../data/ts_phone_api.dart';
 import '../../models/app_theme_preference.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -114,8 +114,7 @@ class _SettingsPageState extends State<SettingsPage> {
     TsPhoneGateway? gateway;
     try {
       gateway =
-          widget.gatewayBuilder?.call(connection) ??
-          PiAppServerGateway(connection);
+          widget.gatewayBuilder?.call(connection) ?? HostGateway(connection);
       final version = await gateway.version();
       if (!mounted || generation != _diagnosticsGeneration) return;
       setState(() {
@@ -340,7 +339,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       label: l10n.linkProtocol,
                                       value: connection == null
                                           ? l10n.diagnosticNotChecked
-                                          : tspiLinkProtocol,
+                                          : tspiHostLinkProtocol,
                                     ),
                                     const _SettingsDivider(),
                                     _DiagnosticRow(

@@ -8,7 +8,7 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../data/app_server_gateway.dart';
+import '../../data/host_gateway.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/chat_message.dart';
@@ -105,7 +105,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       api:
           widget.gateway ??
           widget.gatewayFactory?.call() ??
-          PiAppServerGateway(widget.settings),
+          HostGateway(widget.settings),
       workspaceId: widget.workspace.id,
       sessionId: widget.session.sessionId,
       initialSession: widget.session,
@@ -760,8 +760,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     if (hadFocus) _composerFocus.requestFocus();
   }
 
-  String get _modelSelectionHint =>
-      _controller.canSelectModel
+  String get _modelSelectionHint => _controller.canSelectModel
       ? context.l10n.chooseModel
       : _controller.runtimeState == RuntimeState.running ||
             _controller.commandInFlight
@@ -1270,9 +1269,7 @@ class _ChatNavigationTitle extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Flexible(
-              child: _SessionStatusLine(state: state),
-            ),
+            Flexible(child: _SessionStatusLine(state: state)),
           ],
         ),
       ],

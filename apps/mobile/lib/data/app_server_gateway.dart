@@ -17,17 +17,29 @@ abstract interface class AppServerWorkspaceGateway {
   Future<WorkspaceSummary> createWorkspace(String workspaceId);
 }
 
+abstract interface class WorkspaceSessionGateway {
+  Future<SessionSummary> createWorkspaceSession(String workspaceId);
+  Future<void> removeWorkspaceSession(String workspaceId, String sessionId);
+}
+
+abstract interface class SessionResumeGateway {
+  Future<SessionSummary> resumeWorkspaceSession(
+    String workspaceId,
+    String sessionId,
+  );
+}
+
 extension AppServerWorkspaceSessionGateway on AppServerSessionGateway {
   Future<SessionSummary> createWorkspaceSession(String workspaceId) {
     final gateway = this;
-    return gateway is PiAppServerGateway
+    return gateway is WorkspaceSessionGateway
         ? gateway.createWorkspaceSession(workspaceId)
         : gateway.createSession();
   }
 
   Future<void> removeWorkspaceSession(String workspaceId, String sessionId) {
     final gateway = this;
-    return gateway is PiAppServerGateway
+    return gateway is WorkspaceSessionGateway
         ? gateway.removeWorkspaceSession(workspaceId, sessionId)
         : gateway.removeSession(sessionId);
   }
@@ -38,7 +50,8 @@ class PiAppServerGateway
         TsPhoneGateway,
         TsPhoneModelGateway,
         AppServerSessionGateway,
-        AppServerWorkspaceGateway {
+        AppServerWorkspaceGateway,
+        WorkspaceSessionGateway {
   PiAppServerGateway(this.settings, {PiAppServerClient? client})
     : _client =
           client ??
@@ -197,6 +210,7 @@ class PiAppServerGateway
         return workspace;
       });
 
+  @override
   Future<SessionSummary> createWorkspaceSession(String workspaceId) =>
       _guard(() async {
         final selectedWorkspace = workspaceId;
@@ -221,6 +235,7 @@ class PiAppServerGateway
   Future<void> removeSession(String sessionId) =>
       removeWorkspaceSession('', sessionId);
 
+  @override
   Future<void> removeWorkspaceSession(String workspaceId, String sessionId) =>
       _guard(() async {
         final selectedSession = sessionId;
