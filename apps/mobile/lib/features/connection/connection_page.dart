@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/ts_phone_api.dart';
@@ -159,7 +160,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   widget.onOpenSettings!();
                 },
                 tooltip: l10n.settings,
-                icon: const Icon(Icons.settings_outlined),
+                icon: const Icon(AppIcons.settings_outlined),
               ),
           ],
         ),
@@ -232,7 +233,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             decoration: InputDecoration(
                               labelText: l10n.relay,
                               hintText: l10n.relayHint,
-                              prefixIcon: const Icon(Icons.dns_outlined),
+                              prefixIcon: const Icon(AppIcons.dns_outlined),
                             ),
                             validator: (value) {
                               try {
@@ -263,7 +264,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             decoration: InputDecoration(
                               labelText: l10n.pairingCode,
                               hintText: l10n.pairingCodeHint,
-                              prefixIcon: const Icon(Icons.pin_outlined),
+                              prefixIcon: const Icon(AppIcons.pin_outlined),
                             ),
                             validator: (value) {
                               final normalized = (value ?? '')
@@ -284,7 +285,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             decoration: InputDecoration(
                               labelText: l10n.deviceName,
                               hintText: l10n.deviceNameHint,
-                              prefixIcon: const Icon(Icons.smartphone_outlined),
+                              prefixIcon: const Icon(
+                                AppIcons.smartphone_outlined,
+                              ),
                             ),
                             validator: (value) {
                               final name = (value ?? '').trim();
@@ -299,7 +302,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           if (_error case final message?) ...<Widget>[
                             const SizedBox(height: TsPhoneSpacing.medium),
                             TsInfoBand(
-                              icon: Icons.error_outline_rounded,
+                              icon: AppIcons.error_outline_rounded,
                               message: message,
                               tone: TsInfoTone.error,
                             ),
@@ -323,7 +326,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                         ),
                                       )
                                     : const Icon(
-                                        Icons.link_rounded,
+                                        AppIcons.link_rounded,
                                         key: ValueKey<String>('connect'),
                                       ),
                               ),

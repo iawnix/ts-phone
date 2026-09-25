@@ -56,6 +56,17 @@ run_mobile() {
     run_step "$label" bash -c 'cd -- "$1" && shift && exec "$@"' bash "$MOBILE_ROOT" "$@"
 }
 
+verify_mobile_identity() {
+    local mobile_version version build identity_version identity_build
+    mobile_version=$(awk '$1 == "version:" { print $2; exit }' "$MOBILE_ROOT/pubspec.yaml")
+    version=${mobile_version%%+*}
+    build=${mobile_version##*+}
+    identity_version=$(sed -n "s/^const String tsPhoneAppVersion = '\([^']*\)';$/\1/p" "$MOBILE_ROOT/lib/app_identity.dart")
+    identity_build=$(sed -n "s/^const String tsPhoneAppBuild = '\([^']*\)';$/\1/p" "$MOBILE_ROOT/lib/app_identity.dart")
+    [[ "$identity_version" == "$version" && "$identity_build" == "$build" ]] ||
+        die "mobile app identity ($identity_version+$identity_build) does not match pubspec ($mobile_version)"
+}
+
 require_tools() {
     [[ -x "$DART_BIN" ]] || die "Dart is missing: $DART_BIN"
     [[ -x "$FLUTTER_BIN" ]] || die "Flutter is missing: $FLUTTER_BIN"
@@ -63,6 +74,7 @@ require_tools() {
 
 mobile_checks() {
     require_tools
+    verify_mobile_identity
     run_mobile "mobile format check" "$DART_BIN" format --output=none --set-exit-if-changed lib test
     run_mobile "mobile analyzer" "$FLUTTER_BIN" analyze
     run_mobile "mobile tests" "$FLUTTER_BIN" test

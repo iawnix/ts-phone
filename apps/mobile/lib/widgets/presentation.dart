@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../theme/ts_phone_theme.dart';
 import '../theme/ts_visual_accessibility.dart';
@@ -493,7 +494,7 @@ class TsReadyStatusIcon extends StatelessWidget {
       child: Tooltip(
         message: label,
         child: ExcludeSemantics(
-          child: Icon(Icons.check_circle_rounded, size: 19, color: color),
+          child: Icon(AppIcons.check_circle_rounded, size: 19, color: color),
         ),
       ),
     );
@@ -707,7 +708,7 @@ class TsStatusListTile extends StatelessWidget {
                   const SizedBox(width: TsPhoneSpacing.small),
                   trailing ??
                       Icon(
-                        Icons.chevron_right,
+                        AppIcons.chevron_right,
                         size: 22,
                         color: colors.outline,
                       ),
@@ -1172,7 +1173,7 @@ class TsTerminalBlock extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
-                  Icon(Icons.terminal_rounded, size: 15, color: statusColor),
+                  Icon(AppIcons.terminal_rounded, size: 15, color: statusColor),
                   if (title case final value?) ...<Widget>[
                     const SizedBox(width: 6),
                     Expanded(

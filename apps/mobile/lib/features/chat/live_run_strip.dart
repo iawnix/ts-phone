@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../../l10n/app_localizations_extensions.dart';
 import '../../theme/ts_phone_theme.dart';
@@ -43,8 +44,8 @@ class LiveRunStrip extends StatelessWidget {
             children: <Widget>[
               Icon(
                 failed
-                    ? Icons.error_outline_rounded
-                    : Icons.hourglass_top_rounded,
+                    ? AppIcons.error_outline_rounded
+                    : AppIcons.hourglass_top_rounded,
                 size: 18,
                 color: accent,
               ),

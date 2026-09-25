@@ -118,10 +118,18 @@ SessionUiPhase _resolvePhase({
   required bool historyOnly,
   required bool viewingInactiveBranch,
 }) {
-  // Error and recovery always outrank ordinary connection state.  This keeps
-  // the page from showing a misleading "ready" or "reconnecting" affordance
-  // while the user still has an unresolved failure.
-  if (problem != null) return SessionUiPhase.failed;
+  // Actionable errors and recovery always outrank ordinary connection state.
+  // A background event retry is the one exception: it belongs in the app-bar
+  // signal rather than replacing the readable chat with a failure notice.
+  // A live event stream can be briefly unavailable while the controller is
+  // already retrying it. That is connection chrome, not a failed operation;
+  // promoting it to `failed` would insert a full-width notice into the chat.
+  final transientEventProblem =
+      problem?.code == TsPhoneProblemCode.networkRetrying &&
+      eventConnectionState == EventConnectionState.reconnecting;
+  if (problem != null && !transientEventProblem) {
+    return SessionUiPhase.failed;
+  }
   // Recovery is a live runtime condition. A page-open recovery marker is only
   // historical metadata, so it must not keep a successfully recovered session
   // blocked after the App Server reports idle/running.

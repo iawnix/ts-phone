@@ -211,6 +211,49 @@ void main() {
       },
     );
   }
+
+  testWidgets('keeps a failed sync in the app-bar status control', (
+    tester,
+  ) async {
+    final snapshot = Completer<TsPhoneMessageSnapshot>();
+    final api = fixtures.FakeGateway()..nextSnapshot = snapshot.future;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ChatPage(
+          settings: shell.settings,
+          workspace: shell.appServer,
+          gateway: api,
+          session: const SessionSummary(
+            sessionId: 'session-test',
+            sessionRevision: revision,
+            runtimeState: RuntimeState.idle,
+            isStreaming: false,
+          ),
+        ),
+      ),
+    );
+    snapshot.completeError(
+      const TsPhoneApiException('service unavailable', statusCode: 503),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('chat-session-status-button')),
+      findsOneWidget,
+    );
+    expect(find.text('Live synchronization interrupted'), findsNothing);
+    expect(find.text('Could not connect to the Pi App Server'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('chat-session-status-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Needs attention'), findsOneWidget);
+    expect(find.text('Reconnect'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class SlowCancelGateway extends fixtures.FakeGateway {

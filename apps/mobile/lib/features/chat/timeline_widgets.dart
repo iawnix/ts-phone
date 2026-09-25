@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/chat_message.dart';
@@ -98,8 +99,8 @@ class _TimelineFilterMenu extends StatelessWidget {
               children: <Widget>[
                 Icon(
                   entry.key == selected
-                      ? Icons.check_rounded
-                      : Icons.circle_outlined,
+                      ? AppIcons.check_rounded
+                      : AppIcons.circle_outlined,
                   size: 18,
                 ),
                 const SizedBox(width: TsPhoneSpacing.small),
@@ -125,7 +126,7 @@ class _TimelineFilterMenu extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Icon(
-                  Icons.filter_list_rounded,
+                  AppIcons.filter_list_rounded,
                   size: 19,
                   color: colors.onSurfaceVariant,
                 ),
@@ -138,7 +139,7 @@ class _TimelineFilterMenu extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: TsPhoneSpacing.xSmall),
-                const Icon(Icons.arrow_drop_down_rounded, size: 20),
+                const Icon(AppIcons.arrow_drop_down_rounded, size: 20),
               ],
             ),
           ),
@@ -183,7 +184,7 @@ class TimelineHistoryControl extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 44),
         child: Row(
           children: <Widget>[
-            Icon(Icons.history_rounded, size: 18, color: colors.primary),
+            Icon(AppIcons.history_rounded, size: 18, color: colors.primary),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -223,7 +224,7 @@ class TimelineHistoryControl extends StatelessWidget {
                     await onSelectBranch(selection.branchId!);
                 }
               },
-              icon: const Icon(Icons.more_horiz_rounded, size: 22),
+              icon: const Icon(AppIcons.more_horiz_rounded, size: 22),
               itemBuilder: (context) =>
                   <PopupMenuEntry<_TimelineHistoryAction>>[
                     if (controller.canLoadEarlierMessages || loading)
@@ -235,7 +236,7 @@ class TimelineHistoryControl extends StatelessWidget {
                         enabled: !loading,
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.expand_less_rounded),
+                          leading: const Icon(AppIcons.expand_less_rounded),
                           title: Text(
                             controller.loadingEarlierMessages
                                 ? l10n.loadingEarlierMessages
@@ -252,7 +253,9 @@ class TimelineHistoryControl extends StatelessWidget {
                         enabled: !loading,
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.vertical_align_top_rounded),
+                          leading: const Icon(
+                            AppIcons.vertical_align_top_rounded,
+                          ),
                           title: Text(
                             controller.loadingAllHistory
                                 ? l10n.loadingAllHistory
@@ -274,8 +277,8 @@ class TimelineHistoryControl extends StatelessWidget {
                             children: <Widget>[
                               Icon(
                                 branch.id == history.selectedBranchId
-                                    ? Icons.check_circle_rounded
-                                    : Icons.circle_outlined,
+                                    ? AppIcons.check_circle_rounded
+                                    : AppIcons.circle_outlined,
                                 size: 18,
                               ),
                               const SizedBox(width: 10),
@@ -535,7 +538,7 @@ class _ActivityRun extends StatelessWidget {
       shape: const Border(),
       collapsedShape: const Border(),
       leading: Icon(
-        failed ? Icons.error_outline : Icons.list_alt_outlined,
+        failed ? AppIcons.error_outline : AppIcons.list_alt_outlined,
         size: 18,
         color: failed ? colors.error : colors.onSurfaceVariant,
       ),
@@ -555,7 +558,7 @@ class _ActivityRun extends StatelessWidget {
         for (final item in items.take(8)) _timelineItemView(item),
         if (items.length > 8)
           TextButton.icon(
-            icon: const Icon(Icons.list_alt_outlined, size: 18),
+            icon: const Icon(AppIcons.list_alt_outlined, size: 18),
             label: Text(context.l10n.viewAllActivities(items.length)),
             onPressed: () => pushTsPhonePage<void>(
               context: context,
@@ -763,19 +766,19 @@ class _ActivitySummary extends StatelessWidget {
 }
 
 IconData _activityIcon(TimelineActivityCategory category) => switch (category) {
-  TimelineActivityCategory.subagent => Icons.account_tree_outlined,
-  TimelineActivityCategory.research => Icons.science_outlined,
-  TimelineActivityCategory.review => Icons.fact_check_outlined,
-  TimelineActivityCategory.workspace => Icons.folder_copy_outlined,
-  TimelineActivityCategory.configuration => Icons.settings_outlined,
-  TimelineActivityCategory.context => Icons.compress_outlined,
-  TimelineActivityCategory.system => Icons.info_outline_rounded,
+  TimelineActivityCategory.subagent => AppIcons.account_tree_outlined,
+  TimelineActivityCategory.research => AppIcons.science_outlined,
+  TimelineActivityCategory.review => AppIcons.fact_check_outlined,
+  TimelineActivityCategory.workspace => AppIcons.folder_copy_outlined,
+  TimelineActivityCategory.configuration => AppIcons.settings_outlined,
+  TimelineActivityCategory.context => AppIcons.compress_outlined,
+  TimelineActivityCategory.system => AppIcons.info_outline_rounded,
 };
 
 IconData _activityStateIcon(TimelineActivityStatus status) => switch (status) {
-  TimelineActivityStatus.completed => Icons.check_circle_outline_rounded,
-  TimelineActivityStatus.failed => Icons.error_outline_rounded,
-  TimelineActivityStatus.recorded => Icons.circle_outlined,
+  TimelineActivityStatus.completed => AppIcons.check_circle_outline_rounded,
+  TimelineActivityStatus.failed => AppIcons.error_outline_rounded,
+  TimelineActivityStatus.recorded => AppIcons.circle_outlined,
 };
 
 String _activityCategoryLabel(

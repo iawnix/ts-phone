@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -27,21 +28,28 @@ class SessionNoticeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final notice = state.notice;
-    if (notice == null) return const SizedBox.shrink();
+    if (notice == null) {
+      return AnimatedSwitcher(
+        duration: TsPhoneMotion.resolveFade(context, TsPhoneMotion.standard),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeOutCubic,
+        child: const SizedBox(key: ValueKey<String>('session-notice-empty')),
+      );
+    }
     final l10n = context.l10n;
     final (icon, tone, message) = switch (notice) {
       SessionNoticeKind.error => (
-        Icons.error_outline_rounded,
+        AppIcons.error_outline_rounded,
         TsInfoTone.error,
         problem?.localizedMessage(l10n) ?? l10n.problemRequestFailed,
       ),
       SessionNoticeKind.recovery => (
-        Icons.restore_rounded,
+        AppIcons.restore_rounded,
         TsInfoTone.error,
         l10n.generationDisconnectedBanner,
       ),
       SessionNoticeKind.offline => (
-        Icons.cloud_off_outlined,
+        AppIcons.cloud_off_outlined,
         TsInfoTone.warning,
         l10n.tspiDisconnectedBanner,
       ),
@@ -51,17 +59,17 @@ class SessionNoticeView extends StatelessWidget {
       SessionNoticeKind.error => IconButton(
         onPressed: onRetry,
         tooltip: l10n.reconnect,
-        icon: const Icon(Icons.refresh_rounded),
+        icon: const Icon(AppIcons.refresh_rounded),
       ),
       SessionNoticeKind.recovery => IconButton(
         onPressed: onRetry,
         tooltip: l10n.checkAgain,
-        icon: const Icon(Icons.refresh_rounded),
+        icon: const Icon(AppIcons.refresh_rounded),
       ),
       SessionNoticeKind.offline => IconButton(
         onPressed: onRetry,
         tooltip: l10n.checkAgain,
-        icon: const Icon(Icons.refresh_rounded),
+        icon: const Icon(AppIcons.refresh_rounded),
       ),
     };
 

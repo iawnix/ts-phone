@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
@@ -148,7 +149,7 @@ class _ModelPickerState extends State<_ModelPicker> {
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
                           tooltip: l10n.cancel,
-                          icon: const Icon(Icons.close_rounded),
+                          icon: const Icon(AppIcons.close_rounded),
                         ),
                     ],
                   ),
@@ -162,7 +163,7 @@ class _ModelPickerState extends State<_ModelPicker> {
                           setState(() => _query = value.trim().toLowerCase()),
                       decoration: InputDecoration(
                         hintText: l10n.searchModels,
-                        prefixIcon: const Icon(Icons.search_rounded),
+                        prefixIcon: const Icon(AppIcons.search_rounded),
                       ),
                     ),
                   ),
@@ -212,7 +213,7 @@ class _ModelPickerState extends State<_ModelPicker> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               trailing: selected
-                                  ? const Icon(Icons.check_rounded)
+                                  ? const Icon(AppIcons.check_rounded)
                                   : null,
                               onTap: () => _select(model),
                             );
@@ -222,7 +223,7 @@ class _ModelPickerState extends State<_ModelPicker> {
                 if (_problem != null && !_saving)
                   TextButton.icon(
                     onPressed: _load,
-                    icon: const Icon(Icons.refresh_rounded),
+                    icon: const Icon(AppIcons.refresh_rounded),
                     label: Text(l10n.retry),
                   ),
               ],

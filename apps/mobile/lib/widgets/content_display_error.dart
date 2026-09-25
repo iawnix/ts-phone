@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../l10n/app_localizations_extensions.dart';
 
@@ -16,7 +17,7 @@ class ContentDisplayError extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              Icons.error_outline_rounded,
+              AppIcons.error_outline_rounded,
               size: 20,
               color: Theme.of(context).colorScheme.error,
             ),

@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:flutter/rendering.dart'
     show RenderBox, ScrollCacheExtent, ScrollDirection;
 import 'package:flutter/services.dart';
@@ -44,6 +45,7 @@ class ChatPage extends StatefulWidget {
     this.gateway,
     this.gatewayFactory,
     this.memory,
+    this.onOpenContext,
     this.onOpenNavigation,
     this.onOpenSession,
     this.embedded = false,
@@ -56,6 +58,14 @@ class ChatPage extends StatefulWidget {
   final TsPhoneGateway? gateway;
   final TsPhoneGateway Function()? gatewayFactory;
   final ChatViewMemory? memory;
+
+  /// Opens the compact project/session context switcher on narrow layouts.
+  ///
+  /// [onOpenNavigation] remains available for callers that still expose the
+  /// session drawer. When both callbacks are supplied, this one takes
+  /// precedence so the chat page does not need to know which navigation
+  /// surface the host uses.
+  final VoidCallback? onOpenContext;
   final VoidCallback? onOpenNavigation;
   final ValueChanged<SessionSummary>? onOpenSession;
   final bool embedded;
@@ -651,7 +661,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         context: context,
         animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
         builder: (dialogContext) => AlertDialog(
-          icon: Icon(Icons.stop_circle_outlined, color: colors.error),
+          icon: Icon(AppIcons.stop_circle_outlined, color: colors.error),
           title: Text(context.l10n.abortGeneration),
           content: Text(context.l10n.abortGenerationConfirmation),
           actions: <Widget>[
@@ -692,9 +702,41 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     await _controller.retryConnection();
   }
 
+  void _showSessionStatus() {
+    ActionFeedback.selection();
+    final state = SessionViewState.fromController(_controller);
+    final hasCachedContent =
+        _controller.messages.isNotEmpty ||
+        _controller.timelineItems.isNotEmpty ||
+        _controller.hasStreamingText;
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+      builder: (context) => _SessionStatusSheet(
+        state: state,
+        runtimeState: _controller.runtimeState,
+        problem: _controller.problem,
+        hasCachedContent: hasCachedContent,
+        onRetry: () => unawaited(_retryConnection()),
+      ),
+    );
+  }
+
   void _goBack() {
     ActionFeedback.selection();
     Navigator.of(context).maybePop();
+  }
+
+  void _openContextOrDetails() {
+    final callback = widget.onOpenContext ?? widget.onOpenNavigation;
+    if (callback != null) {
+      ActionFeedback.selection();
+      callback();
+      return;
+    }
+    _showSessionDetails();
   }
 
   String get _navigationTitle {
@@ -847,49 +889,67 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               key: const ValueKey<String>('chat-back'),
               onPressed: _goBack,
             ),
-            title: TsPressable(
-              key: const ValueKey('chat-session-details'),
-              onTap: _showSessionDetails,
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: _ChatNavigationTitle(
-                      title: _navigationTitle,
-                      state: viewState,
-                      workspace: widget.workspace.name,
+            title: Row(
+              children: <Widget>[
+                Expanded(
+                  child: TsPressable(
+                    key: const ValueKey('chat-session-details'),
+                    onTap: _openContextOrDetails,
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: _ChatNavigationTitle(
+                            title: _navigationTitle,
+                            workspace: widget.workspace.name,
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsetsDirectional.only(start: 4, end: 8),
+                          child: Icon(
+                            widget.onOpenContext != null ||
+                                    widget.onOpenNavigation != null
+                                ? AppIcons.unfold_more_rounded
+                                : AppIcons.info_outline_rounded,
+                            size: 18,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsetsDirectional.only(start: 4, end: 8),
-                    child: Icon(Icons.info_outline_rounded, size: 16),
-                  ),
-                ],
-              ),
+                ),
+                _SessionStatusButton(
+                  state: viewState,
+                  runtimeState: _controller.runtimeState,
+                  onPressed: _showSessionStatus,
+                ),
+                const SizedBox(width: 2),
+              ],
             ),
             actions: <Widget>[
               PopupMenuButton<String>(
                 key: const ValueKey('chat-menu'),
                 tooltip: l10n.moreActions,
-                icon: const Icon(Icons.more_horiz_rounded),
+                icon: const Icon(AppIcons.more_horiz_rounded),
                 onSelected: (action) {
                   if (action == 'start') {
                     unawaited(_jumpToStart());
                   } else if (action == 'sync') {
                     unawaited(_sync());
                   } else if (action == 'sidebar') {
-                    widget.onOpenNavigation?.call();
+                    _openContextOrDetails();
                   } else {
                     _showSessionDetails();
                   }
                 },
                 itemBuilder: (_) => [
-                  if (widget.onOpenNavigation != null)
+                  if (widget.onOpenContext != null ||
+                      widget.onOpenNavigation != null)
                     PopupMenuItem(
                       key: const ValueKey('chat-open-sidebar'),
                       value: 'sidebar',
                       child: Row(
                         children: [
-                          const Icon(Icons.view_sidebar_outlined, size: 20),
+                          const Icon(AppIcons.view_sidebar_outlined, size: 20),
                           const SizedBox(width: 12),
                           Flexible(child: Text(l10n.openSidebar)),
                         ],
@@ -904,7 +964,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         !_controller.commandInFlight,
                     child: Row(
                       children: [
-                        const Icon(Icons.sync, size: 20),
+                        const Icon(AppIcons.sync, size: 20),
                         const SizedBox(width: 12),
                         Flexible(child: Text(l10n.syncMessages)),
                       ],
@@ -919,7 +979,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         !_preservingReadingPosition,
                     child: Row(
                       children: [
-                        const Icon(Icons.vertical_align_top, size: 20),
+                        const Icon(AppIcons.vertical_align_top, size: 20),
                         const SizedBox(width: 12),
                         Flexible(child: Text(l10n.jumpToStart)),
                       ],
@@ -1031,7 +1091,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                               !_controller.commandInFlight
                           ? () => _send(retryText: retry.text)
                           : null,
-                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      icon: const Icon(AppIcons.refresh_rounded, size: 20),
                       label: Text(context.l10n.retry),
                     ),
                   ),
@@ -1042,7 +1102,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       key: const ValueKey('pending-approvals'),
                       onPressed: _drainUiRequests,
                       icon: const Icon(
-                        Icons.pending_actions_outlined,
+                        AppIcons.pending_actions_outlined,
                         size: 20,
                       ),
                       label: Text(context.l10n.pendingApprovals),
@@ -1112,35 +1172,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         _controller.timelineItems.isNotEmpty;
     final hasStreaming = _controller.hasStreamingText;
     if (messages.isEmpty && !hasTimelineItems && !hasStreaming) {
-      if (_controller.problem case final problem?) {
-        return _ConnectionProblemView(
-          message: problem.localizedMessage(context.l10n),
-          retrying:
-              _controller.eventConnectionState ==
-                  EventConnectionState.connecting ||
-              _controller.eventConnectionState ==
-                  EventConnectionState.reconnecting,
-          onRetry: _retryConnection,
-        );
+      // Connection state belongs to the app-bar status control. Keeping the
+      // conversation surface readable here means a reconnect never replaces
+      // the user's cached transcript with a large error page.
+      if (viewState.phase != SessionUiPhase.ready) {
+        return const SizedBox.expand();
       }
-      if (viewState.phase == SessionUiPhase.synchronizing) {
-        return const _SessionConnectingView();
-      }
-      if (viewState.phase == SessionUiPhase.offline) {
-        return _ConnectionProblemView(
-          message: context.l10n.chatOffline,
-          retrying: false,
-          onRetry: _retryConnection,
-        );
-      }
-      if (viewState.phase == SessionUiPhase.recovery) {
-        return _ConnectionProblemView(
-          message: context.l10n.chatRecovery,
-          retrying: false,
-          onRetry: _retryConnection,
-        );
-      }
-      return Center(child: Text(context.l10n.noMessages));
+      return const _EmptyConversationView();
     }
     final positioningInitialTimeline = !_initialTimelinePositioned;
     return Stack(
@@ -1154,7 +1192,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             child: timeline,
           ),
         ),
-        if (positioningInitialTimeline) const _SessionConnectingView(),
+        // The timeline can need one frame to settle after a cached snapshot.
+        // Keep that layout pass invisible instead of showing a second sync
+        // screen underneath the app-bar status control.
+        if (positioningInitialTimeline) const SizedBox.expand(),
       ],
     );
   }
@@ -1179,7 +1220,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       dimension: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.arrow_downward_rounded),
+                  : const Icon(AppIcons.arrow_downward_rounded),
             ),
         ],
       ),
@@ -1216,8 +1257,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         !_controller.hasStreamingText) {
       return null;
     }
+    final state = SessionViewState.fromController(_controller);
+    if (state.notice == SessionNoticeKind.offline ||
+        _isTransportProblem(_controller.problem)) {
+      return null;
+    }
     return SessionNoticeView(
-      state: SessionViewState.fromController(_controller),
+      state: state,
       problem: _controller.problem,
       onRetry: _retryConnection,
     );
@@ -1240,14 +1286,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 }
 
 class _ChatNavigationTitle extends StatelessWidget {
-  const _ChatNavigationTitle({
-    required this.title,
-    required this.state,
-    required this.workspace,
-  });
+  const _ChatNavigationTitle({required this.title, required this.workspace});
 
   final String title;
-  final SessionViewState state;
   final String workspace;
 
   @override
@@ -1281,7 +1322,6 @@ class _ChatNavigationTitle extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Flexible(child: _SessionStatusLine(state: state)),
           ],
         ),
       ],
@@ -1289,74 +1329,299 @@ class _ChatNavigationTitle extends StatelessWidget {
   }
 }
 
-class _SessionStatusLine extends StatelessWidget {
-  const _SessionStatusLine({required this.state});
+class _SessionStatusButton extends StatelessWidget {
+  const _SessionStatusButton({
+    required this.state,
+    required this.runtimeState,
+    required this.onPressed,
+  });
 
   final SessionViewState state;
+  final RuntimeState runtimeState;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final status = TsPhoneStatusTheme.resolve(context);
-    final l10n = context.l10n;
-    final label = switch (state.phase) {
-      SessionUiPhase.failed => l10n.chatFailed,
-      SessionUiPhase.recovery => l10n.chatRecovery,
-      SessionUiPhase.history => l10n.chatHistory,
-      SessionUiPhase.offline => l10n.chatOffline,
-      SessionUiPhase.synchronizing => l10n.chatConnecting,
-      SessionUiPhase.reconnecting => l10n.chatReconnecting,
-      SessionUiPhase.running => l10n.chatRunning,
-      SessionUiPhase.ready => l10n.chatReady,
-    };
-    final (icon, color) = switch (state.phase) {
-      SessionUiPhase.failed ||
-      SessionUiPhase.recovery => (Icons.error_outline_rounded, status.error),
-      SessionUiPhase.running => (
-        Icons.hourglass_top_rounded,
-        theme.colorScheme.onSurfaceVariant,
-      ),
-      SessionUiPhase.synchronizing ||
-      SessionUiPhase.reconnecting => (Icons.sync_rounded, status.warning),
-      SessionUiPhase.history => (
-        Icons.history_rounded,
-        theme.colorScheme.onSurfaceVariant,
-      ),
-      SessionUiPhase.offline => (
-        Icons.cloud_off_outlined,
-        theme.colorScheme.onSurfaceVariant,
-      ),
-      SessionUiPhase.ready => (
-        Icons.check_circle_outline_rounded,
-        status.connected,
-      ),
-    };
+    final visual = _sessionStatusVisual(context, state);
+    final label = _sessionStatusAccessibleLabel(context, state, runtimeState);
     return Semantics(
       key: const ValueKey('chat-session-status'),
       label: label,
-      excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, color: color, size: 13),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
+      button: true,
+      child: Tooltip(
+        message: label,
+        child: IconButton(
+          key: const ValueKey('chat-session-status-button'),
+          onPressed: onPressed,
+          padding: const EdgeInsets.all(10),
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          icon: AnimatedSwitcher(
+            duration: TsPhoneMotion.resolveFade(context, TsPhoneMotion.quick),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeOutCubic,
+            child: _SessionStatusGlyph(
+              key: ValueKey<SessionUiPhase>(state.phase),
+              visual: visual,
+              runtimeRunning: runtimeState == RuntimeState.running,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionStatusGlyph extends StatelessWidget {
+  const _SessionStatusGlyph({
+    super.key,
+    required this.visual,
+    this.runtimeRunning = false,
+  });
+
+  final _SessionStatusVisual visual;
+  final bool runtimeRunning;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 20,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: <Widget>[
+          Icon(visual.icon, color: visual.color, size: 18),
+          if (visual.pulsing)
+            Positioned(
+              right: -2,
+              bottom: -1,
+              child: TsStatusDot(color: visual.color, size: 6, pulsing: true),
+            ),
+          if (runtimeRunning &&
+              visual.icon != AppIcons.motion_photos_on_outlined)
+            Positioned(
+              left: -2,
+              top: -1,
+              child: TsStatusDot(
+                color: Theme.of(context).colorScheme.primary,
+                size: 5,
+                pulsing: true,
+              ),
+            ),
         ],
       ),
     );
   }
 }
+
+class _SessionStatusSheet extends StatelessWidget {
+  const _SessionStatusSheet({
+    required this.state,
+    required this.runtimeState,
+    required this.problem,
+    required this.hasCachedContent,
+    required this.onRetry,
+  });
+
+  final SessionViewState state;
+  final RuntimeState runtimeState;
+  final TsPhoneProblem? problem;
+  final bool hasCachedContent;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final visual = _sessionStatusVisual(context, state);
+    final l10n = context.l10n;
+    final canRetry =
+        state.phase != SessionUiPhase.ready &&
+        state.phase != SessionUiPhase.running &&
+        state.phase != SessionUiPhase.history;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        TsPhoneSpacing.large,
+        0,
+        TsPhoneSpacing.large,
+        TsPhoneSpacing.large + MediaQuery.viewPaddingOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              _SessionStatusGlyph(
+                visual: visual,
+                runtimeRunning: runtimeState == RuntimeState.running,
+              ),
+              const SizedBox(width: TsPhoneSpacing.medium),
+              Expanded(
+                child: Text(
+                  _sessionStatusLabel(context, state),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: TsPhoneSpacing.small),
+          Text(
+            runtimeState.localizedCompactLabel(l10n),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (hasCachedContent) ...<Widget>[
+            const SizedBox(height: TsPhoneSpacing.xSmall),
+            Text(
+              l10n.sessionRuntimeLastKnown,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (problem != null && !_isTransportProblem(problem)) ...<Widget>[
+            const SizedBox(height: TsPhoneSpacing.small),
+            Text(
+              problem!.localizedMessage(l10n),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ],
+          if (canRetry) ...<Widget>[
+            const SizedBox(height: TsPhoneSpacing.medium),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.tonalIcon(
+                onPressed: onRetry,
+                icon: const Icon(AppIcons.refresh_rounded),
+                label: Text(l10n.reconnect),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyConversationView extends StatelessWidget {
+  const _EmptyConversationView();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(TsPhoneSpacing.large),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              AppIcons.chat_bubble_outline_rounded,
+              size: 28,
+              color: theme.colorScheme.outline,
+            ),
+            const SizedBox(height: TsPhoneSpacing.small),
+            Text(
+              context.l10n.noMessages,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionStatusVisual {
+  const _SessionStatusVisual({
+    required this.icon,
+    required this.color,
+    this.pulsing = false,
+  });
+
+  final IconData icon;
+  final Color color;
+  final bool pulsing;
+}
+
+_SessionStatusVisual _sessionStatusVisual(
+  BuildContext context,
+  SessionViewState state,
+) {
+  final theme = Theme.of(context);
+  final status = TsPhoneStatusTheme.resolve(context);
+  return switch (state.phase) {
+    SessionUiPhase.failed => _SessionStatusVisual(
+      icon: AppIcons.error_outline_rounded,
+      color: status.error,
+    ),
+    SessionUiPhase.recovery => _SessionStatusVisual(
+      icon: AppIcons.restore_rounded,
+      color: status.error,
+    ),
+    SessionUiPhase.history => _SessionStatusVisual(
+      icon: AppIcons.history_rounded,
+      color: theme.colorScheme.onSurfaceVariant,
+    ),
+    SessionUiPhase.offline => _SessionStatusVisual(
+      icon: AppIcons.cloud_off_outlined,
+      color: status.error,
+    ),
+    SessionUiPhase.synchronizing => _SessionStatusVisual(
+      icon: AppIcons.cloud_sync_outlined,
+      color: status.warning,
+      pulsing: true,
+    ),
+    SessionUiPhase.reconnecting => _SessionStatusVisual(
+      icon: AppIcons.refresh_rounded,
+      color: status.warning,
+      pulsing: true,
+    ),
+    SessionUiPhase.running => _SessionStatusVisual(
+      icon: AppIcons.motion_photos_on_outlined,
+      color: theme.colorScheme.primary,
+      pulsing: true,
+    ),
+    SessionUiPhase.ready => _SessionStatusVisual(
+      icon: AppIcons.check_circle_outline_rounded,
+      color: status.connected,
+    ),
+  };
+}
+
+String _sessionStatusLabel(BuildContext context, SessionViewState state) {
+  final l10n = context.l10n;
+  return switch (state.phase) {
+    SessionUiPhase.failed => l10n.chatFailed,
+    SessionUiPhase.recovery => l10n.chatRecovery,
+    SessionUiPhase.history => l10n.chatHistory,
+    SessionUiPhase.offline => l10n.chatOffline,
+    SessionUiPhase.synchronizing => l10n.chatConnecting,
+    SessionUiPhase.reconnecting => l10n.chatReconnecting,
+    SessionUiPhase.running => l10n.chatRunning,
+    SessionUiPhase.ready => l10n.chatReady,
+  };
+}
+
+String _sessionStatusAccessibleLabel(
+  BuildContext context,
+  SessionViewState state,
+  RuntimeState runtimeState,
+) =>
+    '${_sessionStatusLabel(context, state)} · ${runtimeState.localizedCompactLabel(context.l10n)}';
+
+bool _isTransportProblem(TsPhoneProblem? problem) =>
+    problem?.code == TsPhoneProblemCode.serviceUnavailable ||
+    problem?.code == TsPhoneProblemCode.connectionFailed ||
+    problem?.code == TsPhoneProblemCode.requestTimeout ||
+    problem?.code == TsPhoneProblemCode.networkRetrying ||
+    problem?.code == TsPhoneProblemCode.sessionOffline;
 
 class _SessionDetailsSheet extends StatelessWidget {
   const _SessionDetailsSheet({
@@ -1448,7 +1713,7 @@ class _SessionDetailsSheet extends StatelessWidget {
                 horizontal: TsPhoneSpacing.medium,
               ),
               child: _RuntimeDetailRow(
-                icon: Icons.tune_rounded,
+                icon: AppIcons.tune_rounded,
                 label: l10n.sessionConfiguredModel,
                 value: configuredModel!,
               ),
@@ -1461,7 +1726,7 @@ class _SessionDetailsSheet extends StatelessWidget {
             child: Column(
               children: <Widget>[
                 _RuntimeDetailRow(
-                  icon: Icons.folder_outlined,
+                  icon: AppIcons.folder_outlined,
                   label: l10n.approvalWorkspace,
                   value: workspaceName,
                 ),
@@ -1486,7 +1751,7 @@ class _SessionDetailsSheet extends StatelessWidget {
               child: Column(
                 children: <Widget>[
                   _RuntimeDetailRow(
-                    icon: Icons.smart_toy_outlined,
+                    icon: AppIcons.smart_toy_outlined,
                     label: lastKnown
                         ? l10n.sessionLastModel
                         : l10n.sessionModel,
@@ -1494,33 +1759,33 @@ class _SessionDetailsSheet extends StatelessWidget {
                   ),
                   const _RuntimeDetailDivider(),
                   _RuntimeDetailRow(
-                    icon: Icons.route_outlined,
+                    icon: AppIcons.route_outlined,
                     label: l10n.sessionProvider,
                     value: runtime!.model.knownProvider ?? l10n.dataNotProvided,
                   ),
                   if (usage != null) ...<Widget>[
                     const _RuntimeDetailDivider(),
                     _RuntimeDetailRow(
-                      icon: Icons.data_usage_rounded,
+                      icon: AppIcons.data_usage_rounded,
                       label: l10n.sessionContextWindow,
                       value: contextValue!,
                     ),
                     const _RuntimeDetailDivider(),
                     _RuntimeDetailRow(
-                      icon: Icons.battery_5_bar_rounded,
+                      icon: AppIcons.battery_5_bar_rounded,
                       label: l10n.sessionContextRemaining,
                       value: remainingValue!,
                     ),
                     const _RuntimeDetailDivider(),
                     _RuntimeDetailRow(
-                      icon: Icons.calculate_outlined,
+                      icon: AppIcons.calculate_outlined,
                       label: l10n.sessionContextSource,
                       value: l10n.sessionContextEstimate,
                     ),
                   ],
                   const _RuntimeDetailDivider(),
                   _RuntimeDetailRow(
-                    icon: Icons.schedule_rounded,
+                    icon: AppIcons.schedule_rounded,
                     label: l10n.sessionRuntimeUpdated,
                     value: updatedValue,
                   ),
@@ -1547,7 +1812,7 @@ class _SessionDetailsSheet extends StatelessWidget {
             ),
             children: [
               _RuntimeDetailRow(
-                icon: Icons.tag,
+                icon: AppIcons.tag,
                 label: l10n.approvalSession,
                 value: sessionId,
                 forceStacked: true,
@@ -1606,7 +1871,7 @@ class _CopySessionIdButtonState extends State<_CopySessionIdButton> {
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeOutCubic,
         child: Icon(
-          _copied ? Icons.check_rounded : Icons.copy_rounded,
+          _copied ? AppIcons.check_rounded : AppIcons.copy_rounded,
           key: ValueKey<bool>(_copied),
           size: 18,
         ),
@@ -1629,7 +1894,7 @@ class _RuntimeUnavailableNote extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Icon(
-            Icons.history_toggle_off_rounded,
+            AppIcons.history_toggle_off_rounded,
             size: 18,
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -1917,7 +2182,7 @@ class _MessageTimeline extends StatelessWidget {
                   onPressed: controller.canLoadLaterMessages
                       ? controller.loadLaterMessages
                       : null,
-                  icon: const Icon(Icons.arrow_downward_rounded, size: 18),
+                  icon: const Icon(AppIcons.arrow_downward_rounded, size: 18),
                   label: Text(context.l10n.loadLaterMessages),
                 ),
               );
@@ -2006,62 +2271,12 @@ class _EarlierMessagesControl extends StatelessWidget {
                   dimension: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.history_rounded, size: 18),
+              : const Icon(AppIcons.history_rounded, size: 18),
           label: Text(
             loading
                 ? context.l10n.loadingEarlierMessages
                 : context.l10n.loadEarlierMessages,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SessionConnectingView extends StatelessWidget {
-  const _SessionConnectingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return TsEmptyState(
-      icon: Icons.cloud_sync_outlined,
-      title: context.l10n.sessionSynchronizingTitle,
-      message: context.l10n.sessionSynchronizingMessage,
-      action: const SizedBox.square(
-        dimension: 22,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      ),
-    );
-  }
-}
-
-class _ConnectionProblemView extends StatelessWidget {
-  const _ConnectionProblemView({
-    required this.message,
-    required this.retrying,
-    required this.onRetry,
-  });
-
-  final String message;
-  final bool retrying;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return TsEmptyState(
-      icon: Icons.cloud_off_outlined,
-      title: context.l10n.liveSyncInterrupted,
-      message: message,
-      action: OutlinedButton.icon(
-        onPressed: retrying ? null : onRetry,
-        icon: retrying
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.refresh_rounded),
-        label: Text(
-          retrying ? context.l10n.reconnecting : context.l10n.reconnect,
         ),
       ),
     );

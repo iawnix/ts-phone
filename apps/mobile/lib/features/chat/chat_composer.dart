@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import '../../l10n/app_localizations_extensions.dart';
 
 class ChatComposer extends StatelessWidget {
@@ -95,7 +96,7 @@ class ChatComposer extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.tune_rounded, size: 18),
+                              const Icon(AppIcons.tune_rounded, size: 18),
                               const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
@@ -110,7 +111,7 @@ class ChatComposer extends StatelessWidget {
                               if (canSelectModel) ...[
                                 const SizedBox(width: 4),
                                 const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
+                                  AppIcons.keyboard_arrow_down_rounded,
                                   size: 16,
                                 ),
                               ],
@@ -134,7 +135,10 @@ class ChatComposer extends StatelessWidget {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.stop_circle_outlined, size: 24),
+                            : const Icon(
+                                AppIcons.stop_circle_outlined,
+                                size: 24,
+                              ),
                       ),
                     ),
                   SizedBox.square(
@@ -168,7 +172,10 @@ class ChatComposer extends StatelessWidget {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.arrow_upward_rounded, size: 22),
+                            : const Icon(
+                                AppIcons.arrow_upward_rounded,
+                                size: 22,
+                              ),
                       ),
                     ),
                   ),

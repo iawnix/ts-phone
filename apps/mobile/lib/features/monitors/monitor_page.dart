@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/ts_phone_api.dart';
@@ -115,7 +116,7 @@ class _MonitorPageState extends State<MonitorPage> with WidgetsBindingObserver {
           IconButton(
             onPressed: _refresh,
             tooltip: l10n.refreshSessions,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
           ),
         ],
       ),

@@ -262,6 +262,13 @@ class ChatController extends ChangeNotifier {
           : null) ??
       _eventProblem;
   bool get isSynchronizing => _snapshotSyncInProgress;
+
+  /// A dropped event stream is retried in the background. Keep this separate
+  /// from actionable request failures so the chat can stay readable while the
+  /// connection indicator communicates the transient state in the app bar.
+  bool get hasTransientEventProblem =>
+      _eventConnectionState == EventConnectionState.reconnecting &&
+      _eventProblem?.code == TsPhoneProblemCode.networkRetrying;
   String? get sessionTitle => _sessionTitle;
   SessionRuntimeSnapshot? get sessionRuntime => _sessionRuntime;
   String get sessionRevision => _sessionRevision;

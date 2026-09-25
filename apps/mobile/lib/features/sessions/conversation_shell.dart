@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../../data/app_server_gateway.dart';
 import '../../data/host_gateway.dart';
@@ -14,6 +15,7 @@ import '../../theme/ts_phone_theme.dart';
 import '../../widgets/presentation.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_view_memory.dart';
+import 'context_switcher.dart';
 import 'session_list_page.dart';
 
 /// One Host owns the session directory for every installed workspace.
@@ -46,10 +48,14 @@ class _ConversationShellState extends State<ConversationShell> {
   SessionSummary? _session;
   List<SessionSummary>? _sessions;
   bool _creating = false;
+  bool _initializing = true;
+  bool _showInitialContext = false;
   int _generation = 0;
   int _sidebarRevision = 0;
+  int _selectionEpoch = 0;
 
-  LocalKey get _chatKey => ValueKey(('chat', _session?.sessionId));
+  LocalKey get _chatKey =>
+      ValueKey(('chat', _workspace?.id, _session?.sessionId, _generation));
 
   AppServerSessionGateway? get _management =>
       _api is AppServerSessionGateway ? _api as AppServerSessionGateway : null;
@@ -65,7 +71,7 @@ class _ConversationShellState extends State<ConversationShell> {
     _api =
         widget.gatewayBuilder?.call(widget.settings) ??
         HostGateway(widget.settings);
-    unawaited(_loadWorkspaces());
+    unawaited(_loadWorkspaces(restoreRecent: true));
   }
 
   @override
@@ -76,53 +82,161 @@ class _ConversationShellState extends State<ConversationShell> {
 
   void _showDirectory() {
     _scaffold.currentState?.closeDrawer();
+    _selectionEpoch += 1;
     setState(() {
       _generation += 1;
       _session = null;
-      _workspace = null;
-      _sessions = null;
+      _showInitialContext = _workspaces?.isNotEmpty == true;
     });
   }
 
-  Future<void> _loadWorkspaces() async {
+  Future<void> _loadWorkspaces({bool restoreRecent = false}) async {
+    final hadWorkspaces = _workspaces != null;
+    final selectionEpoch = _selectionEpoch;
     try {
       final workspaces = await _api.listWorkspaces();
       if (!mounted) return;
+      final existingWorkspace = _workspace;
+      final selectedWorkspace =
+          existingWorkspace != null &&
+              workspaces.any((value) => value.id == existingWorkspace.id)
+          ? existingWorkspace
+          : workspaces.length == 1
+          ? workspaces.single
+          : workspaces.firstOrNull;
       setState(() {
         _workspaces = workspaces;
-        _workspace = workspaces.length == 1 ? workspaces.single : null;
+        _workspace = selectedWorkspace;
         _workspaceProblem = null;
       });
+      if (restoreRecent) {
+        final restored = await _restoreRecentConversation(
+          workspaces,
+          selectionEpoch,
+        );
+        if (!restored && mounted && workspaces.isNotEmpty) {
+          _scheduleInitialContext(selectionEpoch);
+        }
+      }
+      if (mounted) setState(() => _initializing = false);
     } on Object catch (error) {
       if (!mounted) return;
-      setState(() => _workspaceProblem = describeTsPhoneProblem(error));
+      setState(() => _initializing = false);
+      final problem = describeTsPhoneProblem(error);
+      setState(() => _workspaceProblem = problem);
+      if (hadWorkspaces) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(problem.localizedMessage(context.l10n))),
+          );
+      }
     }
+  }
+
+  Future<bool> _restoreRecentConversation(
+    List<WorkspaceSummary> workspaces,
+    int selectionEpoch,
+  ) async {
+    final store = widget.selectionStore;
+    if (store == null) return false;
+    (String, String)? recent;
+    try {
+      recent = await store.loadConversation(widget.settings.serverUrl);
+    } on Object {
+      return false;
+    }
+    if (!mounted || selectionEpoch != _selectionEpoch || recent == null) {
+      return false;
+    }
+    WorkspaceSummary? workspace;
+    for (final candidate in workspaces) {
+      if (candidate.id == recent.$1) {
+        workspace = candidate;
+        break;
+      }
+    }
+    // Versions before the workspace-aware preference stored serverId here.
+    // A single workspace lets us recover that preference without guessing
+    // when several projects are available.
+    if (workspace == null &&
+        workspaces.length == 1 &&
+        recent.$1 == widget.settings.serverId) {
+      workspace = workspaces.single;
+    }
+    if (workspace == null) return false;
+
+    List<SessionSummary> sessions;
+    try {
+      sessions = await _api.listSessions(workspace.id);
+    } on Object {
+      return false;
+    }
+    if (!mounted || selectionEpoch != _selectionEpoch) return false;
+    SessionSummary? session;
+    for (final candidate in sessions) {
+      if (candidate.sessionId == recent.$2) {
+        session = candidate;
+        break;
+      }
+    }
+    if (session == null) return false;
+    setState(() {
+      _workspace = workspace;
+      _sessions = sessions;
+      _session = session;
+      _generation += 1;
+      _sidebarRevision += 1;
+      _selectionEpoch += 1;
+    });
+    return true;
+  }
+
+  void _scheduleInitialContext(int selectionEpoch) {
+    if (selectionEpoch != _selectionEpoch || _session != null) return;
+    setState(() => _showInitialContext = true);
   }
 
   void _selectWorkspace(WorkspaceSummary workspace) {
     _scaffold.currentState?.closeDrawer();
+    _selectionEpoch += 1;
     setState(() {
       _workspace = workspace;
       _session = null;
       _sessions = null;
       _generation += 1;
+      _showInitialContext = true;
     });
   }
 
   void _selectSession(SessionSummary session) {
-    _scaffold.currentState?.closeDrawer();
-    setState(() {
-      _generation += 1;
-      _session = session;
-    });
-    unawaited(_remember(session.sessionId));
+    final workspace = _workspace;
+    if (workspace == null) return;
+    _selectContextSession(workspace, session);
   }
 
-  Future<void> _remember(String session) async {
+  void _selectContextSession(
+    WorkspaceSummary workspace,
+    SessionSummary session,
+  ) {
+    _scaffold.currentState?.closeDrawer();
+    _selectionEpoch += 1;
+    final workspaceChanged = _workspace?.id != workspace.id;
+    setState(() {
+      _workspace = workspace;
+      if (workspaceChanged) _sessions = null;
+      _generation += 1;
+      _session = session;
+      _showInitialContext = false;
+    });
+    unawaited(_remember(workspace.id, session.sessionId));
+  }
+
+  Future<void> _remember(String workspace, String session) async {
     try {
       await widget.selectionStore?.saveConversation(
         widget.settings.serverUrl,
-        widget.settings.serverId,
+        workspace,
         session,
       );
     } on Object {
@@ -162,6 +276,71 @@ class _ConversationShellState extends State<ConversationShell> {
     } finally {
       if (mounted) setState(() => _creating = false);
     }
+  }
+
+  Future<List<SessionSummary>> _loadSessionsForContext(
+    WorkspaceSummary workspace,
+  ) => _api.listSessions(workspace.id);
+
+  Future<SessionSummary?> _createSessionForContext(
+    WorkspaceSummary workspace,
+  ) async {
+    final management = _management;
+    if (_creating || management == null) return null;
+    setState(() => _creating = true);
+    try {
+      final session = await management.createWorkspaceSession(workspace.id);
+      if (!mounted) return session;
+      if (_workspace?.id == workspace.id) {
+        setState(() {
+          _sessions = [
+            session,
+            ...?_sessions?.where(
+              (value) => value.sessionId != session.sessionId,
+            ),
+          ];
+          _sidebarRevision += 1;
+        });
+      }
+      return session;
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              describeTsPhoneProblem(error).localizedMessage(context.l10n),
+            ),
+          ),
+        );
+      }
+      return null;
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  Future<void> _showContextSwitcher() async {
+    if (_workspaces == null) await _loadWorkspaces();
+    if (!mounted) return;
+    final workspaces = _workspaces;
+    final workspace = _workspace ?? workspaces?.firstOrNull;
+    if (workspaces == null || workspace == null || workspaces.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+      builder: (context) => ContextSwitcherSheet(
+        workspaces: workspaces,
+        selectedWorkspace: workspace,
+        selectedSession: _session,
+        initialSessions: _sessions,
+        loadSessions: _loadSessionsForContext,
+        onSessionSelected: _selectContextSession,
+        onCreateSession: managementAvailable ? _createSessionForContext : null,
+      ),
+    );
   }
 
   Future<void> _newWorkspace() async {
@@ -243,18 +422,70 @@ class _ConversationShellState extends State<ConversationShell> {
       sidebarHeader: sidebar
           ? ListTile(
               key: const ValueKey('sidebar-directory'),
-              leading: const Icon(Icons.forum_outlined, size: 22),
+              leading: const Icon(AppIcons.forum_outlined, size: 22),
               title: Text(context.l10n.sessions),
               onTap: _showDirectory,
             )
           : null,
       sidebarFooter: sidebar
           ? ListTile(
-              leading: const Icon(Icons.settings_outlined, size: 22),
+              leading: const Icon(AppIcons.settings_outlined, size: 22),
               title: Text(context.l10n.settings),
               onTap: widget.onOpenSettings,
             )
           : null,
+    );
+  }
+
+  Widget _initialContext() {
+    final workspaces = _workspaces;
+    final workspace = _workspace ?? workspaces?.firstOrNull;
+    if (workspaces == null || workspace == null || workspaces.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Scaffold(
+      appBar: TsGlassAppBar(
+        title: Text(context.l10n.workspaces),
+        actions: [
+          if (_workspaceManagement != null)
+            IconButton(
+              onPressed: () => unawaited(_newWorkspace()),
+              tooltip: context.l10n.newProject,
+              icon: const Icon(AppIcons.create_new_folder_outlined),
+            ),
+          PopupMenuButton<String>(
+            key: const ValueKey('initial-context-menu'),
+            tooltip: context.l10n.moreActions,
+            icon: const Icon(AppIcons.more_horiz_rounded),
+            onSelected: (value) {
+              if (value == 'settings') widget.onOpenSettings();
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem<String>(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    const Icon(AppIcons.settings_outlined, size: 20),
+                    const SizedBox(width: 12),
+                    Flexible(child: Text(context.l10n.settings)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: ContextSwitcherSheet(
+        workspaces: workspaces,
+        selectedWorkspace: workspace,
+        selectedSession: _session,
+        initialSessions: _sessions,
+        loadSessions: _loadSessionsForContext,
+        onSessionSelected: _selectContextSession,
+        onCreateSession: managementAvailable ? _createSessionForContext : null,
+        dismissOnSessionSelected: false,
+        embedded: true,
+      ),
     );
   }
 
@@ -266,23 +497,33 @@ class _ConversationShellState extends State<ConversationShell> {
       appBar: sidebar
           ? null
           : TsGlassAppBar(
-              title: Text(context.l10n.projectViews),
+              title: Text(context.l10n.workspaces),
               actions: [
-                IconButton(
-                  onPressed: () => unawaited(_loadWorkspaces()),
-                  tooltip: context.l10n.refreshSessions,
-                  icon: const Icon(Icons.refresh),
-                ),
                 if (_workspaceManagement != null)
                   IconButton(
                     onPressed: () => unawaited(_newWorkspace()),
                     tooltip: context.l10n.newProject,
-                    icon: const Icon(Icons.create_new_folder_outlined),
+                    icon: const Icon(AppIcons.create_new_folder_outlined),
                   ),
-                IconButton(
-                  onPressed: widget.onOpenSettings,
-                  tooltip: context.l10n.settings,
-                  icon: const Icon(Icons.settings_outlined),
+                PopupMenuButton<String>(
+                  key: const ValueKey('workspace-menu'),
+                  tooltip: context.l10n.moreActions,
+                  icon: const Icon(AppIcons.more_horiz_rounded),
+                  onSelected: (value) {
+                    if (value == 'settings') widget.onOpenSettings();
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem<String>(
+                      value: 'settings',
+                      child: Row(
+                        children: [
+                          const Icon(AppIcons.settings_outlined, size: 20),
+                          const SizedBox(width: 12),
+                          Flexible(child: Text(context.l10n.settings)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -292,56 +533,92 @@ class _ConversationShellState extends State<ConversationShell> {
                 : Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text(
-                        _workspaceProblem!.localizedMessage(context.l10n),
-                        textAlign: TextAlign.center,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _workspaceProblem!.localizedMessage(context.l10n),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton.icon(
+                            onPressed: () => unawaited(_loadWorkspaces()),
+                            icon: const Icon(AppIcons.refresh),
+                            label: Text(context.l10n.refreshSessions),
+                          ),
+                        ],
                       ),
                     ),
                   )
-          : workspaces.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    context.l10n.noWorkspacesMessage,
-                    textAlign: TextAlign.center,
-                  ),
-                  if (_workspaceManagement != null) ...[
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () => unawaited(_newWorkspace()),
-                      icon: const Icon(Icons.create_new_folder_outlined),
-                      label: Text(context.l10n.newProject),
+          : RefreshIndicator(
+              onRefresh: _loadWorkspaces,
+              child: workspaces.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        const SizedBox(height: 120),
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                context.l10n.noWorkspacesMessage,
+                                textAlign: TextAlign.center,
+                              ),
+                              if (_workspaceManagement != null) ...[
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: () => unawaited(_newWorkspace()),
+                                  icon: const Icon(
+                                    AppIcons.create_new_folder_outlined,
+                                  ),
+                                  label: Text(context.l10n.newProject),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      itemCount: workspaces.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final workspace = workspaces[index];
+                        final activity = workspace.liveSessionCount > 0
+                            ? context.l10n.liveSessionCount(
+                                workspace.liveSessionCount,
+                              )
+                            : context.l10n.sessionCount(workspace.sessionCount);
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: TsPhoneSpacing.large,
+                            vertical: TsPhoneSpacing.xSmall,
+                          ),
+                          leading: const Icon(AppIcons.folder_outlined),
+                          title: Text(workspace.name),
+                          subtitle: Text(
+                            activity,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: const Icon(AppIcons.chevron_right),
+                          onTap: () => _selectWorkspace(workspace),
+                        );
+                      },
                     ),
-                  ],
-                ],
-              ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: workspaces.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final workspace = workspaces[index];
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.folder_outlined),
-                    title: Text(workspace.name),
-                    subtitle: Text(
-                      context.l10n.sessionCount(workspace.sessionCount),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _selectWorkspace(workspace),
-                  ),
-                );
-              },
             ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_initializing) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return NavigatorPopHandler(
       enabled: _session != null,
       onPopWithResult: (result) => _navigator.currentState?.maybePop(result),
@@ -350,7 +627,9 @@ class _ConversationShellState extends State<ConversationShell> {
         pages: [
           TsAdaptivePage<void>(
             key: const ValueKey('sessions'),
-            child: _sessionList(sidebar: false),
+            child: _showInitialContext
+                ? _initialContext()
+                : _sessionList(sidebar: false),
           ),
           if (_session != null)
             TsAdaptivePage<void>(key: _chatKey, child: _chat()),
@@ -377,25 +656,11 @@ class _ConversationShellState extends State<ConversationShell> {
           ? null
           : () => widget.gatewayBuilder!(widget.settings),
       memory: _memory.view(_workspace!.id, session.sessionId),
-      onOpenNavigation: wide
-          ? null
-          : () => _scaffold.currentState?.openDrawer(),
+      onOpenContext: wide ? null : () => unawaited(_showContextSwitcher()),
       embedded: true,
     );
     return Scaffold(
       key: _scaffold,
-      drawerEnableOpenDragGesture: true,
-      drawer: wide
-          ? null
-          : Drawer(
-              width: MediaQuery.sizeOf(context).width.clamp(0, 360) - 32,
-              shape: const RoundedRectangleBorder(),
-              child: _sessionList(sidebar: true),
-            ),
-      onDrawerChanged: (opened) {
-        FocusManager.instance.primaryFocus?.unfocus();
-        if (opened) setState(() => _sidebarRevision += 1);
-      },
       body: wide
           ? Row(
               children: [

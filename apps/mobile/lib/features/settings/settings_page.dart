@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
 import '../../app_identity.dart';
@@ -50,6 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _savingLocale = false;
   bool _diagnosing = false;
   bool _showConnectionDetails = false;
+  bool _showTechnicalDetails = false;
   _ConnectionDiagnostics? _diagnostics;
   int _diagnosticsGeneration = 0;
 
@@ -65,6 +67,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _diagnosticsGeneration += 1;
       _diagnostics = null;
       _diagnosing = false;
+      _showTechnicalDetails = false;
     }
   }
 
@@ -190,6 +193,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           children: <Widget>[
                             _PreferenceRow<AppThemePreference>(
                               key: const ValueKey('appearance-setting'),
+                              icon: AppIcons.palette_outlined,
                               label: l10n.appearance,
                               saving: _savingTheme,
                               value: widget.themePreference,
@@ -203,6 +207,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             const _SettingsDivider(),
                             _PreferenceRow<AppLocalePreference>(
                               key: const ValueKey('language-setting'),
+                              icon: AppIcons.language_outlined,
                               label: l10n.language,
                               saving: _savingLocale,
                               value: widget.localePreference,
@@ -224,6 +229,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               key: const ValueKey<String>(
                                 'connection-service-edit',
                               ),
+                              icon: AppIcons.link_rounded,
                               title: l10n.tsPhoneService,
                               endpoint: endpointSummary,
                               onTap: () {
@@ -236,6 +242,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               enabled: connection != null,
                               diagnosing: _diagnosing,
                               diagnostics: diagnostics,
+                              icon: AppIcons.monitor_heart_outlined,
                               onTap: _runDiagnostics,
                             ),
                             if (diagnostics?.problem
@@ -248,12 +255,16 @@ class _SettingsPageState extends State<SettingsPage> {
                             const _SettingsDivider(),
                             _ConnectionDetailsToggle(
                               expanded: _showConnectionDetails,
+                              icon: AppIcons.info_outline_rounded,
                               onTap: () {
                                 ActionFeedback.selection();
-                                setState(
-                                  () => _showConnectionDetails =
-                                      !_showConnectionDetails,
-                                );
+                                setState(() {
+                                  _showConnectionDetails =
+                                      !_showConnectionDetails;
+                                  if (!_showConnectionDetails) {
+                                    _showTechnicalDetails = false;
+                                  }
+                                });
                               },
                             ),
                             AnimatedSize(
@@ -277,6 +288,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                         children: <Widget>[
                                           const _SettingsDivider(),
                                           _DiagnosticRow(
+                                            icon: AppIcons.link_rounded,
                                             label: l10n.endpoint,
                                             value:
                                                 connection?.serverUrl ??
@@ -328,46 +340,112 @@ class _SettingsPageState extends State<SettingsPage> {
                                           ),
                                           const _SettingsDivider(),
                                           _DiagnosticRow(
-                                            label: l10n.hostId,
-                                            value:
-                                                connection?.serverId ??
-                                                l10n.notConfigured,
-                                            stacked: true,
-                                            selectable: connection != null,
-                                          ),
-                                          const _SettingsDivider(),
-                                          _DiagnosticRow(
-                                            label: l10n.deviceId,
-                                            value:
-                                                connection?.deviceId ??
-                                                l10n.notConfigured,
-                                            stacked: true,
-                                            selectable: connection != null,
-                                          ),
-                                          const _SettingsDivider(),
-                                          _DiagnosticRow(
+                                            icon: AppIcons.key_outlined,
                                             label: l10n.auth,
                                             value: authValue,
                                             valueColor: authColor,
                                           ),
                                           const _SettingsDivider(),
-                                          _DiagnosticRow(
-                                            label: l10n.linkProtocol,
-                                            value: connection == null
-                                                ? l10n.diagnosticNotChecked
-                                                : tspiHostLinkProtocol,
+                                          _TechnicalDetailsToggle(
+                                            expanded: _showTechnicalDetails,
+                                            onTap: () {
+                                              ActionFeedback.selection();
+                                              setState(
+                                                () => _showTechnicalDetails =
+                                                    !_showTechnicalDetails,
+                                              );
+                                            },
                                           ),
-                                          const _SettingsDivider(),
-                                          _DiagnosticRow(
-                                            label: l10n.appServerProtocol,
-                                            value: appServerProtocolValue,
-                                          ),
-                                          const _SettingsDivider(),
-                                          _DiagnosticRow(
-                                            label: l10n.appServerVersion,
-                                            value:
-                                                diagnostics?.serviceVersion ??
-                                                l10n.diagnosticNotChecked,
+                                          AnimatedSize(
+                                            duration: TsPhoneMotion.resolve(
+                                              context,
+                                              TsPhoneMotion.standard,
+                                            ),
+                                            reverseDuration:
+                                                TsPhoneMotion.resolve(
+                                                  context,
+                                                  TsPhoneMotion.quick,
+                                                ),
+                                            curve: Curves.easeOutCubic,
+                                            alignment: Alignment.topCenter,
+                                            clipBehavior: Clip.hardEdge,
+                                            child: ClipRect(
+                                              child: _showTechnicalDetails
+                                                  ? Column(
+                                                      key:
+                                                          const ValueKey<
+                                                            String
+                                                          >(
+                                                            'technical-details',
+                                                          ),
+                                                      children: <Widget>[
+                                                        const _SettingsDivider(),
+                                                        _DiagnosticRow(
+                                                          icon: Icons
+                                                              .dns_outlined,
+                                                          label: l10n.hostId,
+                                                          value:
+                                                              connection
+                                                                  ?.serverId ??
+                                                              l10n.notConfigured,
+                                                          stacked: true,
+                                                          selectable:
+                                                              connection !=
+                                                              null,
+                                                        ),
+                                                        const _SettingsDivider(),
+                                                        _DiagnosticRow(
+                                                          icon: Icons
+                                                              .smartphone_outlined,
+                                                          label: l10n.deviceId,
+                                                          value:
+                                                              connection
+                                                                  ?.deviceId ??
+                                                              l10n.notConfigured,
+                                                          stacked: true,
+                                                          selectable:
+                                                              connection !=
+                                                              null,
+                                                        ),
+                                                        const _SettingsDivider(),
+                                                        _DiagnosticRow(
+                                                          icon: Icons
+                                                              .code_rounded,
+                                                          label:
+                                                              l10n.linkProtocol,
+                                                          value:
+                                                              connection == null
+                                                              ? l10n.diagnosticNotChecked
+                                                              : tspiHostLinkProtocol,
+                                                        ),
+                                                        const _SettingsDivider(),
+                                                        _DiagnosticRow(
+                                                          icon: Icons
+                                                              .code_rounded,
+                                                          label: l10n
+                                                              .appServerProtocol,
+                                                          value:
+                                                              appServerProtocolValue,
+                                                        ),
+                                                        const _SettingsDivider(),
+                                                        _DiagnosticRow(
+                                                          icon: Icons
+                                                              .info_outline_rounded,
+                                                          label: l10n
+                                                              .appServerVersion,
+                                                          value:
+                                                              diagnostics
+                                                                  ?.serviceVersion ??
+                                                              l10n.diagnosticNotChecked,
+                                                        ),
+                                                      ],
+                                                    )
+                                                  : const SizedBox(
+                                                      key: ValueKey<String>(
+                                                        'technical-details-collapsed',
+                                                      ),
+                                                    ),
+                                            ),
                                           ),
                                         ],
                                       )
@@ -427,6 +505,7 @@ class _SettingsDivider extends StatelessWidget {
 class _PreferenceRow<T extends Object> extends StatelessWidget {
   const _PreferenceRow({
     super.key,
+    required this.icon,
     required this.label,
     required this.value,
     required this.choices,
@@ -434,6 +513,7 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
     required this.saving,
   });
 
+  final IconData icon;
   final String label;
   final T value;
   final Map<T, String> choices;
@@ -473,7 +553,7 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
                     title: Text(entry.value),
                     trailing: entry.key == value
                         ? Icon(
-                            Icons.check_rounded,
+                            AppIcons.check_rounded,
                             color: Theme.of(context).colorScheme.primary,
                           )
                         : null,
@@ -494,12 +574,23 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: !saving,
+      label: label,
+      value: choices[value],
       child: TsPressable(
         onTap: saving ? null : () => _choose(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: <Widget>[
+              Tooltip(
+                message: label,
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: TsPhoneSpacing.medium),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -560,7 +651,7 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
                 )
               else
                 Icon(
-                  Icons.chevron_right_rounded,
+                  AppIcons.chevron_right_rounded,
                   size: 20,
                   color: theme.colorScheme.outline,
                 ),
@@ -575,11 +666,13 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
 class _ConnectionServiceRow extends StatelessWidget {
   const _ConnectionServiceRow({
     super.key,
+    required this.icon,
     required this.title,
     required this.endpoint,
     required this.onTap,
   });
 
+  final IconData icon;
   final String title;
   final String endpoint;
   final VoidCallback onTap;
@@ -590,6 +683,8 @@ class _ConnectionServiceRow extends StatelessWidget {
     final colors = theme.colorScheme;
     return Semantics(
       button: true,
+      label: title,
+      value: endpoint,
       child: TsPressable(
         onTap: onTap,
         child: ConstrainedBox(
@@ -601,6 +696,11 @@ class _ConnectionServiceRow extends StatelessWidget {
             ),
             child: Row(
               children: <Widget>[
+                Tooltip(
+                  message: title,
+                  child: Icon(icon, size: 22, color: colors.primary),
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -627,7 +727,7 @@ class _ConnectionServiceRow extends StatelessWidget {
                 ),
                 const SizedBox(width: TsPhoneSpacing.medium),
                 Icon(
-                  Icons.edit_outlined,
+                  AppIcons.edit_outlined,
                   key: const ValueKey<String>('connection-edit-affordance'),
                   size: 19,
                   color: colors.primary,
@@ -642,9 +742,14 @@ class _ConnectionServiceRow extends StatelessWidget {
 }
 
 class _ConnectionDetailsToggle extends StatelessWidget {
-  const _ConnectionDetailsToggle({required this.expanded, required this.onTap});
+  const _ConnectionDetailsToggle({
+    required this.expanded,
+    required this.icon,
+    required this.onTap,
+  });
 
   final bool expanded;
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
@@ -665,6 +770,11 @@ class _ConnectionDetailsToggle extends StatelessWidget {
             ),
             child: Row(
               children: <Widget>[
+                Tooltip(
+                  message: context.l10n.connectionDetails,
+                  child: Icon(icon, size: 20, color: colors.onSurfaceVariant),
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
                 Expanded(
                   child: Text(
                     context.l10n.connectionDetails,
@@ -673,8 +783,8 @@ class _ConnectionDetailsToggle extends StatelessWidget {
                 ),
                 Icon(
                   expanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
+                      ? AppIcons.keyboard_arrow_up_rounded
+                      : AppIcons.keyboard_arrow_down_rounded,
                   color: colors.outline,
                 ),
               ],
@@ -699,7 +809,7 @@ class _ConnectionProblem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.error_outline_rounded, size: 18, color: error),
+          Icon(AppIcons.error_outline_rounded, size: 18, color: error),
           const SizedBox(width: TsPhoneSpacing.small),
           Expanded(
             child: Text(
@@ -758,6 +868,7 @@ class _DiagnosticRow extends StatelessWidget {
   const _DiagnosticRow({
     required this.label,
     required this.value,
+    this.icon,
     this.valueColor,
     this.stacked = false,
     this.selectable = false,
@@ -766,6 +877,7 @@ class _DiagnosticRow extends StatelessWidget {
 
   final String label;
   final String value;
+  final IconData? icon;
   final Color? valueColor;
   final bool stacked;
   final bool selectable;
@@ -808,6 +920,14 @@ class _DiagnosticRow extends StatelessWidget {
                 children: <Widget>[
                   Row(
                     children: [
+                      if (icon case final value?) ...<Widget>[
+                        Icon(
+                          value,
+                          size: 18,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: TsPhoneSpacing.small),
+                      ],
                       Expanded(
                         child: Text(label, style: theme.textTheme.bodyMedium),
                       ),
@@ -820,6 +940,14 @@ class _DiagnosticRow extends StatelessWidget {
               )
             : Row(
                 children: <Widget>[
+                  if (icon case final value?) ...<Widget>[
+                    Icon(
+                      value,
+                      size: 18,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: TsPhoneSpacing.small),
+                  ],
                   Expanded(
                     child: Text(label, style: theme.textTheme.bodyMedium),
                   ),
@@ -832,17 +960,72 @@ class _DiagnosticRow extends StatelessWidget {
   }
 }
 
+class _TechnicalDetailsToggle extends StatelessWidget {
+  const _TechnicalDetailsToggle({required this.expanded, required this.onTap});
+
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final label = context.l10n.technicalDetails;
+    return Semantics(
+      button: true,
+      expanded: expanded,
+      label: label,
+      child: TsPressable(
+        key: const ValueKey<String>('technical-details-toggle'),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TsPhoneSpacing.large,
+              vertical: TsPhoneSpacing.small,
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  AppIcons.tune_rounded,
+                  size: 20,
+                  color: colors.onSurfaceVariant,
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                Icon(
+                  expanded
+                      ? AppIcons.keyboard_arrow_up_rounded
+                      : AppIcons.keyboard_arrow_down_rounded,
+                  color: colors.outline,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DiagnosticsActionRow extends StatelessWidget {
   const _DiagnosticsActionRow({
     required this.enabled,
     required this.diagnosing,
     required this.diagnostics,
+    required this.icon,
     required this.onTap,
   });
 
   final bool enabled;
   final bool diagnosing;
   final _ConnectionDiagnostics? diagnostics;
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
@@ -867,6 +1050,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: enabled && !diagnosing,
+      label: '${l10n.runDiagnostics}, $label',
       child: TsPressable(
         key: const ValueKey<String>('run-connection-diagnostics'),
         onTap: enabled && !diagnosing ? onTap : null,
@@ -879,6 +1063,17 @@ class _DiagnosticsActionRow extends StatelessWidget {
             ),
             child: Row(
               children: <Widget>[
+                Tooltip(
+                  message: l10n.runDiagnostics,
+                  child: Icon(
+                    icon,
+                    size: 22,
+                    color: enabled
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(width: TsPhoneSpacing.medium),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -920,7 +1115,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
                           ),
                         )
                       : Icon(
-                          Icons.refresh_rounded,
+                          AppIcons.refresh_rounded,
                           key: const ValueKey<String>('diagnostics-refresh'),
                           size: 20,
                           color: enabled

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 
 import '../models/chat_message.dart';
 import '../l10n/app_localizations_extensions.dart';
@@ -93,7 +94,7 @@ class _OutputNotice extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            failed ? Icons.error_outline : Icons.info_outline,
+            failed ? AppIcons.error_outline : AppIcons.info_outline,
             size: 18,
             color: failed ? colors.error : colors.onSurfaceVariant,
           ),
@@ -344,7 +345,7 @@ class _UserMessageMetadata extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
             )
           else
-            Icon(Icons.cloud_upload_outlined, size: 13, color: color),
+            Icon(AppIcons.cloud_upload_outlined, size: 13, color: color),
           Text(deliveryLabel, style: labelStyle),
         ] else if (timeLabel != null)
           Text('· $timeLabel', style: labelStyle),
@@ -388,8 +389,8 @@ class _ToolDetailView extends StatelessWidget {
           collapsedIconColor: theme.colorScheme.onSurfaceVariant,
           leading: Icon(
             detail.isError
-                ? Icons.error_outline_rounded
-                : Icons.terminal_rounded,
+                ? AppIcons.error_outline_rounded
+                : AppIcons.terminal_rounded,
             size: 18,
             color: detail.isError
                 ? stateColor

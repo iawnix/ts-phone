@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -134,7 +135,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
             vertical: TsPhoneSpacing.xSmall,
           ),
         ),
-        icon: const Icon(Icons.image_outlined),
+        icon: const Icon(AppIcons.image_outlined),
         label: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +288,7 @@ class _MarkdownImagePreviewPageState extends State<_MarkdownImagePreviewPage> {
             key: const ValueKey<String>('markdown-image-open-browser'),
             onPressed: () => _openHttpsUri(widget.uri),
             tooltip: context.l10n.openInBrowser,
-            icon: const Icon(Icons.open_in_new_rounded),
+            icon: const Icon(AppIcons.open_in_new_rounded),
           ),
         ],
       ),
@@ -363,7 +364,7 @@ class _ImagePreviewFailure extends StatelessWidget {
                 children: <Widget>[
                   ExcludeSemantics(
                     child: Icon(
-                      Icons.broken_image_outlined,
+                      AppIcons.broken_image_outlined,
                       size: 32,
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -379,7 +380,7 @@ class _ImagePreviewFailure extends StatelessWidget {
                     key: const ValueKey<String>('markdown-image-retry'),
                     onPressed: onRetry,
                     tooltip: context.l10n.retry,
-                    icon: const Icon(Icons.refresh_rounded),
+                    icon: const Icon(AppIcons.refresh_rounded),
                   ),
                 ],
               ),

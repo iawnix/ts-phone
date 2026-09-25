@@ -19,6 +19,7 @@ import 'package:ts_phone/models/app_locale_preference.dart';
 import 'package:ts_phone/models/connection_settings.dart';
 import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/platform/ts_accessibility_controller.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 import 'package:ts_phone/models/chat_message.dart';
 import 'package:ts_phone/widgets/chat_message_view.dart';
@@ -94,7 +95,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+    expect(find.byIcon(AppIcons.image_outlined), findsOneWidget);
     expect(find.byType(Image), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -691,7 +692,7 @@ void main() {
     expect(find.text('Review · Validate'), findsOneWidget);
     expect(find.text('Failed'), findsOneWidget);
     expect(find.text('2.4s'), findsOneWidget);
-    expect(find.byIcon(Icons.fact_check_outlined), findsOneWidget);
+    expect(find.byIcon(AppIcons.fact_check_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -924,6 +925,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(endpoint, findsOneWidget);
+      expect(find.text('Host ID'), findsNothing);
+      expect(find.text('Device ID'), findsNothing);
       await tester.ensureVisible(endpoint);
       await tester.pumpAndSettle();
       expect(tester.getSize(endpoint).height, greaterThan(20));
@@ -973,6 +976,10 @@ void main() {
       find.byKey(const ValueKey<String>('connection-details-toggle')),
     );
     await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('technical-details-toggle')),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('pi-app-server/8'), findsOneWidget);
     expect(find.text('Pi App Server').last, findsOneWidget);
   });
@@ -1015,7 +1022,7 @@ void main() {
       expect(find.byKey(const ValueKey('language-setting')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('appearance-setting')));
       await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      expect(find.byIcon(AppIcons.check_rounded), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -1149,7 +1156,16 @@ Future<ConnectionSettings> _redeemTestPairing({
 );
 
 Future<void> _openSettings(WidgetTester tester, String label) async {
-  await tester.tap(find.byTooltip(label));
+  final directSettings = find.byTooltip(label);
+  if (directSettings.evaluate().isNotEmpty) {
+    await tester.tap(directSettings);
+  } else {
+    final menu = find.byKey(const ValueKey('workspace-menu'));
+    expect(menu, findsOneWidget);
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+  }
   await tester.pumpAndSettle();
 }
 

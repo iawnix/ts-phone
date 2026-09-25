@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
+import 'package:intl/intl.dart';
 
 import '../../data/app_server_gateway.dart';
 import '../../data/host_gateway.dart';
 import '../../data/ts_phone_api.dart';
+import '../../l10n/app_localizations.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../models/host_monitor.dart';
@@ -88,7 +91,7 @@ class _SessionListPageState extends State<SessionListPage>
           dimension: 22,
           child: CircularProgressIndicator(strokeWidth: 2),
         )
-      : const Icon(Icons.add_comment_outlined, size: 22);
+      : const Icon(AppIcons.add_comment_outlined, size: 22);
 
   @override
   void initState() {
@@ -274,13 +277,6 @@ class _SessionListPageState extends State<SessionListPage>
         ),
         title: Text(widget.workspace.name),
         actions: [
-          if (_gateway is HostMonitorGateway)
-            IconButton(
-              key: const ValueKey('open-monitors'),
-              onPressed: _openMonitors,
-              tooltip: l10n.hostMonitors,
-              icon: const Icon(Icons.notifications_active_outlined),
-            ),
           if (_sessionsGateway != null || widget.onCreateSession != null)
             IconButton(
               key: const ValueKey('create-session'),
@@ -288,12 +284,62 @@ class _SessionListPageState extends State<SessionListPage>
               tooltip: l10n.newSession,
               icon: _createIcon,
             ),
-          if (widget.onOpenSettings case final open?)
-            IconButton(
-              onPressed: open,
-              tooltip: l10n.settings,
-              icon: const Icon(Icons.settings_outlined),
-            ),
+          PopupMenuButton<String>(
+            key: const ValueKey('session-menu'),
+            tooltip: l10n.moreActions,
+            icon: const Icon(AppIcons.more_horiz_rounded),
+            onSelected: (action) {
+              switch (action) {
+                case 'refresh':
+                  unawaited(_refresh(announce: true));
+                case 'monitors':
+                  unawaited(_openMonitors());
+                case 'settings':
+                  widget.onOpenSettings?.call();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                key: const ValueKey('refresh-sessions'),
+                value: 'refresh',
+                enabled: !_refreshing,
+                child: Row(
+                  children: [
+                    const Icon(AppIcons.refresh_rounded, size: 20),
+                    const SizedBox(width: TsPhoneSpacing.medium),
+                    Text(l10n.refreshSessions),
+                  ],
+                ),
+              ),
+              if (_gateway is HostMonitorGateway)
+                PopupMenuItem<String>(
+                  key: const ValueKey('open-monitors'),
+                  value: 'monitors',
+                  child: Row(
+                    children: [
+                      const Icon(
+                        AppIcons.notifications_active_outlined,
+                        size: 20,
+                      ),
+                      const SizedBox(width: TsPhoneSpacing.medium),
+                      Text(l10n.hostMonitors),
+                    ],
+                  ),
+                ),
+              if (widget.onOpenSettings != null)
+                PopupMenuItem<String>(
+                  key: const ValueKey('open-settings'),
+                  value: 'settings',
+                  child: Row(
+                    children: [
+                      const Icon(AppIcons.settings_outlined, size: 20),
+                      const SizedBox(width: TsPhoneSpacing.medium),
+                      Text(l10n.settings),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
       body: TsPageBackdrop(
@@ -332,7 +378,7 @@ class _SessionListPageState extends State<SessionListPage>
                 onChanged: (value) => setState(() => _query = value),
                 decoration: InputDecoration(
                   hintText: l10n.searchConversations,
-                  prefixIcon: const Icon(Icons.search),
+                  prefixIcon: const Icon(AppIcons.search),
                   isDense: true,
                   filled: true,
                   fillColor: colors.surfaceContainer,
@@ -384,8 +430,12 @@ class _SessionListPageState extends State<SessionListPage>
                                   leading: _sessionLeading(session),
                                   title: Text(
                                     session.localizedDisplayName(l10n),
-                                    maxLines: 2,
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: _sessionSubtitleWidget(
+                                    session,
+                                    l10n,
                                   ),
                                   onTap: null,
                                   trailing: _sessionTrailing(session),
@@ -400,7 +450,7 @@ class _SessionListPageState extends State<SessionListPage>
             if (_gateway is HostMonitorGateway)
               ListTile(
                 key: const ValueKey('sidebar-monitors'),
-                leading: const Icon(Icons.notifications_active_outlined),
+                leading: const Icon(AppIcons.notifications_active_outlined),
                 title: Text(l10n.hostMonitors),
                 onTap: _openMonitors,
               ),
@@ -425,7 +475,7 @@ class _SessionListPageState extends State<SessionListPage>
           padding: const EdgeInsets.fromLTRB(0, 72, 0, 24),
           children: [
             TsEmptyState(
-              icon: Icons.chat_bubble_outline,
+              icon: AppIcons.chat_bubble_outline,
               title: l10n.noSessionHistoryTitle,
               message: l10n.noSessionHistoryMessage,
               action: _sessionsGateway == null && widget.onCreateSession == null
@@ -444,7 +494,7 @@ class _SessionListPageState extends State<SessionListPage>
       children: [
         if (_problem case final problem?)
           TsInfoBand(
-            icon: Icons.cloud_off_outlined,
+            icon: AppIcons.cloud_off_outlined,
             message: l10n.sessionStateStale(problem.localizedMessage(l10n)),
             tone: TsInfoTone.error,
           ),
@@ -464,8 +514,9 @@ class _SessionListPageState extends State<SessionListPage>
                       .length;
                   return TsSectionHeader(
                     title: l10n.sessions,
-                    caption:
-                        '${l10n.sessionCount(_sessions!.length)} · ${l10n.liveSessionCount(running)}',
+                    caption: running > 0
+                        ? l10n.liveSessionCount(running)
+                        : null,
                   );
                 }
                 final session = _sessions![index - 1];
@@ -476,8 +527,12 @@ class _SessionListPageState extends State<SessionListPage>
                     child: ListTile(
                       key: ValueKey('session-${session.sessionId}'),
                       leading: _sessionLeading(session),
-                      title: Text(session.localizedDisplayName(l10n)),
-                      subtitle: Text(session.shortId),
+                      title: Text(
+                        session.localizedDisplayName(l10n),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: _sessionSubtitleWidget(session, l10n),
                       onTap: null,
                       trailing: _sessionTrailing(session),
                     ),
@@ -514,10 +569,19 @@ class _SessionListPageState extends State<SessionListPage>
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
-    return Icon(
-      session.runtimeState == RuntimeState.running
-          ? Icons.motion_photos_on_outlined
-          : Icons.chat_bubble_outline,
+    final l10n = context.l10n;
+    final label = session.runtimeState.localizedCompactLabel(l10n);
+    final icon = switch (session.runtimeState) {
+      RuntimeState.running => AppIcons.motion_photos_on_outlined,
+      RuntimeState.connecting => AppIcons.sync_rounded,
+      RuntimeState.offline => AppIcons.cloud_off_outlined,
+      RuntimeState.recoveryRequired => AppIcons.error_outline_rounded,
+      RuntimeState.idle => AppIcons.chat_bubble_outline,
+    };
+    return Semantics(
+      label: label,
+      excludeSemantics: true,
+      child: Tooltip(message: label, child: Icon(icon)),
     );
   }
 
@@ -525,20 +589,33 @@ class _SessionListPageState extends State<SessionListPage>
     if (_sessionsGateway == null || _busy) return null;
     return PopupMenuButton<String>(
       tooltip: context.l10n.moreActions,
-      icon: const Icon(Icons.more_horiz_rounded),
+      icon: const Icon(AppIcons.more_horiz_rounded),
       onSelected: (_) => _remove(session),
       itemBuilder: (context) => [
         PopupMenuItem<String>(
           value: 'delete',
           child: Row(
             children: <Widget>[
-              const Icon(Icons.delete_outline, size: 20),
+              const Icon(AppIcons.delete_outline, size: 20),
               const SizedBox(width: TsPhoneSpacing.medium),
               Text(context.l10n.deletePermanently),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget? _sessionSubtitleWidget(
+    SessionSummary session,
+    AppLocalizations l10n,
+  ) {
+    final updated = session.updatedAt?.toLocal();
+    if (updated == null) return null;
+    return Text(
+      DateFormat.MMMd(l10n.localeName).add_Hm().format(updated),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
@@ -566,12 +643,12 @@ class _SessionError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TsEmptyState(
-    icon: Icons.cloud_off_outlined,
+    icon: AppIcons.cloud_off_outlined,
     title: context.l10n.loadSessionsFailed,
     message: problem.localizedMessage(context.l10n),
     action: FilledButton.icon(
       onPressed: onRetry,
-      icon: const Icon(Icons.refresh),
+      icon: const Icon(AppIcons.refresh),
       label: Text(context.l10n.retry),
     ),
   );

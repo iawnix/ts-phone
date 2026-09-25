@@ -7,6 +7,7 @@ import 'package:ts_phone/l10n/app_localizations.dart';
 import 'package:ts_phone/models/app_locale_preference.dart';
 import 'package:ts_phone/models/app_theme_preference.dart';
 import 'package:ts_phone/models/connection_settings.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
 import 'package:ts_phone/widgets/presentation.dart';
 import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
@@ -88,7 +89,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('connection-edit-affordance')), findsOne);
-    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    expect(find.byIcon(AppIcons.edit_outlined), findsOneWidget);
     expect(
       tester
           .widget<Text>(
@@ -141,7 +142,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('connection actions use one icon per action', (
+  testWidgets('connection actions use familiar icon anchors', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -162,9 +163,9 @@ void main() {
     final details = find.byKey(const ValueKey('connection-details-toggle'));
     expect(tester.getSize(diagnostics).height, inInclusiveRange(48, 76));
     expect(tester.getSize(details).height, lessThanOrEqualTo(48));
-    expect(find.byIcon(Icons.monitor_heart_outlined), findsNothing);
-    expect(find.byIcon(Icons.info_outline_rounded), findsNothing);
-    expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.monitor_heart_outlined), findsOneWidget);
+    expect(find.byIcon(AppIcons.info_outline_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.refresh_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -268,6 +269,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('run-connection-diagnostics')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('technical-details-toggle')));
     await tester.pumpAndSettle();
     expect(find.text('Pi App Server').last, findsOneWidget);
     expect(find.text('pi-app-server/8'), findsOneWidget);

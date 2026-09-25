@@ -47,6 +47,27 @@ void main() {
     expect(recovery.isHistorical, isFalse);
   });
 
+  test('background event retry stays in the app-bar connection state', () {
+    final state = resolveSessionViewState(
+      runtimeState: RuntimeState.idle,
+      eventConnectionState: EventConnectionState.reconnecting,
+      isSynchronizing: false,
+      problem: const TsPhoneProblem(
+        TsPhoneProblemKind.unavailable,
+        TsPhoneProblemCode.networkRetrying,
+      ),
+      historyOnly: false,
+      viewingInactiveBranch: false,
+      canSend: false,
+      hasActiveAgentRun: false,
+      commandInFlight: false,
+      canRefresh: true,
+    );
+
+    expect(state.phase, SessionUiPhase.reconnecting);
+    expect(state.notice, isNull);
+  });
+
   test('session state exposes only the current turn action', () {
     final running = resolveSessionViewState(
       runtimeState: RuntimeState.running,

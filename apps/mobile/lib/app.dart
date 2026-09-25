@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
 import 'data/settings_store.dart';
@@ -304,13 +305,13 @@ class _SettingsLoadFailurePage extends StatelessWidget {
       body: TsPageBackdrop(
         child: SafeArea(
           child: TsEmptyState(
-            icon: Icons.settings_backup_restore_rounded,
+            icon: AppIcons.settings_backup_restore_rounded,
             title: l10n.appTitle,
             message: l10n.settingsLoadFailed,
             action: FilledButton.icon(
               key: const ValueKey<String>('settings-load-retry'),
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
+              icon: const Icon(AppIcons.refresh_rounded),
               label: Text(l10n.retry),
             ),
           ),

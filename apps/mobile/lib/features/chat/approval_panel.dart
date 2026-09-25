@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:ts_phone/theme/app_icons.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../data/ts_phone_api.dart';
@@ -434,7 +435,10 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
             color: colors.tertiaryContainer,
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.shield_outlined, color: colors.onTertiaryContainer),
+          child: Icon(
+            AppIcons.shield_outlined,
+            color: colors.onTertiaryContainer,
+          ),
         ),
         const SizedBox(width: TsPhoneSpacing.medium),
         Expanded(
@@ -502,20 +506,20 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           _ApprovalFact(
-            icon: Icons.folder_outlined,
+            icon: AppIcons.folder_outlined,
             label: l10n.approvalWorkspace,
             value: widget.workspaceName,
           ),
           _ApprovalFact(
             icon: widget.accessMode == SessionAccessMode.controller
-                ? Icons.admin_panel_settings_outlined
-                : Icons.visibility_outlined,
+                ? AppIcons.admin_panel_settings_outlined
+                : AppIcons.visibility_outlined,
             label: l10n.approvalSession,
             value:
                 '${widget.sessionName} · ${widget.accessMode.localizedLabel(l10n)}',
           ),
           _ApprovalFact(
-            icon: Icons.build_outlined,
+            icon: AppIcons.build_outlined,
             label: l10n.approvalTool,
             value: widget.request.toolName,
           ),
@@ -578,8 +582,8 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
                     else
                       Icon(
                         _phase == _ApprovalPanelPhase.failed
-                            ? Icons.error_outline_rounded
-                            : Icons.info_outline_rounded,
+                            ? AppIcons.error_outline_rounded
+                            : AppIcons.info_outline_rounded,
                         size: 19,
                         color: _phase == _ApprovalPanelPhase.failed
                             ? colors.onErrorContainer
@@ -625,7 +629,7 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
     final reject = OutlinedButton.icon(
       key: const ValueKey<String>('approval-reject'),
       onPressed: _canRespond ? () => _respond(false) : null,
-      icon: const Icon(Icons.block_outlined),
+      icon: const Icon(AppIcons.block_outlined),
       label: Text(l10n.reject),
     );
     final approve = FilledButton.icon(
@@ -635,7 +639,7 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
         backgroundColor: colors.tertiary,
         foregroundColor: colors.onTertiary,
       ),
-      icon: const Icon(Icons.shield_outlined),
+      icon: const Icon(AppIcons.shield_outlined),
       label: Text(l10n.approveOnce),
     );
     final stackActions =
