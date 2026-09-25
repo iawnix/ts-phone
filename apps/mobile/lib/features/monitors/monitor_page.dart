@@ -8,6 +8,9 @@ import '../../l10n/app_localizations_extensions.dart';
 import '../../l10n/host_monitor_localizations.dart';
 import '../../models/host_monitor.dart';
 import '../../models/workspace.dart';
+import '../../theme/ts_phone_theme.dart';
+import '../../widgets/action_feedback.dart';
+import '../../widgets/presentation.dart';
 
 class MonitorPage extends StatefulWidget {
   const MonitorPage({
@@ -67,6 +70,7 @@ class _MonitorPageState extends State<MonitorPage> with WidgetsBindingObserver {
 
   Future<void> _setEnabled(HostMonitor monitor, bool enabled) async {
     if (_updating.contains(monitor.id)) return;
+    ActionFeedback.selection();
     setState(() => _updating.add(monitor.id));
     try {
       final updated = await widget.gateway.setMonitorEnabled(
@@ -83,7 +87,18 @@ class _MonitorPageState extends State<MonitorPage> with WidgetsBindingObserver {
         });
       }
     } on Object catch (error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted) {
+        ActionFeedback.error();
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                describeTsPhoneProblem(error).localizedMessage(context.l10n),
+              ),
+            ),
+          );
+      }
     } finally {
       if (mounted) setState(() => _updating.remove(monitor.id));
     }
@@ -94,7 +109,7 @@ class _MonitorPageState extends State<MonitorPage> with WidgetsBindingObserver {
     final l10n = context.l10n;
     final monitors = _monitors;
     return Scaffold(
-      appBar: AppBar(
+      appBar: TsGlassAppBar(
         title: Text('${widget.workspace.name} · ${l10n.hostMonitors}'),
         actions: [
           IconButton(
@@ -124,34 +139,136 @@ class _MonitorPageState extends State<MonitorPage> with WidgetsBindingObserver {
                     ),
                   if (monitors?.isEmpty == true) Text(l10n.hostMonitorsEmpty),
                   for (final monitor in monitors ?? const <HostMonitor>[])
-                    Card(
-                      child: SwitchListTile(
-                        key: ValueKey('monitor-${monitor.id}'),
-                        title: Text(monitor.title),
-                        isThreeLine: true,
-                        value: monitor.enabled,
-                        onChanged: _updating.contains(monitor.id)
-                            ? null
-                            : (enabled) => _setEnabled(monitor, enabled),
-                        subtitle: Text(
-                          [
-                            '${l10n.hostMonitorState(monitor.state)} · ${monitor.enabled ? l10n.hostMonitorEnabled : l10n.hostMonitorDisabled}',
-                            if (monitor.lastObservedAt case final at?)
-                              l10n.hostMonitorObserved(
-                                DateFormat.yMd(
-                                  l10n.localeName,
-                                ).add_Hm().format(at.toLocal()),
-                              ),
-                            if (monitor.pendingCount > 0)
-                              l10n.hostMonitorPending(monitor.pendingCount),
-                            ?monitor.lastError,
-                          ].join('\n'),
-                        ),
-                      ),
+                    _MonitorCard(
+                      monitor: monitor,
+                      busy: _updating.contains(monitor.id),
+                      onChanged: (enabled) => _setEnabled(monitor, enabled),
                     ),
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _MonitorCard extends StatelessWidget {
+  const _MonitorCard({
+    required this.monitor,
+    required this.busy,
+    required this.onChanged,
+  });
+
+  final HostMonitor monitor;
+  final bool busy;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final l10n = context.l10n;
+    final observed = monitor.lastObservedAt;
+    final error = monitor.lastError?.trim();
+    final status =
+        '${l10n.hostMonitorState(monitor.state)} · ${monitor.enabled ? l10n.hostMonitorEnabled : l10n.hostMonitorDisabled}';
+    final observedLabel = observed == null
+        ? null
+        : l10n.hostMonitorObserved(
+            DateFormat.yMd(l10n.localeName).add_Hm().format(observed.toLocal()),
+          );
+
+    return Card(
+      key: ValueKey('monitor-${monitor.id}'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          TsPhoneSpacing.large,
+          TsPhoneSpacing.medium,
+          TsPhoneSpacing.small,
+          TsPhoneSpacing.medium,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: TsPressable(
+                onTap: busy ? null : () => onChanged(!monitor.enabled),
+                borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: TsPhoneSpacing.xSmall,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(monitor.title, style: theme.textTheme.titleSmall),
+                      const SizedBox(height: TsPhoneSpacing.xSmall),
+                      Wrap(
+                        spacing: TsPhoneSpacing.small,
+                        runSpacing: TsPhoneSpacing.xSmall,
+                        children: <Widget>[
+                          Text(
+                            status,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                          if (observedLabel != null)
+                            Text(
+                              observedLabel,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (monitor.pendingCount > 0 ||
+                          error?.isNotEmpty == true) ...[
+                        const SizedBox(height: TsPhoneSpacing.small),
+                        Wrap(
+                          spacing: TsPhoneSpacing.small,
+                          runSpacing: TsPhoneSpacing.xSmall,
+                          children: <Widget>[
+                            if (monitor.pendingCount > 0)
+                              Text(
+                                l10n.hostMonitorPending(monitor.pendingCount),
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: colors.tertiary,
+                                ),
+                              ),
+                            if (error?.isNotEmpty == true)
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 250,
+                                ),
+                                child: Text(
+                                  error!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: colors.error,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: TsPhoneSpacing.small),
+            Semantics(
+              label: monitor.title,
+              value: status,
+              child: Switch(
+                value: monitor.enabled,
+                onChanged: busy ? null : onChanged,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/phone_model.dart';
+import '../../theme/ts_phone_theme.dart';
 
 Future<PhoneModel?> showModelPicker(
   BuildContext context, {
@@ -16,6 +17,7 @@ Future<PhoneModel?> showModelPicker(
   isScrollControlled: true,
   useSafeArea: true,
   showDragHandle: true,
+  sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
   builder: (_) => _ModelPicker(
     gateway: gateway,
     selected: selected,

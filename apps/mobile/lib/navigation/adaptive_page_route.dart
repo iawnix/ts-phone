@@ -24,6 +24,16 @@ Route<T> tsAdaptivePageRoute<T>({
   RouteSettings? settings,
   bool fullscreenDialog = false,
 }) {
+  if (MediaQuery.disableAnimationsOf(context)) {
+    return PageRouteBuilder<T>(
+      settings: settings,
+      fullscreenDialog: fullscreenDialog,
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (context, _, _) => builder(context),
+      transitionsBuilder: (context, _, _, child) => child,
+    );
+  }
   if (Theme.of(context).platform == TargetPlatform.iOS) {
     return CupertinoPageRoute<T>(
       builder: builder,

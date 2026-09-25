@@ -855,7 +855,7 @@ void main() {
         of: find.byType(AppBar),
         matching: find.byType(BackdropFilter),
       ),
-      findsNothing,
+      findsOneWidget,
     );
     expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
     expect(

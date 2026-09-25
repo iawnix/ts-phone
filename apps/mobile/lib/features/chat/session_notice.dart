@@ -66,9 +66,11 @@ class SessionNoticeView extends StatelessWidget {
     };
 
     return AnimatedSwitcher(
-      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.standard),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
+      duration: TsPhoneMotion.resolveFade(context, TsPhoneMotion.standard),
+      switchInCurve: Curves.easeOutCubic,
+      // Keep the exit responsive so a recovery/error update can be replaced
+      // immediately without making the user wait for a slow fade.
+      switchOutCurve: Curves.easeOutCubic,
       child: TsInfoBand(
         key: ValueKey<SessionNoticeKind>(notice),
         icon: icon,

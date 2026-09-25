@@ -167,7 +167,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final appServerProtocolValue =
         diagnostics?.apiVersion ?? l10n.diagnosticNotChecked;
     return Scaffold(
-      appBar: AppBar(
+      appBar: TsGlassAppBar(
         leading: BackButton(onPressed: widget.onClose),
         title: Text(l10n.settings),
       ),
@@ -256,107 +256,128 @@ class _SettingsPageState extends State<SettingsPage> {
                                 );
                               },
                             ),
-                            if (_showConnectionDetails) ...<Widget>[
-                              const _SettingsDivider(),
-                              KeyedSubtree(
-                                key: const ValueKey<String>(
-                                  'connection-details',
-                                ),
-                                child: Column(
-                                  children: <Widget>[
-                                    _DiagnosticRow(
-                                      label: l10n.endpoint,
-                                      value:
-                                          connection?.serverUrl ??
-                                          l10n.notConfigured,
-                                      stacked: true,
-                                      selectable: connection != null,
-                                      trailing: connection == null
-                                          ? null
-                                          : IconButton(
-                                              key: const ValueKey<String>(
-                                                'copy-server-address',
-                                              ),
-                                              tooltip: l10n.copyServerAddress,
-                                              icon: const Icon(
-                                                Icons.content_copy_rounded,
-                                                size: 18,
-                                              ),
-                                              onPressed: () async {
-                                                var copied = false;
-                                                try {
-                                                  await Clipboard.setData(
-                                                    ClipboardData(
-                                                      text:
-                                                          connection.serverUrl,
-                                                    ),
-                                                  );
-                                                  copied = true;
-                                                } on Object {
-                                                  /* Clipboard availability is platform-dependent. */
-                                                }
-                                                if (!context.mounted) return;
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      copied
-                                                          ? l10n.serverAddressCopied
-                                                          : l10n.copyServerAddressFailed,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                    ),
-                                    const _SettingsDivider(),
-                                    _DiagnosticRow(
-                                      label: l10n.hostId,
-                                      value:
-                                          connection?.serverId ??
-                                          l10n.notConfigured,
-                                      stacked: true,
-                                      selectable: connection != null,
-                                    ),
-                                    const _SettingsDivider(),
-                                    _DiagnosticRow(
-                                      label: l10n.deviceId,
-                                      value:
-                                          connection?.deviceId ??
-                                          l10n.notConfigured,
-                                      stacked: true,
-                                      selectable: connection != null,
-                                    ),
-                                    const _SettingsDivider(),
-                                    _DiagnosticRow(
-                                      label: l10n.auth,
-                                      value: authValue,
-                                      valueColor: authColor,
-                                    ),
-                                    const _SettingsDivider(),
-                                    _DiagnosticRow(
-                                      label: l10n.linkProtocol,
-                                      value: connection == null
-                                          ? l10n.diagnosticNotChecked
-                                          : tspiHostLinkProtocol,
-                                    ),
-                                    const _SettingsDivider(),
-                                    _DiagnosticRow(
-                                      label: l10n.appServerProtocol,
-                                      value: appServerProtocolValue,
-                                    ),
-                                    const _SettingsDivider(),
-                                    _DiagnosticRow(
-                                      label: l10n.appServerVersion,
-                                      value:
-                                          diagnostics?.serviceVersion ??
-                                          l10n.diagnosticNotChecked,
-                                    ),
-                                  ],
-                                ),
+                            AnimatedSize(
+                              duration: TsPhoneMotion.resolve(
+                                context,
+                                TsPhoneMotion.standard,
                               ),
-                            ],
+                              reverseDuration: TsPhoneMotion.resolve(
+                                context,
+                                TsPhoneMotion.quick,
+                              ),
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.topCenter,
+                              clipBehavior: Clip.hardEdge,
+                              child: ClipRect(
+                                child: _showConnectionDetails
+                                    ? Column(
+                                        key: const ValueKey<String>(
+                                          'connection-details',
+                                        ),
+                                        children: <Widget>[
+                                          const _SettingsDivider(),
+                                          _DiagnosticRow(
+                                            label: l10n.endpoint,
+                                            value:
+                                                connection?.serverUrl ??
+                                                l10n.notConfigured,
+                                            stacked: true,
+                                            selectable: connection != null,
+                                            trailing: connection == null
+                                                ? null
+                                                : IconButton(
+                                                    key: const ValueKey<String>(
+                                                      'copy-server-address',
+                                                    ),
+                                                    tooltip:
+                                                        l10n.copyServerAddress,
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .content_copy_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    onPressed: () async {
+                                                      var copied = false;
+                                                      try {
+                                                        await Clipboard.setData(
+                                                          ClipboardData(
+                                                            text: connection
+                                                                .serverUrl,
+                                                          ),
+                                                        );
+                                                        copied = true;
+                                                      } on Object {
+                                                        /* Clipboard availability is platform-dependent. */
+                                                      }
+                                                      if (!context.mounted) {
+                                                        return;
+                                                      }
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(
+                                                            copied
+                                                                ? l10n.serverAddressCopied
+                                                                : l10n.copyServerAddressFailed,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                          ),
+                                          const _SettingsDivider(),
+                                          _DiagnosticRow(
+                                            label: l10n.hostId,
+                                            value:
+                                                connection?.serverId ??
+                                                l10n.notConfigured,
+                                            stacked: true,
+                                            selectable: connection != null,
+                                          ),
+                                          const _SettingsDivider(),
+                                          _DiagnosticRow(
+                                            label: l10n.deviceId,
+                                            value:
+                                                connection?.deviceId ??
+                                                l10n.notConfigured,
+                                            stacked: true,
+                                            selectable: connection != null,
+                                          ),
+                                          const _SettingsDivider(),
+                                          _DiagnosticRow(
+                                            label: l10n.auth,
+                                            value: authValue,
+                                            valueColor: authColor,
+                                          ),
+                                          const _SettingsDivider(),
+                                          _DiagnosticRow(
+                                            label: l10n.linkProtocol,
+                                            value: connection == null
+                                                ? l10n.diagnosticNotChecked
+                                                : tspiHostLinkProtocol,
+                                          ),
+                                          const _SettingsDivider(),
+                                          _DiagnosticRow(
+                                            label: l10n.appServerProtocol,
+                                            value: appServerProtocolValue,
+                                          ),
+                                          const _SettingsDivider(),
+                                          _DiagnosticRow(
+                                            label: l10n.appServerVersion,
+                                            value:
+                                                diagnostics?.serviceVersion ??
+                                                l10n.diagnosticNotChecked,
+                                          ),
+                                        ],
+                                      )
+                                    : const SizedBox(
+                                        key: ValueKey<String>(
+                                          'connection-details-collapsed',
+                                        ),
+                                      ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -426,6 +447,10 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
       useSafeArea: true,
       isScrollControlled: true,
       showDragHandle: true,
+      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(
+        context,
+        reverseCurve: Curves.easeOutCubic,
+      ),
       builder: (context) => SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -469,7 +494,7 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: !saving,
-      child: InkWell(
+      child: TsPressable(
         onTap: saving ? null : () => _choose(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -565,7 +590,7 @@ class _ConnectionServiceRow extends StatelessWidget {
     final colors = theme.colorScheme;
     return Semantics(
       button: true,
-      child: InkWell(
+      child: TsPressable(
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 64),
@@ -628,7 +653,7 @@ class _ConnectionDetailsToggle extends StatelessWidget {
     return Semantics(
       button: true,
       expanded: expanded,
-      child: InkWell(
+      child: TsPressable(
         key: const ValueKey<String>('connection-details-toggle'),
         onTap: onTap,
         child: ConstrainedBox(
@@ -835,14 +860,14 @@ class _DiagnosticsActionRow extends StatelessWidget {
         : diagnostics != null
         ? (l10n.diagnosticVerified, status.connected)
         : (l10n.diagnosticNotChecked, theme.colorScheme.onSurfaceVariant);
-    final motionDuration = TsPhoneMotion.resolve(
+    final motionDuration = TsPhoneMotion.resolveFade(
       context,
       TsPhoneMotion.standard,
     );
     return Semantics(
       button: true,
       enabled: enabled && !diagnosing,
-      child: InkWell(
+      child: TsPressable(
         key: const ValueKey<String>('run-connection-diagnostics'),
         onTap: enabled && !diagnosing ? onTap : null,
         child: ConstrainedBox(
@@ -865,6 +890,8 @@ class _DiagnosticsActionRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       AnimatedSwitcher(
                         duration: motionDuration,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeOutCubic,
                         child: Text(
                           key: ValueKey<String>(
                             diagnosing ? 'diagnostics-running' : label,
@@ -881,6 +908,8 @@ class _DiagnosticsActionRow extends StatelessWidget {
                 const SizedBox(width: TsPhoneSpacing.small),
                 AnimatedSwitcher(
                   duration: motionDuration,
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeOutCubic,
                   child: diagnosing
                       ? SizedBox.square(
                           key: const ValueKey<String>('diagnostics-spinner'),

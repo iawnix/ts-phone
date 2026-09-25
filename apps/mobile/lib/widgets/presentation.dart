@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/ts_phone_theme.dart';
@@ -248,6 +249,7 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.centerTitle,
     this.titleSpacing,
     this.titleTextStyle,
+    this.automaticallyImplyLeading = true,
   });
 
   final Widget? leading;
@@ -257,6 +259,7 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool? centerTitle;
   final double? titleSpacing;
   final TextStyle? titleTextStyle;
+  final bool automaticallyImplyLeading;
 
   @override
   Size get preferredSize => Size.fromHeight(toolbarHeight);
@@ -274,6 +277,7 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       leading: leading,
       leadingWidth: 52,
+      automaticallyImplyLeading: automaticallyImplyLeading,
       title: title,
       actions: actions,
       actionsPadding: const EdgeInsetsDirectional.only(end: 4),
@@ -291,6 +295,69 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       surfaceTintColor: Colors.transparent,
       animateColor: !MediaQuery.disableAnimationsOf(context),
       flexibleSpace: const TsGlassBar(edge: TsGlassBarEdge.bottom),
+    );
+  }
+}
+
+/// A pressable surface with the small, immediate scale response used by the
+/// phone UI. InkWell remains responsible for semantics, focus, and ink states;
+/// the scale is purely visual and is safe to interrupt on the next gesture.
+class TsPressable extends StatefulWidget {
+  const TsPressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.onDoubleTap,
+    this.onTapDown,
+    this.onTapUp,
+    this.onTapCancel,
+    this.borderRadius,
+  });
+
+  final Widget child;
+  final GestureTapCallback? onTap;
+  final GestureLongPressCallback? onLongPress;
+  final GestureDoubleTapCallback? onDoubleTap;
+  final GestureTapDownCallback? onTapDown;
+  final GestureTapUpCallback? onTapUp;
+  final GestureTapCancelCallback? onTapCancel;
+  final BorderRadius? borderRadius;
+
+  @override
+  State<TsPressable> createState() => _TsPressableState();
+}
+
+class _TsPressableState extends State<TsPressable> {
+  bool _pressed = false;
+
+  void _setPressed(bool pressed) {
+    if (_pressed == pressed || !mounted) return;
+    setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final interactive =
+        widget.onTap != null ||
+        widget.onLongPress != null ||
+        widget.onDoubleTap != null;
+    return AnimatedScale(
+      scale: _pressed && interactive && !reduceMotion ? 0.98 : 1,
+      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.quick),
+      curve: Curves.easeOutCubic,
+      child: InkWell(
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        onDoubleTap: widget.onDoubleTap,
+        onTapDown: widget.onTapDown,
+        onTapUp: widget.onTapUp,
+        onTapCancel: widget.onTapCancel,
+        onHighlightChanged: interactive ? _setPressed : null,
+        borderRadius: widget.borderRadius,
+        child: widget.child,
+      ),
     );
   }
 }
@@ -570,7 +637,7 @@ class TsStatusListTile extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Material(
       color: colors.surfaceContainerLowest,
-      child: InkWell(
+      child: TsPressable(
         onTap: onTap,
         child: DecoratedBox(
           decoration: BoxDecoration(

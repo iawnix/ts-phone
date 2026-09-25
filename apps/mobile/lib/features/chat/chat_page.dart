@@ -649,6 +649,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     try {
       final confirmed = await showDialog<bool>(
         context: context,
+        animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
         builder: (dialogContext) => AlertDialog(
           icon: Icon(Icons.stop_circle_outlined, color: colors.error),
           title: Text(context.l10n.abortGeneration),
@@ -727,6 +728,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       useSafeArea: true,
       showDragHandle: true,
       isScrollControlled: true,
+      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
       builder: (context) => _SessionDetailsSheet(
         title: _navigationTitle,
         runtime: _controller.sessionRuntime,
@@ -836,7 +838,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         final viewState = SessionViewState.fromController(_controller);
         return Scaffold(
           resizeToAvoidBottomInset: true,
-          appBar: AppBar(
+          appBar: TsGlassAppBar(
             toolbarHeight: _chatToolbarHeight,
             centerTitle: false,
             titleSpacing: 0,
@@ -845,13 +847,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               key: const ValueKey<String>('chat-back'),
               onPressed: _goBack,
             ),
-            title: InkWell(
+            title: TsPressable(
               key: const ValueKey('chat-session-details'),
               onTap: _showSessionDetails,
-              child: _ChatNavigationTitle(
-                title: _navigationTitle,
-                state: viewState,
-                workspace: widget.workspace.name,
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _ChatNavigationTitle(
+                      title: _navigationTitle,
+                      state: viewState,
+                      workspace: widget.workspace.name,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsetsDirectional.only(start: 4, end: 8),
+                    child: Icon(Icons.info_outline_rounded, size: 16),
+                  ),
+                ],
               ),
             ),
             actions: <Widget>[
@@ -1520,6 +1532,15 @@ class _SessionDetailsSheet extends StatelessWidget {
             tilePadding: const EdgeInsets.symmetric(horizontal: 12),
             shape: const Border(),
             collapsedShape: const Border(),
+            expansionAnimationStyle: AnimationStyle(
+              duration: TsPhoneMotion.resolve(context, TsPhoneMotion.standard),
+              reverseDuration: TsPhoneMotion.resolve(
+                context,
+                TsPhoneMotion.quick,
+              ),
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeOutCubic,
+            ),
             title: Text(
               l10n.technicalDetails,
               style: theme.textTheme.bodyMedium,
@@ -1581,7 +1602,9 @@ class _CopySessionIdButtonState extends State<_CopySessionIdButton> {
           : context.l10n.copySessionId,
       color: _copied ? Theme.of(context).colorScheme.primary : null,
       icon: AnimatedSwitcher(
-        duration: TsPhoneMotion.resolve(context, TsPhoneMotion.quick),
+        duration: TsPhoneMotion.resolveFade(context, TsPhoneMotion.quick),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeOutCubic,
         child: Icon(
           _copied ? Icons.check_rounded : Icons.copy_rounded,
           key: ValueKey<bool>(_copied),

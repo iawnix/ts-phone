@@ -10,6 +10,8 @@ import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../models/workspace.dart';
 import '../../navigation/adaptive_page_route.dart';
+import '../../theme/ts_phone_theme.dart';
+import '../../widgets/presentation.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_view_memory.dart';
 import 'session_list_page.dart';
@@ -168,6 +170,7 @@ class _ConversationShellState extends State<ConversationShell> {
     final controller = TextEditingController();
     final workspaceId = await showDialog<String>(
       context: context,
+      animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
       builder: (context) => AlertDialog(
         title: Text(context.l10n.newProject),
         content: TextField(
@@ -262,7 +265,7 @@ class _ConversationShellState extends State<ConversationShell> {
     return Scaffold(
       appBar: sidebar
           ? null
-          : AppBar(
+          : TsGlassAppBar(
               title: Text(context.l10n.projectViews),
               actions: [
                 IconButton(
@@ -381,7 +384,7 @@ class _ConversationShellState extends State<ConversationShell> {
     );
     return Scaffold(
       key: _scaffold,
-      drawerEnableOpenDragGesture: false,
+      drawerEnableOpenDragGesture: true,
       drawer: wide
           ? null
           : Drawer(

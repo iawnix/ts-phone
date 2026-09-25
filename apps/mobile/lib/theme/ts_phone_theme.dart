@@ -25,6 +25,30 @@ abstract final class TsPhoneMotion {
 
   static Duration resolve(BuildContext context, Duration duration) =>
       MediaQuery.disableAnimationsOf(context) ? Duration.zero : duration;
+
+  /// Keeps opacity and color transitions legible while removing movement.
+  static Duration resolveFade(BuildContext context, Duration duration) {
+    if (!MediaQuery.disableAnimationsOf(context)) return duration;
+    return duration > quick ? quick : duration;
+  }
+
+  static AnimationStyle resolveAnimationStyle(
+    BuildContext context, {
+    Duration duration = standard,
+    Duration reverseDuration = quick,
+    Curve curve = Curves.easeOutCubic,
+    Curve reverseCurve = Curves.easeOut,
+  }) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return AnimationStyle.noAnimation;
+    }
+    return AnimationStyle(
+      duration: duration,
+      reverseDuration: reverseDuration,
+      curve: curve,
+      reverseCurve: reverseCurve,
+    );
+  }
 }
 
 @immutable
@@ -296,8 +320,8 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
       strongBorder: isLight ? const Color(0xF2FFFFFF) : const Color(0x66FFFFFF),
       highlight: isLight ? const Color(0xA6FFFFFF) : const Color(0x26FFFFFF),
       shadow: isLight ? const Color(0x24000000) : const Color(0x78000000),
-      blurSigma: 22,
-      floatingBlurSigma: 28,
+      blurSigma: 16,
+      floatingBlurSigma: 20,
     );
   }
 

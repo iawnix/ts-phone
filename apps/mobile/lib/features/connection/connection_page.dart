@@ -310,7 +310,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               key: const ValueKey<String>('connect-action'),
                               onPressed: _connecting ? null : _connect,
                               icon: AnimatedSwitcher(
-                                duration: TsPhoneMotion.resolve(
+                                duration: TsPhoneMotion.resolveFade(
                                   context,
                                   TsPhoneMotion.quick,
                                 ),

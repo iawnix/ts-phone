@@ -280,8 +280,9 @@ class HostGateway
 
     void emit(Map<String, Object?> value, {bool initial = false}) {
       if (cancelled) return;
-      final nextEpoch = _string(value['epoch']);
-      final nextSequence = value['sequence'];
+      final cursor = _cursor(value);
+      final nextEpoch = _string(cursor['epoch']);
+      final nextSequence = cursor['sequence'];
       if (nextSequence is! int || nextSequence < 0) {
         throw const FormatException('Invalid Host event sequence');
       }
@@ -334,13 +335,14 @@ class HostGateway
       );
       try {
         // Every connection reattaches and replaces local state from a snapshot.
-        // lastEventId is deliberately not presented as a replay guarantee.
-        final result = _object(
-          await _client.request(
-            'session/attach',
-            _target(workspaceId, sessionId),
-          ),
-        );
+        // Resume after the last event so large sessions do not require replaying
+        // the entire event history in a single attach response.
+        final params = _target(workspaceId, sessionId);
+        final afterCursor = _afterCursor(lastEventId);
+        if (afterCursor != null) {
+          params['after_cursor'] = afterCursor;
+        }
+        final result = _object(await _client.request('session/attach', params));
         if (cancelled) return;
         emit(result, initial: true);
         hydrated = true;
@@ -540,9 +542,19 @@ class HostGateway
   }
 
   static List<Object?> _messages(Map<String, Object?> snapshot) {
-    final messages = _list(
-      snapshot['messages'],
-    ).map((value) => _object(value)).toList();
+    final messages = _list(snapshot['messages']).map((value) {
+      final entry = _object(value);
+      // Pi Harness transcript entries wrap the ChatMessage in an envelope.
+      // Keep accepting the older flat Host message shape as well.
+      if (entry['type'] == 'message' && entry['message'] is Map) {
+        final message = _object(entry['message']);
+        if (!message.containsKey('timestamp') && entry['timestamp'] is num) {
+          message['timestamp'] = entry['timestamp'];
+        }
+        return message;
+      }
+      return entry;
+    }).toList();
     final receipts = snapshot['receipts'];
     if (receipts is List) {
       for (final raw in receipts) {
@@ -569,8 +581,36 @@ class HostGateway
     'workspace_id': workspace,
     'session_id': session,
   };
-  static String _eventId(Map<String, Object?> value) =>
-      '${_string(value['epoch'])}:${value['sequence']}';
+
+  static Map<String, Object?>? _afterCursor(String? eventId) {
+    if (eventId == null) return null;
+    final separator = eventId.lastIndexOf(':');
+    if (separator <= 0 || separator == eventId.length - 1) return null;
+    final epoch = eventId.substring(0, separator);
+    final sequence = int.tryParse(eventId.substring(separator + 1));
+    if (epoch.isEmpty || sequence == null || sequence < 0) return null;
+    return {'epoch': epoch, 'sequence': sequence};
+  }
+
+  static Map<String, Object?> _cursor(Map<String, Object?> value) {
+    final rawCursor = value['cursor'];
+    if (rawCursor is! Map) return value;
+    final cursor = Map<String, Object?>.from(rawCursor);
+    cursor['epoch'] ??= value['epoch'];
+    cursor['sequence'] ??= value['sequence'];
+    return cursor;
+  }
+
+  static String _eventId(Map<String, Object?> value) {
+    final cursor = _cursor(value);
+    final epoch = _string(cursor['epoch']);
+    final sequence = cursor['sequence'];
+    if (sequence is! int || sequence < 0) {
+      throw const FormatException('Invalid Host event sequence');
+    }
+    return '$epoch:$sequence';
+  }
+
   static String? _model(Object? value) => value is String
       ? value
       : value is Map && value['provider'] is String && value['id'] is String

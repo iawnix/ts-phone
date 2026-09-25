@@ -40,6 +40,7 @@ Future<ApprovalPanelOutcome?> showApprovalPanel({
     queuedAfter: queuedAfter,
     phoneLayout: phoneLayout,
   );
+  final animationStyle = TsPhoneMotion.resolveAnimationStyle(context);
   if (phoneLayout) {
     return showModalBottomSheet<ApprovalPanelOutcome>(
       context: context,
@@ -47,6 +48,7 @@ Future<ApprovalPanelOutcome?> showApprovalPanel({
       enableDrag: false,
       isScrollControlled: true,
       useSafeArea: true,
+      sheetAnimationStyle: animationStyle,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.42),
       builder: (context) => panel,
@@ -55,6 +57,7 @@ Future<ApprovalPanelOutcome?> showApprovalPanel({
   return showDialog<ApprovalPanelOutcome>(
     context: context,
     barrierDismissible: false,
+    animationStyle: animationStyle,
     barrierColor: Colors.black.withValues(alpha: 0.42),
     builder: (context) => panel,
   );
@@ -94,7 +97,7 @@ class _ApprovalPanel extends StatefulWidget {
 }
 
 class _ApprovalPanelState extends State<_ApprovalPanel>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static const Set<int> _countdownAnnouncementThresholds = <int>{60, 30, 10};
 
   _ApprovalPanelPhase _phase = _ApprovalPanelPhase.pending;
@@ -102,8 +105,11 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
   Timer? _countdownTimer;
   Timer? _expiryTimer;
   Timer? _terminalTimer;
+  late final AnimationController _dragReturnController;
+  Animation<double>? _dragAnimation;
   final Set<int> _announcedCountdownThresholds = <int>{};
   int _remainingSeconds = 0;
+  double _dragOffset = 0;
 
   bool get _canRespond =>
       _phase == _ApprovalPanelPhase.pending ||
@@ -112,10 +118,65 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
   @override
   void initState() {
     super.initState();
+    _dragReturnController = AnimationController(vsync: this)
+      ..addListener(_updateDragAnimation);
     WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_checkSessionIdentity);
     _resetCountdown();
     scheduleMicrotask(_checkSessionIdentity);
+  }
+
+  void _updateDragAnimation() {
+    final animation = _dragAnimation;
+    if (!mounted || animation == null) return;
+    setState(() => _dragOffset = animation.value);
+  }
+
+  double _dampedDragOffset(double value) {
+    if (value <= 0) return 0;
+    const boundary = 88.0;
+    if (value <= boundary) return value;
+    return boundary + (value - boundary) * 0.18;
+  }
+
+  void _startHeaderDrag(DragStartDetails details) {
+    _dragReturnController.stop();
+    _dragAnimation = null;
+  }
+
+  void _updateHeaderDrag(DragUpdateDetails details) {
+    if (!widget.phoneLayout) return;
+    setState(() {
+      _dragOffset = _dampedDragOffset(_dragOffset + details.delta.dy);
+    });
+  }
+
+  void _finishHeaderDrag(DragEndDetails details) {
+    if (!widget.phoneLayout || _dragOffset <= 0) return;
+    final downwardVelocity = math.max(0, details.velocity.pixelsPerSecond.dy);
+    final projected = _dampedDragOffset(_dragOffset + downwardVelocity * 0.08);
+    final durationMs = (220 - downwardVelocity * 0.04).clamp(120, 220).round();
+    _dragReturnController.duration = TsPhoneMotion.resolve(
+      context,
+      Duration(milliseconds: durationMs),
+    );
+    final curve = CurvedAnimation(
+      parent: _dragReturnController,
+      curve: Curves.easeOutCubic,
+    );
+    _dragAnimation = projected > _dragOffset
+        ? TweenSequence<double>([
+            TweenSequenceItem<double>(
+              tween: Tween<double>(begin: _dragOffset, end: projected),
+              weight: 28,
+            ),
+            TweenSequenceItem<double>(
+              tween: Tween<double>(begin: projected, end: 0),
+              weight: 72,
+            ),
+          ]).animate(curve)
+        : Tween<double>(begin: _dragOffset, end: 0).animate(curve);
+    _dragReturnController.forward(from: 0);
   }
 
   @override
@@ -184,15 +245,18 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
       _remainingSeconds = 0;
     });
     _terminalTimer?.cancel();
-    _terminalTimer = Timer(const Duration(milliseconds: 1400), () {
-      if (!mounted) return;
-      Navigator.of(context).pop(switch (phase) {
-        _ApprovalPanelPhase.expired => ApprovalPanelOutcome.expired,
-        _ApprovalPanelPhase.stale => ApprovalPanelOutcome.stale,
-        _ApprovalPanelPhase.missing => ApprovalPanelOutcome.missing,
-        _ => null,
-      });
-    });
+    _terminalTimer = Timer(
+      TsPhoneMotion.resolve(context, const Duration(milliseconds: 240)),
+      () {
+        if (!mounted) return;
+        Navigator.of(context).pop(switch (phase) {
+          _ApprovalPanelPhase.expired => ApprovalPanelOutcome.expired,
+          _ApprovalPanelPhase.stale => ApprovalPanelOutcome.stale,
+          _ApprovalPanelPhase.missing => ApprovalPanelOutcome.missing,
+          _ => null,
+        });
+      },
+    );
   }
 
   Future<void> _respond(bool approved) async {
@@ -252,6 +316,7 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
     _countdownTimer?.cancel();
     _expiryTimer?.cancel();
     _terminalTimer?.cancel();
+    _dragReturnController.dispose();
     super.dispose();
   }
 
@@ -271,34 +336,37 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
         alignment: widget.phoneLayout
             ? Alignment.bottomCenter
             : Alignment.center,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: widget.phoneLayout ? double.infinity : 520,
-            maxHeight: media.size.height * (widget.phoneLayout ? 0.88 : 0.82),
-          ),
-          child: TsGlassSurface(
-            elevated: true,
-            blurSigma: 20,
-            borderRadius: radius,
-            child: Material(
-              color: Colors.transparent,
-              child: SafeArea(
-                top: !widget.phoneLayout,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _buildHeader(context),
-                    Flexible(
-                      child: Material(
-                        key: const ValueKey<String>(
-                          'approval-readable-surface',
+        child: Transform.translate(
+          offset: Offset(0, _dragOffset),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: widget.phoneLayout ? double.infinity : 520,
+              maxHeight: media.size.height * (widget.phoneLayout ? 0.88 : 0.82),
+            ),
+            child: TsGlassSurface(
+              elevated: true,
+              blurSigma: 20,
+              borderRadius: radius,
+              child: Material(
+                color: Colors.transparent,
+                child: SafeArea(
+                  top: !widget.phoneLayout,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _buildHeader(context),
+                      Flexible(
+                        child: Material(
+                          key: const ValueKey<String>(
+                            'approval-readable-surface',
+                          ),
+                          color: colors.surfaceContainerLowest,
+                          child: _buildContent(context),
                         ),
-                        color: colors.surfaceContainerLowest,
-                        child: _buildContent(context),
                       ),
-                    ),
-                    _buildActions(context),
-                  ],
+                      _buildActions(context),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -309,38 +377,47 @@ class _ApprovalPanelState extends State<_ApprovalPanel>
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.medium,
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final stackHeader =
-              MediaQuery.textScalerOf(context).scale(17) > 22 ||
-              constraints.maxWidth < 328;
-          final identity = _buildHeaderIdentity(context);
-          final countdown = _buildCountdownBadge(context);
-          if (stackHeader) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragStart: widget.phoneLayout ? _startHeaderDrag : null,
+      onVerticalDragUpdate: widget.phoneLayout ? _updateHeaderDrag : null,
+      onVerticalDragEnd: widget.phoneLayout ? _finishHeaderDrag : null,
+      onVerticalDragCancel: widget.phoneLayout
+          ? () => _finishHeaderDrag(DragEndDetails())
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          TsPhoneSpacing.large,
+          TsPhoneSpacing.large,
+          TsPhoneSpacing.large,
+          TsPhoneSpacing.medium,
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stackHeader =
+                MediaQuery.textScalerOf(context).scale(17) > 22 ||
+                constraints.maxWidth < 328;
+            final identity = _buildHeaderIdentity(context);
+            final countdown = _buildCountdownBadge(context);
+            if (stackHeader) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  identity,
+                  const SizedBox(height: TsPhoneSpacing.small),
+                  Align(alignment: Alignment.centerRight, child: countdown),
+                ],
+              );
+            }
+            return Row(
               children: <Widget>[
-                identity,
-                const SizedBox(height: TsPhoneSpacing.small),
-                Align(alignment: Alignment.centerRight, child: countdown),
+                Expanded(child: identity),
+                const SizedBox(width: TsPhoneSpacing.small),
+                countdown,
               ],
             );
-          }
-          return Row(
-            children: <Widget>[
-              Expanded(child: identity),
-              const SizedBox(width: TsPhoneSpacing.small),
-              countdown,
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }

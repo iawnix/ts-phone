@@ -218,6 +218,7 @@ class _SessionListPageState extends State<SessionListPage>
     if (_busy || gateway == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
+      animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
       builder: (context) => AlertDialog(
         title: Text(context.l10n.deletePermanently),
         content: Text(session.localizedDisplayName(context.l10n)),
@@ -267,7 +268,7 @@ class _SessionListPageState extends State<SessionListPage>
     if (widget.sidebar) return _buildSidebar();
     final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(
+      appBar: TsGlassAppBar(
         leading: BackButton(
           onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
         ),
@@ -370,22 +371,25 @@ class _SessionListPageState extends State<SessionListPage>
                           for (final session in sessions)
                             Material(
                               color: Colors.transparent,
-                              child: ListTile(
-                                key: ValueKey(
-                                  'sidebar-session-${session.sessionId}',
-                                ),
-                                selected:
-                                    session.sessionId ==
-                                    widget.selectedSessionId,
-                                selectedTileColor: colors.surfaceContainer,
-                                leading: _sessionLeading(session),
-                                title: Text(
-                                  session.localizedDisplayName(l10n),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                              child: TsPressable(
                                 onTap: _busy ? null : () => _open(session),
-                                trailing: _sessionTrailing(session),
+                                child: ListTile(
+                                  key: ValueKey(
+                                    'sidebar-session-${session.sessionId}',
+                                  ),
+                                  selected:
+                                      session.sessionId ==
+                                      widget.selectedSessionId,
+                                  selectedTileColor: colors.surfaceContainer,
+                                  leading: _sessionLeading(session),
+                                  title: Text(
+                                    session.localizedDisplayName(l10n),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: null,
+                                  trailing: _sessionTrailing(session),
+                                ),
                               ),
                             ),
                         ],
@@ -467,13 +471,16 @@ class _SessionListPageState extends State<SessionListPage>
                 final session = _sessions![index - 1];
                 return Material(
                   color: Colors.transparent,
-                  child: ListTile(
-                    key: ValueKey('session-${session.sessionId}'),
-                    leading: _sessionLeading(session),
-                    title: Text(session.localizedDisplayName(l10n)),
-                    subtitle: Text(session.shortId),
+                  child: TsPressable(
                     onTap: _busy ? null : () => _open(session),
-                    trailing: _sessionTrailing(session),
+                    child: ListTile(
+                      key: ValueKey('session-${session.sessionId}'),
+                      leading: _sessionLeading(session),
+                      title: Text(session.localizedDisplayName(l10n)),
+                      subtitle: Text(session.shortId),
+                      onTap: null,
+                      trailing: _sessionTrailing(session),
+                    ),
                   ),
                 );
               },
@@ -516,10 +523,22 @@ class _SessionListPageState extends State<SessionListPage>
 
   Widget? _sessionTrailing(SessionSummary session) {
     if (_sessionsGateway == null || _busy) return null;
-    return IconButton(
-      onPressed: () => _remove(session),
-      tooltip: context.l10n.deletePermanently,
-      icon: const Icon(Icons.delete_outline),
+    return PopupMenuButton<String>(
+      tooltip: context.l10n.moreActions,
+      icon: const Icon(Icons.more_horiz_rounded),
+      onSelected: (_) => _remove(session),
+      itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: <Widget>[
+              const Icon(Icons.delete_outline, size: 20),
+              const SizedBox(width: TsPhoneSpacing.medium),
+              Text(context.l10n.deletePermanently),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

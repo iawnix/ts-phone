@@ -46,11 +46,13 @@ Map<String, Object?> _read({
   String epoch = 'epoch-a',
   int sequence = 10,
   String text = 'first',
+  bool nestedCursor = false,
 }) => {
   'session': _session(),
   'snapshot': _snapshot(text: text),
-  'epoch': epoch,
-  'sequence': sequence,
+  if (!nestedCursor) 'epoch': epoch,
+  if (!nestedCursor) 'sequence': sequence,
+  if (nestedCursor) 'cursor': {'epoch': epoch, 'sequence': sequence},
 };
 Map<String, Object?> _event({
   String workspace = 'ts_001',
@@ -134,8 +136,10 @@ void main() {
       addTearDown(gateway.close);
       server.onRequest = (request) {
         expect(request['method'], 'session/attach');
+        final params = request['params']! as Map;
+        expect(params['after_cursor'], {'epoch': 'old', 'sequence': 999});
         server.send(_event(sequence: 11));
-        server.respond(request, _read());
+        server.respond(request, _read(nestedCursor: true));
       };
       final stream = StreamQueue(
         gateway.events('ts_001', 'session-1', lastEventId: 'old:999'),
@@ -266,6 +270,58 @@ void main() {
       );
     },
   );
+
+  test('unwraps Pi Harness transcript message envelopes', () async {
+    final server = _Server();
+    final gateway = HostGateway(_settings, client: server.client());
+    addTearDown(gateway.close);
+    server.onRequest = (request) {
+      expect(request['method'], 'session/read');
+      server.respond(request, {
+        ..._read(nestedCursor: true),
+        'snapshot': {
+          ..._snapshot(),
+          'messages': [
+            {
+              'id': 'entry-1',
+              'parentId': null,
+              'type': 'message',
+              'message': {
+                'role': 'user',
+                'content': [
+                  {'type': 'text', 'text': 'from Harness'},
+                ],
+              },
+              'seq': 4,
+              'timestamp': 1750000000123,
+            },
+            {'role': 'assistant', 'content': 'flat message'},
+          ],
+          'receipts': [
+            {
+              'client_message_id': 'harness-user-id',
+              'state': 'observed',
+              'message_index': 0,
+            },
+          ],
+        },
+      });
+    };
+
+    final snapshot = await gateway.getMessages('ts_001', 'session-1');
+    expect(snapshot.messages, hasLength(2));
+    expect(snapshot.lastEventId, 'epoch-a:10');
+    expect((snapshot.messages[0]! as Map)['role'], 'user');
+    expect((snapshot.messages[0]! as Map)['content'], [
+      {'type': 'text', 'text': 'from Harness'},
+    ]);
+    expect((snapshot.messages[0]! as Map)['timestamp'], 1750000000123);
+    expect(
+      (snapshot.messages[0]! as Map)['clientMessageId'],
+      'harness-user-id',
+    );
+    expect((snapshot.messages[1]! as Map)['content'], 'flat message');
+  });
 
   test('maps monitor management and structured Host failures', () async {
     final server = _Server();

@@ -54,18 +54,28 @@ class LiveRunStrip extends StatelessWidget {
                   liveRegion: true,
                   label: label,
                   child: ExcludeSemantics(
-                    child: AnimatedSwitcher(
-                      duration: TsPhoneMotion.resolve(
-                        context,
-                        TsPhoneMotion.quick,
-                      ),
-                      child: Column(
-                        key: ValueKey<String>(label),
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        AnimatedSwitcher(
+                          duration: TsPhoneMotion.resolveFade(
+                            context,
+                            TsPhoneMotion.quick,
+                          ),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeOutCubic,
+                          layoutBuilder: (currentChild, previousChildren) =>
+                              Stack(
+                                alignment: AlignmentDirectional.topStart,
+                                children: <Widget>[
+                                  ...previousChildren,
+                                  ?currentChild,
+                                ],
+                              ),
+                          child: Text(
                             label,
+                            key: ValueKey<String>(label),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -73,13 +83,13 @@ class LiveRunStrip extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          if (startedAt != null)
-                            _ElapsedLabel(
-                              key: ValueKey<DateTime>(startedAt),
-                              startedAt: startedAt,
-                            ),
-                        ],
-                      ),
+                        ),
+                        if (startedAt != null)
+                          _ElapsedLabel(
+                            key: ValueKey<DateTime>(startedAt),
+                            startedAt: startedAt,
+                          ),
+                      ],
                     ),
                   ),
                 ),
