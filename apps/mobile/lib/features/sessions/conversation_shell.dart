@@ -37,7 +37,8 @@ class ConversationShell extends StatefulWidget {
   State<ConversationShell> createState() => _ConversationShellState();
 }
 
-class _ConversationShellState extends State<ConversationShell> {
+class _ConversationShellState extends State<ConversationShell>
+    with WidgetsBindingObserver {
   final _navigator = GlobalKey<NavigatorState>();
   final _scaffold = GlobalKey<ScaffoldState>();
   final _memory = ConversationMemory();
@@ -50,6 +51,8 @@ class _ConversationShellState extends State<ConversationShell> {
   bool _creating = false;
   bool _initializing = true;
   bool _showInitialContext = false;
+  bool _refreshingWorkspaces = false;
+  Timer? _workspaceRefreshTimer;
   int _generation = 0;
   int _sidebarRevision = 0;
   int _selectionEpoch = 0;
@@ -68,16 +71,31 @@ class _ConversationShellState extends State<ConversationShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _api =
         widget.gatewayBuilder?.call(widget.settings) ??
         HostGateway(widget.settings);
     unawaited(_loadWorkspaces(restoreRecent: true));
+    _workspaceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_session == null && mounted) {
+        unawaited(_loadWorkspaces());
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _workspaceRefreshTimer?.cancel();
     _api.close();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_loadWorkspaces());
+    }
   }
 
   void _showDirectory() {
@@ -91,6 +109,8 @@ class _ConversationShellState extends State<ConversationShell> {
   }
 
   Future<void> _loadWorkspaces({bool restoreRecent = false}) async {
+    if (_refreshingWorkspaces) return;
+    _refreshingWorkspaces = true;
     final hadWorkspaces = _workspaces != null;
     final selectionEpoch = _selectionEpoch;
     try {
@@ -100,7 +120,7 @@ class _ConversationShellState extends State<ConversationShell> {
       final selectedWorkspace =
           existingWorkspace != null &&
               workspaces.any((value) => value.id == existingWorkspace.id)
-          ? existingWorkspace
+          ? workspaces.firstWhere((value) => value.id == existingWorkspace.id)
           : workspaces.length == 1
           ? workspaces.single
           : workspaces.firstOrNull;
@@ -131,6 +151,8 @@ class _ConversationShellState extends State<ConversationShell> {
             SnackBar(content: Text(problem.localizedMessage(context.l10n))),
           );
       }
+    } finally {
+      _refreshingWorkspaces = false;
     }
   }
 
@@ -139,48 +161,96 @@ class _ConversationShellState extends State<ConversationShell> {
     int selectionEpoch,
   ) async {
     final store = widget.selectionStore;
-    if (store == null) return false;
     (String, String)? recent;
-    try {
-      recent = await store.loadConversation(widget.settings.serverUrl);
-    } on Object {
-      return false;
-    }
-    if (!mounted || selectionEpoch != _selectionEpoch || recent == null) {
-      return false;
-    }
-    WorkspaceSummary? workspace;
-    for (final candidate in workspaces) {
-      if (candidate.id == recent.$1) {
-        workspace = candidate;
-        break;
+    if (store != null) {
+      try {
+        recent = await store.loadConversation(widget.settings.serverUrl);
+      } on Object {
+        recent = null;
       }
     }
-    // Versions before the workspace-aware preference stored serverId here.
-    // A single workspace lets us recover that preference without guessing
-    // when several projects are available.
-    if (workspace == null &&
-        workspaces.length == 1 &&
-        recent.$1 == widget.settings.serverId) {
-      workspace = workspaces.single;
+    if (!mounted || selectionEpoch != _selectionEpoch) {
+      return false;
     }
-    if (workspace == null) return false;
+    if (recent != null) {
+      WorkspaceSummary? workspace;
+      for (final candidate in workspaces) {
+        if (candidate.id == recent.$1) {
+          workspace = candidate;
+          break;
+        }
+      }
+      // Versions before the workspace-aware preference stored serverId here.
+      // A single workspace lets us recover that preference without guessing
+      // when several projects are available.
+      if (workspace == null &&
+          workspaces.length == 1 &&
+          recent.$1 == widget.settings.serverId) {
+        workspace = workspaces.single;
+      }
+      if (workspace != null) {
+        try {
+          final sessions = await _api.listSessions(workspace.id);
+          if (!mounted || selectionEpoch != _selectionEpoch) return false;
+          final session = sessions
+              .where((candidate) => candidate.sessionId == recent!.$2)
+              .firstOrNull;
+          if (session != null) {
+            setState(() {
+              _workspace = workspace;
+              _sessions = sessions;
+              _session = session;
+              _generation += 1;
+              _sidebarRevision += 1;
+              _selectionEpoch += 1;
+            });
+            return true;
+          }
+        } on Object {
+          // A missing saved session should fall through to the latest one.
+        }
+      }
+    }
+    return _restoreLatestConversation(workspaces, selectionEpoch);
+  }
 
-    List<SessionSummary> sessions;
-    try {
-      sessions = await _api.listSessions(workspace.id);
-    } on Object {
-      return false;
-    }
+  Future<bool> _restoreLatestConversation(
+    List<WorkspaceSummary> workspaces,
+    int selectionEpoch,
+  ) async {
     if (!mounted || selectionEpoch != _selectionEpoch) return false;
-    SessionSummary? session;
-    for (final candidate in sessions) {
-      if (candidate.sessionId == recent.$2) {
-        session = candidate;
-        break;
+    final candidates = <(WorkspaceSummary, List<SessionSummary>)>[];
+    for (final workspace in workspaces) {
+      try {
+        final sessions = await _api.listSessions(workspace.id);
+        if (sessions.isNotEmpty) candidates.add((workspace, sessions));
+      } on Object {
+        // One unavailable project should not hide sessions from the others.
+      }
+      if (!mounted || selectionEpoch != _selectionEpoch) return false;
+    }
+    if (candidates.isEmpty) return false;
+    (WorkspaceSummary, SessionSummary)? latest;
+    for (final (workspace, sessions) in candidates) {
+      for (final session in sessions) {
+        final current = latest?.$2;
+        final currentUpdated = current?.updatedAt;
+        final sessionUpdated = session.updatedAt;
+        if (latest == null ||
+            (sessionUpdated != null &&
+                (currentUpdated == null ||
+                    sessionUpdated.isAfter(currentUpdated)))) {
+          latest = (workspace, session);
+        }
       }
     }
-    if (session == null) return false;
+    if (latest == null || !mounted || selectionEpoch != _selectionEpoch) {
+      return false;
+    }
+    final (workspace, session) = latest;
+    final sessions = candidates
+        .firstWhere((candidate) => candidate.$1.id == workspace.id)
+        .$2;
     setState(() {
       _workspace = workspace;
       _sessions = sessions;
@@ -339,13 +409,16 @@ class _ConversationShellState extends State<ConversationShell> {
         loadSessions: _loadSessionsForContext,
         onSessionSelected: _selectContextSession,
         onCreateSession: managementAvailable ? _createSessionForContext : null,
+        onCreateWorkspace: _workspaceManagement == null
+            ? null
+            : () => _newWorkspace(select: false),
       ),
     );
   }
 
-  Future<void> _newWorkspace() async {
+  Future<WorkspaceSummary?> _newWorkspace({bool select = true}) async {
     final management = _workspaceManagement;
-    if (management == null) return;
+    if (management == null) return null;
     final controller = TextEditingController();
     final workspaceId = await showDialog<String>(
       context: context,
@@ -373,13 +446,14 @@ class _ConversationShellState extends State<ConversationShell> {
     );
     controller.dispose();
     final normalized = workspaceId?.trim() ?? '';
-    if (normalized.isEmpty) return;
+    if (normalized.isEmpty) return null;
     try {
       final created = await management.createWorkspace(normalized);
       await _loadWorkspaces();
-      if (mounted) _selectWorkspace(created);
+      if (select && mounted) _selectWorkspace(created);
+      return created;
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -387,6 +461,7 @@ class _ConversationShellState extends State<ConversationShell> {
           ),
         ),
       );
+      return null;
     }
   }
 
@@ -447,12 +522,6 @@ class _ConversationShellState extends State<ConversationShell> {
       appBar: TsGlassAppBar(
         title: Text(context.l10n.workspaces),
         actions: [
-          if (_workspaceManagement != null)
-            IconButton(
-              onPressed: () => unawaited(_newWorkspace()),
-              tooltip: context.l10n.newProject,
-              icon: const Icon(AppIcons.create_new_folder_outlined),
-            ),
           PopupMenuButton<String>(
             key: const ValueKey('initial-context-menu'),
             tooltip: context.l10n.moreActions,
@@ -483,6 +552,9 @@ class _ConversationShellState extends State<ConversationShell> {
         loadSessions: _loadSessionsForContext,
         onSessionSelected: _selectContextSession,
         onCreateSession: managementAvailable ? _createSessionForContext : null,
+        onCreateWorkspace: _workspaceManagement == null
+            ? null
+            : () => _newWorkspace(select: false),
         dismissOnSessionSelected: false,
         embedded: true,
       ),

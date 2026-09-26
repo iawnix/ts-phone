@@ -129,6 +129,54 @@ void main() {
   );
 
   test(
+    'projects persisted runtime failures into the session snapshot',
+    () async {
+      final server = _Server();
+      final gateway = HostGateway(_settings, client: server.client());
+      addTearDown(gateway.close);
+      server.onRequest = (request) {
+        expect(request['method'], 'session/read');
+        server.respond(request, {
+          ..._read(),
+          'snapshot': {
+            ..._snapshot(),
+            'messages': <Object?>[
+              {
+                'role': 'assistant',
+                'content': <Object?>[],
+                'outputState': 'failed',
+                'failure': {
+                  'code': 'provider_error',
+                  'summary': '模型服务拒绝了请求',
+                  'detail': "400: Invalid 'tools[1].name'",
+                  'statusCode': 400,
+                  'retryable': false,
+                  'operationId': 'run-1',
+                },
+              },
+            ],
+            'runtime_error': {
+              'code': 'provider_error',
+              'summary': '模型服务拒绝了请求',
+              'detail': "400: Invalid 'tools[1].name'",
+              'statusCode': 400,
+              'retryable': false,
+              'operationId': 'run-1',
+            },
+          },
+        });
+      };
+
+      final snapshot = await gateway.getMessages('ts_001', 'session-1');
+      final failure = (snapshot.messages.single! as Map)['failure'] as Map;
+      expect((snapshot.messages.single! as Map)['outputState'], 'failed');
+      expect(failure['code'], 'provider_error');
+      expect(failure['statusCode'], 400);
+      expect(failure['detail'], "400: Invalid 'tools[1].name'");
+    },
+  );
+
+  test(
     'reconciles early events with attach snapshot and reattaches after a new epoch',
     () async {
       final server = _Server();
@@ -366,6 +414,45 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('keeps cached workspaces while the relay reconnects', () async {
+    final server = _Server();
+    final gateway = HostGateway(_settings, client: server.client());
+    addTearDown(gateway.close);
+    var workspaceReads = 0;
+    server.onRequest = (request) {
+      switch (request['method']) {
+        case 'workspace/list':
+          workspaceReads += 1;
+          if (workspaceReads == 1) {
+            server.respond(request, {
+              'workspaces': [
+                {'workspace_id': 'ts_001', 'name': 'Chemistry'},
+              ],
+            });
+          } else {
+            server.channel.addError(StateError('relay dropped'));
+          }
+        case 'session/list':
+          server.respond(request, {
+            'sessions': [_session()],
+          });
+        default:
+          fail('Unexpected ${request['method']}');
+      }
+    };
+
+    expect((await gateway.listWorkspaces()).single.name, 'Chemistry');
+    expect(gateway.transportState, HostTransportState.connected);
+    final states = <HostTransportState>[];
+    final stateSubscription = gateway.transportChanges.listen(states.add);
+    addTearDown(stateSubscription.cancel);
+
+    final cached = await gateway.listWorkspaces();
+    expect(cached.single.name, 'Chemistry');
+    expect(gateway.transportState, HostTransportState.reconnecting);
+    expect(states, contains(HostTransportState.reconnecting));
   });
 }
 

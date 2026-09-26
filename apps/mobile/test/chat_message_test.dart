@@ -53,6 +53,28 @@ void main() {
     expect(message.tools.single.body, 'failed');
   });
 
+  test('keeps runtime failure diagnostics attached to the failed output', () {
+    final message = ChatMessage.fromJson(<String, Object?>{
+      'role': 'assistant',
+      'content': <Object?>[],
+      'outputState': 'failed',
+      'failure': <String, Object?>{
+        'code': 'provider_error',
+        'summary': '模型服务拒绝了请求',
+        'detail': "400: Invalid 'tools[1].name'",
+        'statusCode': 400,
+        'retryable': false,
+        'operationId': 'run-1',
+      },
+    });
+
+    expect(message.failure?.code, 'provider_error');
+    expect(message.failure?.statusCode, 400);
+    expect(message.failure?.hasDetail, isTrue);
+    expect(message.failure?.operationId, 'run-1');
+    expect(message.copyWith().failure?.detail, "400: Invalid 'tools[1].name'");
+  });
+
   test('rejects malformed optional delivery metadata', () {
     expect(
       () => ChatMessage.fromJson(<String, Object?>{

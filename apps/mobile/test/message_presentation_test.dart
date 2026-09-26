@@ -155,6 +155,40 @@ void main() {
     });
   }
 
+  testWidgets('failed output keeps technical detail collapsed by default', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      presentation(
+        ChatMessageView(
+          message: const ChatMessage(
+            role: ChatRole.assistant,
+            text: '',
+            outputState: AssistantOutputState.failed,
+            failure: ChatFailure(
+              code: 'provider_error',
+              summary: 'The model service rejected the request',
+              detail: "400: Invalid 'tools[1].name'",
+              statusCode: 400,
+              operationId: 'run-1',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Generation failed'), findsOneWidget);
+    expect(
+      find.text('The model service rejected the request · HTTP 400'),
+      findsOneWidget,
+    );
+    expect(find.text("400: Invalid 'tools[1].name'"), findsNothing);
+
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+    expect(find.textContaining("400: Invalid 'tools[1].name'"), findsOneWidget);
+  });
+
   testWidgets(
     'activity folding preserves failure visibility and original order',
     (tester) async {

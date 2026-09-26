@@ -85,20 +85,23 @@ class PiAppServerClient {
     final generation = ++_connectionGeneration;
     final hello = Completer<void>();
     _hello = hello;
-    final channel = _channelFactory(_linkUri(), {
-      'Authorization': 'Bearer $token',
-    });
-    _channel = channel;
-    _incoming = channel.stream.listen(
-      (value) => _onChunk(generation, value),
-      onError: (Object error) => _fail(generation, error),
-      onDone: () => _fail(
-        generation,
-        const PiAppServerException('TSPi Link connection closed'),
-      ),
-      cancelOnError: true,
-    );
     try {
+      // The channel factory may throw before returning a channel (for example
+      // when URI validation fails). Keep the hello future from remaining
+      // pending so a later retry can establish a fresh transport.
+      final channel = _channelFactory(_linkUri(), {
+        'Authorization': 'Bearer $token',
+      });
+      _channel = channel;
+      _incoming = channel.stream.listen(
+        (value) => _onChunk(generation, value),
+        onError: (Object error) => _fail(generation, error),
+        onDone: () => _fail(
+          generation,
+          const PiAppServerException('TSPi Link connection closed'),
+        ),
+        cancelOnError: true,
+      );
       await channel.ready.timeout(const Duration(seconds: 20));
       _send({'type': 'hello', 'version': piAppServerProtocolVersion});
       await hello.future.timeout(const Duration(seconds: 20));

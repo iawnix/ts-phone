@@ -18,6 +18,60 @@ class ToolDetail {
   final bool isError;
 }
 
+class ChatFailure {
+  const ChatFailure({
+    this.code,
+    this.summary,
+    this.detail,
+    this.statusCode,
+    this.retryable,
+    this.operationId,
+  });
+
+  factory ChatFailure.fromJson(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Failure detail must be an object');
+    }
+    final json = value.cast<String, Object?>();
+    final statusCode = json['statusCode'];
+    final strings = <(String?, String?)>[
+      (json['code'] as String?, 'failure code'),
+      (json['summary'] as String?, 'failure summary'),
+      (json['detail'] as String?, 'failure detail'),
+      (json['operationId'] as String?, 'failure operation id'),
+    ];
+    for (final (value, label) in strings) {
+      if (value != null && value.isEmpty) {
+        throw FormatException('$label cannot be empty');
+      }
+    }
+    if (statusCode != null && statusCode is! int) {
+      throw const FormatException('Failure status code is invalid');
+    }
+    final retryable = json['retryable'];
+    if (retryable != null && retryable is! bool) {
+      throw const FormatException('Failure retryable flag is invalid');
+    }
+    return ChatFailure(
+      code: json['code'] as String?,
+      summary: json['summary'] as String?,
+      detail: json['detail'] as String?,
+      statusCode: statusCode as int?,
+      retryable: retryable as bool?,
+      operationId: json['operationId'] as String?,
+    );
+  }
+
+  final String? code;
+  final String? summary;
+  final String? detail;
+  final int? statusCode;
+  final bool? retryable;
+  final String? operationId;
+
+  bool get hasDetail => detail?.trim().isNotEmpty == true;
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.role,
@@ -28,6 +82,7 @@ class ChatMessage {
     this.origin,
     this.deliveryState,
     this.outputState,
+    this.failure,
   });
 
   factory ChatMessage.fromJson(Object? value) {
@@ -98,6 +153,9 @@ class ChatMessage {
         'aborted' => AssistantOutputState.aborted,
         _ => null,
       },
+      failure: json['failure'] == null
+          ? null
+          : ChatFailure.fromJson(json['failure']),
     );
   }
 
@@ -109,6 +167,7 @@ class ChatMessage {
   final String? origin;
   final ChatDeliveryState? deliveryState;
   final AssistantOutputState? outputState;
+  final ChatFailure? failure;
 
   bool get hasVisibleContent =>
       text.isNotEmpty || tools.isNotEmpty || outputState != null;
@@ -128,6 +187,7 @@ class ChatMessage {
       origin: origin,
       deliveryState: deliveryState ?? this.deliveryState,
       outputState: outputState,
+      failure: failure,
     );
   }
 

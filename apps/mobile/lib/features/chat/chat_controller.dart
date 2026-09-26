@@ -245,6 +245,9 @@ class ChatController extends ChangeNotifier {
   bool get hasStreamingText => _streamingTextChunks != null;
   ValueListenable<String?> get streamingTextUpdates => _streamingTextUpdates;
   ChatActivity? get activity => _activity;
+  bool get hasFailedOutput => _messages.any(
+    (message) => message.outputState == AssistantOutputState.failed,
+  );
   TsPhoneProblem? get problem =>
       _operationProblem ??
       (_promptProblem == null
@@ -467,6 +470,10 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> _synchronizeMessages({bool resetView = false}) async {
+    final hadCachedSnapshot =
+        _messages.isNotEmpty ||
+        _timelineItems.isNotEmpty ||
+        outbox.messages.isNotEmpty;
     _cancelStreamRender();
     _snapshotSyncInProgress = true;
     _snapshotReady = false;
@@ -528,7 +535,18 @@ class ChatController extends ChangeNotifier {
       _operationProblem = null;
       _notify();
     } on Object catch (error) {
-      if (!_disposed) _setError(error);
+      if (!_disposed) {
+        // A cached transcript remains useful while the relay is recovering.
+        // Keep the failure in the status channel so the chat does not flash an
+        // error page for a transient snapshot request failure.
+        if (hadCachedSnapshot && _isTransientTransportError(error)) {
+          _operationProblem = describeTsPhoneProblem(error);
+          _eventConnectionState = EventConnectionState.reconnecting;
+          _armEventError(error);
+        } else {
+          _setError(error);
+        }
+      }
     } finally {
       _snapshotSyncInProgress = false;
       if (!_disposed) {
@@ -1297,6 +1315,17 @@ class ChatController extends ChangeNotifier {
     };
   }
 
+  static bool _isTransientTransportError(Object error) {
+    final problem = describeTsPhoneProblem(error);
+    return const {
+      TsPhoneProblemCode.connectionFailed,
+      TsPhoneProblemCode.requestTimeout,
+      TsPhoneProblemCode.serviceUnavailable,
+      TsPhoneProblemCode.sessionOffline,
+      TsPhoneProblemCode.networkRetrying,
+    }.contains(problem.code);
+  }
+
   void _handleEvent(TsPhoneEvent event) {
     final payload = _asMap(event.payload);
     if (_isLiveContentEvent(event.type) &&
@@ -1404,6 +1433,7 @@ class ChatController extends ChangeNotifier {
         }
         _updateCapabilities(payload?['capabilities']);
         _operationProblem = null;
+        _applyRuntimeError(payload?['runtimeError']);
         _updateSessionRuntime(payload?['runtime']);
         _updateAccessMode(payload?['accessMode']);
         _canPrompt = payload?['canPrompt'] is bool
@@ -2206,6 +2236,23 @@ class ChatController extends ChangeNotifier {
   void _setError(Object error) {
     _operationProblem = describeTsPhoneProblem(error);
     _notify();
+  }
+
+  void _applyRuntimeError(Object? value) {
+    final error = _asMap(value);
+    if (error == null) return;
+    final code = error['code'] is String ? error['code']! as String : null;
+    final statusCode = error['statusCode'] is int
+        ? error['statusCode']! as int
+        : null;
+    final message = error['message'] is String
+        ? error['message']! as String
+        : error['summary'] is String
+        ? error['summary']! as String
+        : 'Pi runtime error';
+    _operationProblem = describeTsPhoneProblem(
+      TsPhoneApiException(message, code: code, statusCode: statusCode),
+    );
   }
 
   static Map<String, Object?>? _asMap(Object? value) {

@@ -32,6 +32,7 @@ class ContextSwitcherSheet extends StatefulWidget {
     required this.loadSessions,
     required this.onSessionSelected,
     this.onCreateSession,
+    this.onCreateWorkspace,
     this.dismissOnSessionSelected = true,
     this.embedded = false,
   });
@@ -43,6 +44,7 @@ class ContextSwitcherSheet extends StatefulWidget {
   final ContextSessionLoader loadSessions;
   final ContextSessionSelector onSessionSelected;
   final ContextSessionCreator? onCreateSession;
+  final Future<WorkspaceSummary?> Function()? onCreateWorkspace;
   final bool dismissOnSessionSelected;
   final bool embedded;
 
@@ -51,20 +53,54 @@ class ContextSwitcherSheet extends StatefulWidget {
 }
 
 class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
+  late List<WorkspaceSummary> _workspaces;
   late WorkspaceSummary _workspace;
   List<SessionSummary>? _sessions;
   Object? _error;
   bool _loading = false;
   bool _creating = false;
+  bool _creatingWorkspace = false;
 
   @override
   void initState() {
     super.initState();
+    _workspaces = List<WorkspaceSummary>.of(widget.workspaces);
     _workspace = widget.selectedWorkspace;
     _sessions = widget.initialSessions == null
         ? null
         : _prioritizeSessions(widget.initialSessions!);
     if (_sessions == null) unawaited(_loadSessions(_workspace));
+  }
+
+  @override
+  void didUpdateWidget(covariant ContextSwitcherSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _workspaces = List<WorkspaceSummary>.of(widget.workspaces);
+    final selectedId =
+        oldWidget.selectedWorkspace.id != widget.selectedWorkspace.id
+        ? widget.selectedWorkspace.id
+        : _workspace.id;
+    WorkspaceSummary? next;
+    for (final workspace in _workspaces) {
+      if (workspace.id == selectedId) {
+        next = workspace;
+        break;
+      }
+    }
+    next ??= widget.selectedWorkspace;
+    final nextWorkspace = next;
+    if (nextWorkspace.id == _workspace.id) {
+      _workspace = nextWorkspace;
+      return;
+    }
+    _workspace = nextWorkspace;
+    _sessions = null;
+    _error = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _workspace.id == nextWorkspace.id && _sessions == null) {
+        unawaited(_loadSessions(nextWorkspace));
+      }
+    });
   }
 
   Future<void> _loadSessions(WorkspaceSummary workspace) async {
@@ -103,6 +139,28 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
     }
   }
 
+  Future<void> _createWorkspace() async {
+    final create = widget.onCreateWorkspace;
+    if (create == null || _creatingWorkspace) return;
+    setState(() => _creatingWorkspace = true);
+    try {
+      final workspace = await create();
+      if (!mounted || workspace == null) return;
+      setState(() {
+        _workspaces = [
+          ..._workspaces.where((value) => value.id != workspace.id),
+          workspace,
+        ];
+        _workspace = workspace;
+        _sessions = null;
+        _error = null;
+      });
+      unawaited(_loadSessions(workspace));
+    } finally {
+      if (mounted) setState(() => _creatingWorkspace = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -117,11 +175,33 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
         TsPhoneSpacing.large,
       ),
       children: <Widget>[
-        _SheetHeader(title: l10n.workspaces),
+        Row(
+          children: <Widget>[
+            Expanded(child: _SheetHeader(title: l10n.workspaces)),
+            if (widget.onCreateWorkspace != null)
+              IconButton(
+                key: const ValueKey('context-new-workspace'),
+                onPressed: _creatingWorkspace ? null : _createWorkspace,
+                tooltip: l10n.newProject,
+                icon: _creatingWorkspace
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(AppIcons.create_new_folder_outlined),
+              ),
+          ],
+        ),
         const SizedBox(height: TsPhoneSpacing.xSmall),
-        for (final workspace in widget.workspaces)
+        for (final workspace in _workspaces)
           _ContextRow(
-            icon: AppIcons.folder_outlined,
+            icon: switch (workspace.runtimeState) {
+              RuntimeState.running => AppIcons.motion_photos_on_outlined,
+              RuntimeState.connecting => AppIcons.sync_rounded,
+              RuntimeState.offline => AppIcons.cloud_off_outlined,
+              RuntimeState.recoveryRequired => AppIcons.error_outline_rounded,
+              RuntimeState.idle => AppIcons.folder_outlined,
+            },
             title: workspace.name,
             selected: workspace.id == _workspace.id,
             onTap: workspace.id == _workspace.id

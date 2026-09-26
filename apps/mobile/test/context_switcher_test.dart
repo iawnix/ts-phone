@@ -60,4 +60,47 @@ void main() {
     expect(selected, isTrue);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('creates a project from the context panel', (tester) async {
+    const workspace = WorkspaceSummary(
+      id: 'workspace',
+      name: 'Project A',
+      runtimeState: RuntimeState.idle,
+      isStreaming: false,
+      liveSessionCount: 0,
+      sessionCount: 0,
+    );
+    const created = WorkspaceSummary(
+      id: 'workspace-b',
+      name: 'Project B',
+      runtimeState: RuntimeState.idle,
+      isStreaming: false,
+      liveSessionCount: 0,
+      sessionCount: 0,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(
+          body: ContextSwitcherSheet(
+            workspaces: const [workspace],
+            selectedWorkspace: workspace,
+            selectedSession: null,
+            initialSessions: const [],
+            loadSessions: (_) async => const [],
+            onSessionSelected: (_, _) {},
+            onCreateWorkspace: () async => created,
+            embedded: true,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('context-new-workspace')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Project B'), findsOneWidget);
+  });
 }

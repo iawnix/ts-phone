@@ -40,6 +40,7 @@ SessionSummary session(String id) => SessionSummary(
 );
 
 class ConversationGateway implements TsPhoneGateway, AppServerSessionGateway {
+  List<WorkspaceSummary> workspaces = [appServer];
   List<SessionSummary> sessions = [session('one'), session('two')];
   int created = 0;
 
@@ -50,7 +51,7 @@ class ConversationGateway implements TsPhoneGateway, AppServerSessionGateway {
   };
 
   @override
-  Future<List<WorkspaceSummary>> listWorkspaces() async => [appServer];
+  Future<List<WorkspaceSummary>> listWorkspaces() async => workspaces;
 
   @override
   Future<List<SessionSummary>> listSessions(String workspaceId) async {
@@ -171,23 +172,50 @@ class _SelectionStore implements ConversationSelectionStore {
 void loadPreviewFonts() {}
 
 void main() {
-  testWidgets('shows the combined context picker without recent history', (
+  testWidgets('opens the latest session without recent selection history', (
     tester,
   ) async {
     final gateway = ConversationGateway();
     await tester.pumpWidget(shellApp(gateway));
     await tester.pumpAndSettle();
-    expect(find.byType(ContextSwitcherSheet), findsOneWidget);
-    expect(find.text('App Server'), findsOneWidget);
+    expect(find.byType(ChatPage), findsOneWidget);
     expect(find.text('Session one'), findsOneWidget);
-    expect(find.text('Session two'), findsOneWidget);
+    expect(find.byType(ContextSwitcherSheet), findsNothing);
     expect(find.byType(ConversationShell), findsOneWidget);
+  });
+
+  testWidgets('refreshes the project directory when the app resumes', (
+    tester,
+  ) async {
+    final gateway = ConversationGateway();
+    gateway.sessions = [];
+    await tester.pumpWidget(shellApp(gateway));
+    await tester.pumpAndSettle();
+
+    gateway.workspaces = [
+      appServer,
+      const WorkspaceSummary(
+        id: 'project-b',
+        name: 'Project B',
+        runtimeState: RuntimeState.idle,
+        isStreaming: false,
+        liveSessionCount: 0,
+        sessionCount: 0,
+      ),
+    ];
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Project B'), findsOneWidget);
   });
 
   testWidgets('creates and opens a native App Server session', (tester) async {
     final gateway = ConversationGateway();
     final store = _SelectionStore();
     await tester.pumpWidget(shellApp(gateway, selectionStore: store));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('chat-back')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('context-new-session')));
     await tester.pumpAndSettle();

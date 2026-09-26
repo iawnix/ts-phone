@@ -1259,7 +1259,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
     final state = SessionViewState.fromController(_controller);
     if (state.notice == SessionNoticeKind.offline ||
-        _isTransportProblem(_controller.problem)) {
+        _isTransportProblem(_controller.problem) ||
+        _controller.hasFailedOutput) {
       return null;
     }
     return SessionNoticeView(

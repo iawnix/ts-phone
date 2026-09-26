@@ -8,6 +8,17 @@ import 'app_server_gateway.dart';
 import 'host_rpc_client.dart';
 import 'ts_phone_api.dart';
 
+/// Transport state is independent from a session's runtime state. A session
+/// can remain readable while the relay is recovering.
+enum HostTransportState {
+  connecting,
+  connected,
+  reconnecting,
+  offline,
+  authFailed,
+  closed,
+}
+
 /// Adapts the public Host API to the existing mobile presentation models.
 /// Pi owns messages and turns. The phone owns only projections and its outbox.
 class HostGateway
@@ -32,9 +43,18 @@ class HostGateway
   final HostRpcClient _client;
   final _sessions = <String, Map<String, Object?>>{};
   final _sessionWorkspaces = <String, String>{};
+  final _workspaceSummaries = <String, WorkspaceSummary>{};
+  final _transportChanges = StreamController<HostTransportState>.broadcast(
+    sync: true,
+  );
   String? _workspaceId;
   String? _sessionId;
+  HostTransportState _transportState = HostTransportState.offline;
   bool _closed = false;
+
+  HostTransportState get transportState => _transportState;
+
+  Stream<HostTransportState> get transportChanges => _transportChanges.stream;
 
   @override
   Future<Map<String, Object?>> version() => _guard(() async {
@@ -47,27 +67,41 @@ class HostGateway
   });
 
   @override
-  Future<List<WorkspaceSummary>> listWorkspaces() => _guard(() async {
-    final result = _object(await _client.request('workspace/list'));
-    final workspaces = _list(result['workspaces']);
-    return Future.wait(
-      workspaces.map((raw) async {
-        final workspace = _object(raw);
-        final id = _string(workspace['workspace_id']);
-        final sessions = await listSessions(id);
-        return WorkspaceSummary(
-          id: id,
-          name: workspace['name'] as String? ?? id,
-          runtimeState: RuntimeState.idle,
-          isStreaming: sessions.any((session) => session.isStreaming),
-          liveSessionCount: sessions
-              .where((session) => session.runtimeState.isAvailable)
-              .length,
-          sessionCount: sessions.length,
-        );
-      }),
-    );
-  });
+  Future<List<WorkspaceSummary>> listWorkspaces() async {
+    try {
+      final result = await _guard(
+        () async => _object(await _client.request('workspace/list')),
+      );
+      final workspaces = _list(result['workspaces']);
+      final projected = await Future.wait(
+        workspaces.map((raw) async {
+          final workspace = _object(raw);
+          final id = _string(workspace['workspace_id']);
+          final sessions = await listSessions(id);
+          return WorkspaceSummary(
+            id: id,
+            name: workspace['name'] as String? ?? id,
+            runtimeState: RuntimeState.idle,
+            isStreaming: sessions.any((session) => session.isStreaming),
+            liveSessionCount: sessions
+                .where((session) => session.runtimeState.isAvailable)
+                .length,
+            sessionCount: sessions.length,
+          );
+        }),
+      );
+      _workspaceSummaries
+        ..clear()
+        ..addEntries(projected.map((value) => MapEntry(value.id, value)));
+      return projected;
+    } on Object catch (error) {
+      if (_workspaceSummaries.isNotEmpty && _isTransient(error)) {
+        _setTransportState(HostTransportState.reconnecting);
+        return _workspaceSummaries.values.toList(growable: false);
+      }
+      rethrow;
+    }
+  }
 
   @override
   Future<WorkspaceSummary> createWorkspace(String workspaceId) =>
@@ -80,7 +114,7 @@ class HostGateway
         );
         final workspace = _object(result['workspace'] ?? result);
         final id = _string(workspace['workspace_id']);
-        return WorkspaceSummary(
+        final summary = WorkspaceSummary(
           id: id,
           name: workspace['name'] as String? ?? id,
           runtimeState: RuntimeState.idle,
@@ -88,18 +122,30 @@ class HostGateway
           liveSessionCount: 0,
           sessionCount: 0,
         );
+        _workspaceSummaries[id] = summary;
+        return summary;
       });
 
   @override
-  Future<List<SessionSummary>> listSessions(String workspaceId) =>
-      _guard(() async {
-        final result = _object(
+  Future<List<SessionSummary>> listSessions(String workspaceId) async {
+    try {
+      final result = await _guard(
+        () async => _object(
           await _client.request('session/list', {'workspace_id': workspaceId}),
-        );
-        return _list(
-          result['sessions'],
-        ).map((raw) => _summary(_object(raw), workspaceId)).toList();
-      });
+        ),
+      );
+      return _list(
+        result['sessions'],
+      ).map((raw) => _summary(_object(raw), workspaceId)).toList();
+    } on Object catch (error) {
+      final cached = _cachedSessions(workspaceId);
+      if (cached.isNotEmpty && _isTransient(error)) {
+        _setTransportState(HostTransportState.reconnecting);
+        return cached;
+      }
+      rethrow;
+    }
+  }
 
   @override
   Future<SessionSummary> createSession() async {
@@ -293,6 +339,11 @@ class HostGateway
         _rememberRead(value, workspaceId, sessionId);
       }
       final snapshot = _object(value['snapshot']);
+      final payload = _snapshotPayload(workspaceId, sessionId, snapshot);
+      final backendEvent = value['event'];
+      if (backendEvent is Map && backendEvent['type'] == 'runtime.error') {
+        payload['runtimeError'] = Map<String, Object?>.from(backendEvent);
+      }
       controller.add(
         TsPhoneEvent(
           id: _eventId(value),
@@ -301,7 +352,7 @@ class HostGateway
           sessionRevision: _revision(workspaceId, sessionId),
           instanceEpoch: epoch,
           type: 'session.snapshot',
-          payload: _snapshotPayload(workspaceId, sessionId, snapshot),
+          payload: payload,
           at: DateTime.now(),
         ),
       );
@@ -327,10 +378,14 @@ class HostGateway
           }
         },
         onError: (Object error, StackTrace stack) {
+          if (!cancelled) _setTransportState(HostTransportState.reconnecting);
           if (!cancelled) controller.addError(_translate(error), stack);
         },
         onDone: () {
-          if (!cancelled) unawaited(controller.close());
+          if (!cancelled) {
+            _setTransportState(HostTransportState.reconnecting);
+            unawaited(controller.close());
+          }
         },
       );
       try {
@@ -350,8 +405,12 @@ class HostGateway
           emit(value);
         }
         buffered.clear();
+        _setTransportState(HostTransportState.connected);
         onConnected?.call();
       } on Object catch (error, stack) {
+        if (_isTransient(error)) {
+          _setTransportState(HostTransportState.reconnecting);
+        }
         if (!cancelled) {
           controller.addError(_translate(error), stack);
           await controller.close();
@@ -520,7 +579,7 @@ class HostGateway
     final messages = _messages(snapshot);
     final online = snapshot['online'] ?? known?['online'];
     final readOnly = snapshot['read_only'] ?? known?['read_only'];
-    return {
+    final payload = <String, Object?>{
       'messages': messages,
       'isStreaming': snapshot['is_streaming'] == true,
       'runtimeState': online != true
@@ -539,6 +598,12 @@ class HostGateway
       'accessMode': readOnly == true ? 'observer' : 'controller',
       'sessionName': known?['name'],
     };
+    if (snapshot['runtime_error'] is Map) {
+      payload['runtimeError'] = Map<String, Object?>.from(
+        snapshot['runtime_error']! as Map,
+      );
+    }
+    return payload;
   }
 
   static List<Object?> _messages(Map<String, Object?> snapshot) {
@@ -630,16 +695,70 @@ class HostGateway
       );
     }
     try {
-      return await action();
+      if (_transportState == HostTransportState.offline) {
+        _setTransportState(HostTransportState.connecting);
+      }
+      final result = await action();
+      _setTransportState(HostTransportState.connected);
+      return result;
     } on Object catch (error) {
-      throw _translate(error);
+      final translated = _translate(error);
+      _setTransportState(_stateForError(translated));
+      throw translated;
     }
+  }
+
+  List<SessionSummary> _cachedSessions(String workspaceId) => _sessions.entries
+      .where((entry) => entry.value['workspace_id'] == workspaceId)
+      .map((entry) => _summary(entry.value, workspaceId))
+      .toList(growable: false);
+
+  HostTransportState _stateForError(Object error) {
+    if (error is TsPhoneApiException &&
+        (error.statusCode == 401 ||
+            error.statusCode == 403 ||
+            error.code == 'authentication' ||
+            error.code == 'unauthorized')) {
+      return HostTransportState.authFailed;
+    }
+    return _isTransient(error)
+        ? HostTransportState.reconnecting
+        : HostTransportState.offline;
+  }
+
+  static bool _isTransient(Object error) {
+    if (error is TimeoutException) return true;
+    if (error is TsPhoneApiException) {
+      return error.retryable == true ||
+          const {
+            'connection_closed',
+            'connection_failed',
+            'request_timeout',
+            'service_unavailable',
+            'session_offline',
+          }.contains(error.code);
+    }
+    return false;
+  }
+
+  void _setTransportState(HostTransportState next) {
+    if (_transportState == next ||
+        _closed && next != HostTransportState.closed) {
+      return;
+    }
+    _transportState = next;
+    if (!_transportChanges.isClosed) _transportChanges.add(next);
   }
 
   @override
   void close() {
     if (_closed) return;
     _closed = true;
+    _transportState = HostTransportState.closed;
+    if (!_transportChanges.isClosed) {
+      _transportChanges.add(HostTransportState.closed);
+      unawaited(_transportChanges.close());
+    }
     unawaited(_client.close());
   }
 }
@@ -679,6 +798,16 @@ Object _translate(Object error) {
       code: error.code,
       retryable: error.retryable,
       statusCode: definitiveRejection ? 409 : null,
+    );
+  }
+  // HostRpcClient surfaces a dropped WebSocket as StateError on some
+  // platforms. Normalize that transport-only failure so cached projections
+  // can remain visible while the next request reconnects.
+  if (error is StateError) {
+    return TsPhoneApiException(
+      error.toString(),
+      code: 'connection_failed',
+      retryable: true,
     );
   }
   return error;

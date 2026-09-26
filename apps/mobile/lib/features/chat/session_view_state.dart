@@ -125,8 +125,14 @@ SessionUiPhase _resolvePhase({
   // already retrying it. That is connection chrome, not a failed operation;
   // promoting it to `failed` would insert a full-width notice into the chat.
   final transientEventProblem =
-      problem?.code == TsPhoneProblemCode.networkRetrying &&
-      eventConnectionState == EventConnectionState.reconnecting;
+      eventConnectionState == EventConnectionState.reconnecting &&
+      switch (problem?.code) {
+        TsPhoneProblemCode.serviceUnavailable ||
+        TsPhoneProblemCode.connectionFailed ||
+        TsPhoneProblemCode.requestTimeout ||
+        TsPhoneProblemCode.networkRetrying => true,
+        _ => false,
+      };
   if (problem != null && !transientEventProblem) {
     return SessionUiPhase.failed;
   }

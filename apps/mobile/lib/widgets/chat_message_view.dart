@@ -30,6 +30,7 @@ class ChatMessageView extends StatelessWidget {
       return RepaintBoundary(
         child: _OutputNotice(
           state: message.outputState ?? AssistantOutputState.empty,
+          failure: message.failure,
         ),
       );
     }
@@ -42,7 +43,7 @@ class ChatMessageView extends StatelessWidget {
         if (hasNarrative) MarkdownMessage(data: message.text),
         for (final tool in message.tools) _ToolDetailView(detail: tool),
         if (message.hasInterruptedOutput)
-          _OutputNotice(state: message.outputState!),
+          _OutputNotice(state: message.outputState!, failure: message.failure),
       ],
     );
     final frame = RepaintBoundary(
@@ -73,8 +74,9 @@ class ChatMessageView extends StatelessWidget {
 }
 
 class _OutputNotice extends StatelessWidget {
-  const _OutputNotice({required this.state});
+  const _OutputNotice({required this.state, this.failure});
   final AssistantOutputState state;
+  final ChatFailure? failure;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +89,55 @@ class _OutputNotice extends StatelessWidget {
       AssistantOutputState.failed => l10n.messageGenerationFailed,
       AssistantOutputState.aborted => l10n.messageGenerationAborted,
     };
+    final detail = failure?.detail?.trim();
+    final summary = failure?.summary?.trim();
+    if (failure != null &&
+        (summary?.isNotEmpty == true || detail?.isNotEmpty == true)) {
+      final colors = Theme.of(context).colorScheme;
+      final subtitle = <String>[
+        if (summary?.isNotEmpty == true) summary!,
+        if (failure?.statusCode case final status?) 'HTTP $status',
+      ].join(' · ');
+      final details = <String>[
+        if (detail?.isNotEmpty == true) detail!,
+        if (failure?.code case final code? when code.isNotEmpty) 'Code: $code',
+        if (failure?.operationId case final operationId?
+            when operationId.isNotEmpty)
+          'Operation: $operationId',
+      ].join('\n');
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            key: ValueKey<String>(
+              'message-failure-${failure?.operationId ?? failure?.code ?? label}',
+            ),
+            dense: true,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+            childrenPadding: const EdgeInsets.fromLTRB(48, 0, 12, 10),
+            leading: Icon(
+              AppIcons.error_outline,
+              size: 18,
+              color: colors.error,
+            ),
+            title: Text(label, style: TextStyle(color: colors.error)),
+            subtitle: subtitle.isEmpty ? null : Text(subtitle),
+            children: details.isEmpty
+                ? const <Widget>[]
+                : <Widget>[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SelectableText(
+                        details,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+          ),
+        ),
+      );
+    }
     return Padding(
       key: const ValueKey('message-output-notice'),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
