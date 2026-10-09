@@ -6,7 +6,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 const piAppServerProtocolVersion = 8;
-const tspiLinkProtocol = 'tspi-link.v1';
+const tspiLinkProtocol = 'research-agent-link.v1';
 const _maxFrameLength = 16 * 1024 * 1024;
 
 class PiAppServerException implements Exception {

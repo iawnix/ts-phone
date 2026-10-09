@@ -23,8 +23,8 @@ needed:
 
 Run `TSPi phone pair` on that installation, then enter the printed TSPi Relay
 URL and eight-character code in the app. The app redeems the one-time code for
-its own revocable device authorization. It carries `tspi-host/1` UTF-8 NDJSON
-over the `tspi-link.v1` WebSocket subprotocol. Every session operation includes
+its own revocable device authorization. It carries `research-agent-host/2` UTF-8 NDJSON
+over the `research-agent-link.v1` WebSocket subprotocol. Every session operation includes
 its workspace and session identity. Reconnection attaches again for a complete
 snapshot; an uncertain input retry preserves its original message ID.
 

@@ -2,7 +2,7 @@
 
 Flutter client for Android and iOS. The app stores its Bearer token in Android
 Keystore-backed secure storage or the iOS Keychain. It connects to a TSPi
-Relay with `tspi-link.v1`; the Relay forwards the `tspi-host/1` NDJSON byte
+Relay with `research-agent-link.v1`; the Relay forwards the `research-agent-host/2` NDJSON byte
 stream to the outbound-connected Host. The app rejects remote plain HTTP and
 never starts or embeds a TS Phone server.
 

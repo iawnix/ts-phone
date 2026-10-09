@@ -463,8 +463,7 @@ class HostGateway
       await _client.request('model/select', {
         ..._target(workspaceId, sessionId),
         'request_id': createTsPhoneClientMessageId(),
-        'provider': model.provider,
-        'model_id': model.id,
+        'model': {'provider': model.provider, 'id': model.id},
       }),
     );
     if (result['session'] is Map) {
@@ -507,7 +506,19 @@ class HostGateway
         'request_id': createTsPhoneClientMessageId(),
       }),
     );
-    return HostMonitor.fromJson(_object(result['monitor'] ?? result));
+    if (result['updated'] != 1) {
+      throw const TsPhoneApiException(
+        'Monitor no longer exists',
+        code: 'monitor_not_found',
+      );
+    }
+    final status = _object(
+      await _client.request('monitor/status', {
+        'workspace_id': workspaceId,
+        'monitor_id': monitorId,
+      }),
+    );
+    return HostMonitor.fromJson(_object(_list(status['monitors']).single));
   });
 
   Map<String, Object?> get _activeTarget {

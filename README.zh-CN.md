@@ -21,7 +21,7 @@ TS Phone -- 出站 WSS --> TSPi Relay <-- 出站 WSS -- TSPi Host
 
 在该安装中运行 `TSPi phone pair`，然后在 App 中输入输出的 TSPi Relay URL 和 8 位
 配对码。App 使用一次性配对码换取本设备独立、可撤销的授权。手机通过
-`tspi-link.v1` WebSocket 子协议承载 `tspi-host/1` UTF-8 NDJSON。
+`research-agent-link.v1` WebSocket 子协议承载 `research-agent-host/2` UTF-8 NDJSON。
 会话操作始终包含工作区和会话 ID。断线后重新 attach 获取完整快照；投递不确定的
 消息重试复用原消息 ID，避免新建一次输入。
 

@@ -15,7 +15,7 @@ final settings = ConnectionSettings(
   serverUrl: 'https://link.example.test',
   serverId: '123e4567-e89b-42d3-a456-426614174000',
   deviceId: '223e4567-e89b-42d3-a456-426614174000',
-  token: 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+  token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
 );
 
 final appServer = WorkspaceSummary(

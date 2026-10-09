@@ -12,7 +12,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 const _serverId = '123e4567-e89b-42d3-a456-426614174000';
 const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
-const _deviceToken = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+const _deviceToken = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
 void main() {
   test('connects through TSPi Link with the Pi v8 hello', () async {

@@ -1,6 +1,6 @@
 # Architecture
 
-TS Phone is a presentation client of `tspi-host/1`. Ordinary Pi sessions own
+TS Phone is a presentation client of `research-agent-host/2`. Ordinary Pi sessions own
 their execution, conversation and JSONL history. Host owns workspace routing,
 session discovery and the bridge to each running Pi session. Task monitoring
 belongs to the server and continues independently of the phone screen.
@@ -14,13 +14,13 @@ TS Phone -> Relay -> Host -> Pi session bridge -> ordinary Pi session
 
 The existing pairing flow provides a revocable device token. The phone connects
 to `wss://<relay>/v1/link` with `Authorization: Bearer <device-token>` and the
-`tspi-link.v1` subprotocol. WebSocket binary messages carry UTF-8 NDJSON, without
+`research-agent-link.v1` subprotocol. WebSocket binary messages carry UTF-8 NDJSON, without
 CBOR, length prefixes, Chord service patches or Pi protocol-v8 handshakes.
 The decoder handles split UTF-8 characters and multiple lines per frame.
 
 ```json
-{"id":"phone-1","method":"initialize","params":{"protocol":"tspi-host/1"}}
-{"id":"phone-1","result":{"protocol":"tspi-host/1","epoch":"host-epoch","capabilities":[]}}
+{"id":"phone-1","method":"initialize","params":{"protocol":"research-agent-host/2"}}
+{"id":"phone-1","result":{"protocol":"research-agent-host/2","epoch":"host-epoch","capabilities":[]}}
 {"id":"phone-2","method":"session/attach","params":{"workspace_id":"ts_001","session_id":"session-1"}}
 ```
 

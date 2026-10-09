@@ -6,7 +6,7 @@ transport is an authenticated TSPi Link WebSocket to a trusted Relay.
 - Device credentials are kept in platform secure storage and never entered or
   displayed as long-lived text in the app.
 - Every connection sends `Authorization: Bearer <token>` and the
-  `tspi-link.v1` subprotocol.
+  `research-agent-link.v1` subprotocol.
 - Pairing codes expire after five minutes and work once. A revoked device is
   disconnected immediately.
 - The App Server validates the protocol v8 hello and binds requests to the

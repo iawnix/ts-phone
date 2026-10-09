@@ -18,7 +18,7 @@ void main() {
         serverUrl: 'https://phone.test',
         serverId: hostId,
         deviceId: deviceId,
-        token: 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
       await store.save(connection);
       await store.saveConversation(connection.serverUrl, 'ts_001', 'session_2');
@@ -37,7 +37,7 @@ void main() {
           serverUrl: connection.serverUrl,
           serverId: hostId,
           deviceId: '323e4567-e89b-42d3-a456-426614174000',
-          token: 'tspd_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq',
+          token: 'rad_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq',
         ),
       );
       expect(await store.loadConversation(connection.serverUrl), isNull);
@@ -54,7 +54,7 @@ void main() {
         serverUrl: 'https://tsphone.iawnix.xyz',
         serverId: hostId,
         deviceId: deviceId,
-        token: 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
 
       await store.save(connection);
