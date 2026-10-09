@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 umask 077
 
-readonly DEFAULT_SIGNING_DIR="/home/iaw/.config/ts-phone/android-signing"
+readonly DEFAULT_SIGNING_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ts-phone/android-signing"
 readonly SIGNING_DIR="${TS_PHONE_SIGNING_DIR:-$DEFAULT_SIGNING_DIR}"
 readonly KEYSTORE="${SIGNING_DIR}/ts-phone-release.p12"
 readonly PASSWORD_FILE="${SIGNING_DIR}/keystore.pass"

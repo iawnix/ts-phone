@@ -1,62 +1,77 @@
-# Deployment
+# Android release operations
 
-TS Phone is deployed as a signed Flutter application. The runtime it connects
-to is the TSPi Host shipped by TSPi; this repository has no server daemon
-to install or expose.
-
-## TSPi Host prerequisites
-
-On the machine that owns the TSPi installation, enable TSPi Link during
-installation and start the installation Host by opening a workspace:
+TS Phone is a signed Flutter application. Install and enable Phone access on
+[ResearchAgent](https://github.com/iawnix/TSPi), then run on the server:
 
 ```bash
-./TSPi --workspace reaction-a
+research-agent --workspace reaction-a
+research-agent phone pair
+research-agent phone devices
+# Revoke a lost or replaced device:
+research-agent phone revoke <device-id>
 ```
 
-The Host ID and Link credential are stored below `.pi/app-server-host/`. The
-Host opens an outbound WSS connection to the configured TSPi Relay; the App
-Server remains on its private Unix socket and needs no public HTTP port.
+Host connects outbound to ResearchAgent Link Relay; no public Host port is
+required. The app uses the trusted HTTPS Relay origin and one-time pairing
+code. Upgrading from legacy TSPi protocol identities requires re-pairing.
 
-Create a Phone pairing on the Host:
+## Publish on GitHub
+
+1. Fetch tags, choose an increasing version/build with `tool/version.py set`,
+   and add its exact `## X.Y.Z+N` section to `CHANGELOG.md`.
+2. Run `tool/iterate.sh dev` and, for protocol changes, the local deterministic
+   ResearchAgent interoperability suite. Review the source and merge to `main`.
+3. From that clean commit, create and push the annotated tag:
+
+   ```bash
+   tag=$(python3 tool/version.py tag)
+   git tag -a "$tag" -m "TS Phone ${tag#ts-phone-v}"
+   python3 tool/version.py check --tag "$tag" --release
+   git push origin "$tag"
+   ```
+
+The workflow validates tag/source/version/changelog **before** signing, repeats
+independent checks, builds three split APKs plus an AAB, validates archive
+identity, signatures and source attestations, and generates `SHA256SUMS`.
+It uploads the exact nine-file set to a **draft**, checks GitHub's asset sizes
+and SHA-256 digests, then publishes and marks it latest. It refuses to modify
+a public release. A failed draft can be completed by rerunning the tag workflow
+or dispatching it with the same existing tag. Never move a published tag.
+
+Required repository secrets (already used by the production release identity):
+
+- `TS_PHONE_RELEASE_KEYSTORE_B64`
+- `TS_PHONE_RELEASE_KEYSTORE_PASSWORD`
+- `TS_PHONE_RELEASE_CERTIFICATE_SHA256`
+
+Keep the original certificate and `xyz.iawnix.ts_phone` application ID. Never
+regenerate the production key. Signing files are provisioned only after tests,
+kept in runner temporary storage and removed by an `always()` cleanup step.
+No local test data, test logs, credentials or private caches are uploaded.
+
+## Local build
+
+Configure `TS_PHONE_FLUTTER`, `TS_PHONE_ANDROID_SDK`, `TS_PHONE_JAVA_HOME` and
+`TS_PHONE_SIGNING_DIR` to existing trusted tools and the protected production
+key directory. Optional `TS_PHONE_BUILD_TOOLS` selects build-tools 36.0.0.
+`build_apk.sh` is a compatibility wrapper for `tool/iterate.sh release`.
+
+For local validation, SDK copies, caches, temporary build files and outputs
+must be inside the private test root. Explicitly set:
 
 ```bash
-./TSPi phone pair
+export TS_PHONE_BUILD_ROOT=/home/iaw/project/TSPi/local_debug/ts-phone/android-build
+export TS_PHONE_OUTPUT_ROOT=/home/iaw/project/TSPi/local_debug/ts-phone/android-output
+# Set private SDK/cache and protected signing paths before invoking:
+./tool/iterate.sh release
 ```
 
-## Android build
+`--allow-dirty` is only for local candidates and cannot pass GitHub publication
+validation. A release captures exact source before building; each artifact
+embeds a small source identity manifest (commit/digest), **not the source code**.
+Official downloadable artifacts are built anew on GitHub from the committed
+tag; never upload artifacts from local_debug.
 
-Create or provision the release keystore in the private signing directory,
-then run:
-
-```bash
-TS_PHONE_SIGNING_DIR=/secure/ts-phone-signing \
-  apps/mobile/tool/build_release_android.sh
-```
-
-The script captures the Git source, embeds its snapshot in each APK/AAB,
-builds split APKs and an app bundle, verifies package/version/ABI metadata and
-the pinned certificate, and publishes a content-addressed set below
-`dist/android-current`. Use `--allow-dirty` only for a local candidate.
-
-The CI workflow `.github/workflows/android-release.yml` performs the same
-checks for a `ts-phone-v<version>+<build>` tag and uploads only Android
-artifacts to the GitHub release. No Node dependencies, server archive, systemd
-unit, reverse proxy, or FRP configuration is involved.
-
-## Mobile configuration
-
-At first launch the user supplies:
-
-- the TSPi Relay origin (`https://...`);
-- the eight-character, single-use pairing code;
-- a device name shown by `TSPi phone devices`.
-
-The app redeems the code for a Host ID, Device ID, and device token, then stores
-them in platform secure storage. Re-pairing replaces that connection identity;
-revoke an old identity with `TSPi phone revoke <device-id>`.
-
-## Updates and rollback
-
-Android releases are immutable. Install a previous APK/AAB from the GitHub
-release if a rollback is required. Host sessions and workspace data are
-not part of the mobile artifact and are unaffected by an app update.
+Most users install the arm64-v8a APK. The AAB is for store upload. Android
+usually blocks downgrades and signer changes; see [recovery](recovery.md).
+iOS signing and binary distribution are not part of this workflow.

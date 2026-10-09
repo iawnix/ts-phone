@@ -416,7 +416,9 @@ class FakeGateway implements TsPhoneGateway {
   @override
   Future<List<SessionSummary>> listSessions(String workspaceId) async => [];
   @override
-  Future<Map<String, Object?>> version() async => {'apiVersion': 'research-agent-host/2'};
+  Future<Map<String, Object?>> version() async => {
+    'apiVersion': 'research-agent-host/2',
+  };
   @override
   void close() {
     unawaited(eventsController.close());

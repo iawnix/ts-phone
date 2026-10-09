@@ -8,28 +8,22 @@ import 'conversation_shell_test.dart' as shell;
 import 'history_navigation_test.dart' as ui;
 
 void main() {
-  testWidgets(
-    'phone home searches sessions',
-    (tester) async {
-      final api = shell.ConversationGateway();
-      await tester.pumpWidget(shell.shellApp(api));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('context-search')), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('context-toggle-search')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('context-search')),
-        'two',
-      );
-      await tester.pump();
-      expect(find.text('Session one'), findsNothing);
-      expect(find.text('Session two'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('context-toggle-search')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('context-search')), findsNothing);
-      expect(find.text('Session one'), findsOneWidget);
-    },
-  );
+  testWidgets('phone home searches sessions', (tester) async {
+    final api = shell.ConversationGateway();
+    await tester.pumpWidget(shell.shellApp(api));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('context-search')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('context-toggle-search')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('context-search')), 'two');
+    await tester.pump();
+    expect(find.text('Session one'), findsNothing);
+    expect(find.text('Session two'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('context-toggle-search')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('context-search')), findsNothing);
+    expect(find.text('Session one'), findsOneWidget);
+  });
   testWidgets('new session remains in home after returning from chat', (
     tester,
   ) async {

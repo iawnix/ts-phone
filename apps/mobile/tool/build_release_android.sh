@@ -6,14 +6,14 @@ export LC_ALL=C
 
 readonly MOBILE_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly SOURCE_ROOT="$(cd -- "${MOBILE_ROOT}/../.." && pwd -P)"
-readonly DEFAULT_SIGNING_DIR="/home/iaw/.config/ts-phone/android-signing"
+readonly DEFAULT_SIGNING_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ts-phone/android-signing"
 readonly SIGNING_DIR="${TS_PHONE_SIGNING_DIR:-$DEFAULT_SIGNING_DIR}"
 readonly KEYSTORE="${SIGNING_DIR}/ts-phone-release.p12"
 readonly PASSWORD_FILE="${SIGNING_DIR}/keystore.pass"
-readonly FLUTTER_BIN="${TS_PHONE_FLUTTER:-${FLUTTER_BIN:-/home/iaw/soft/flutter/bin/flutter}}"
-readonly ANDROID_SDK="${TS_PHONE_ANDROID_SDK:-${ANDROID_HOME:-/home/iaw/soft/android/sdk}}"
+readonly FLUTTER_BIN="${TS_PHONE_FLUTTER:-${FLUTTER_BIN:-$(command -v flutter || true)}}"
+readonly ANDROID_SDK="${TS_PHONE_ANDROID_SDK:-${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}}"
 readonly BUILD_TOOLS="${TS_PHONE_BUILD_TOOLS:-${ANDROID_SDK}/build-tools/36.0.0}"
-readonly JAVA_HOME_PATH="${TS_PHONE_JAVA_HOME:-${JAVA_HOME:-/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64}}"
+readonly JAVA_HOME_PATH="${TS_PHONE_JAVA_HOME:-${JAVA_HOME:-}}"
 readonly JARSIGNER="${TS_PHONE_JARSIGNER:-${JAVA_HOME_PATH}/bin/jarsigner}"
 readonly KEYTOOL="${TS_PHONE_KEYTOOL:-${JAVA_HOME_PATH}/bin/keytool}"
 readonly CAPTURE_BOOTSTRAP="${SOURCE_ROOT}/apps/mobile/tool/mobile-build-attestation.py"
@@ -65,8 +65,14 @@ export TS_PHONE_SIGNING_DIR="$SIGNING_DIR"
 export JAVA_HOME="$JAVA_HOME_PATH"
 export ANDROID_HOME="$ANDROID_SDK"
 export ANDROID_SDK_ROOT="$ANDROID_SDK"
-export GRADLE_USER_HOME="${GRADLE_USER_HOME:-${SOURCE_ROOT}/.gradle}"
-export PUB_CACHE="${PUB_CACHE:-${SOURCE_ROOT}/.pub-cache}"
+readonly PRIVATE_ROOT="${TS_PHONE_BUILD_ROOT:-${RUNNER_TEMP:-/home/iaw/project/TSPi/local_debug/ts-phone}/android-build}"
+install -d -m 0700 "$PRIVATE_ROOT" "$PRIVATE_ROOT/tmp"
+export TMPDIR="$PRIVATE_ROOT/tmp"
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$PRIVATE_ROOT/gradle}"
+export PUB_CACHE="${PUB_CACHE:-$PRIVATE_ROOT/pub-cache}"
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export GRADLE_OPTS="${GRADLE_OPTS:-} -Dorg.gradle.daemon=false"
+python3 "$SOURCE_ROOT/tool/version.py" check >/dev/null
 
 build_root=$(mktemp -d -t ts-phone-android-build.XXXXXXXX)
 [[ -d "$build_root" && ! -L "$build_root" ]] ||
@@ -107,15 +113,22 @@ install -d -m 0700 "$SOURCE_ASSET_DIR"
 install -m 0600 "$SOURCE_SNAPSHOT_FILE" "$SOURCE_ASSET"
 
 cd -- "$CAPTURED_MOBILE_ROOT"
-"$FLUTTER_BIN" build apk --release --split-per-abi
-"$FLUTTER_BIN" build appbundle --release
+"$FLUTTER_BIN" pub get --enforce-lockfile
+"$FLUTTER_BIN" build apk --release --no-pub --split-per-abi
+"$FLUTTER_BIN" build appbundle --release --no-pub
 rm -f -- "$SOURCE_ASSET"
 python3 "$CAPTURED_ATTESTATION_TOOL" verify-source \
     --repository-root "$SOURCE_ROOT" \
     --source-root "$CAPTURED_SOURCE_ROOT" \
     --source-snapshot "$SOURCE_SNAPSHOT_FILE" >/dev/null
 
-install -d -m 0755 "${SOURCE_ROOT}/dist"
+if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+    default_output_root="${SOURCE_ROOT}/dist"
+else
+    default_output_root="$PRIVATE_ROOT/output"
+fi
+readonly OUTPUT_ROOT="${TS_PHONE_OUTPUT_ROOT:-$default_output_root}"
+install -d -m 0755 "$OUTPUT_ROOT"
 install -d -m 0700 "$PRIVATE_ARTIFACT_DIR"
 declare -A apk_sources=(
     [arm64-v8a]="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
@@ -190,7 +203,7 @@ python3 "$CAPTURED_ATTESTATION_TOOL" attest \
     --source-snapshot "$SOURCE_SNAPSHOT_FILE" >/dev/null
 published_root=$(python3 "$CAPTURED_ATTESTATION_TOOL" publish \
     --artifact-root "$PRIVATE_ARTIFACT_DIR" \
-    --output-root "${SOURCE_ROOT}/dist" \
+    --output-root "$OUTPUT_ROOT" \
     --version "$VERSION_NAME" \
     --build "$BUILD_NUMBER")
 

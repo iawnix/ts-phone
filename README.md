@@ -1,81 +1,94 @@
 # TS Phone
 
-TS Phone is the Flutter client for TSPi Host. The Host routes project-scoped
-requests to ordinary Pi sessions; Pi owns execution and JSONL history. The
-phone displays those sessions and manages task monitors.
+[简体中文](README.zh-CN.md) · [Download Android](https://github.com/iawnix/ts-phone/releases/latest) · [Changelog](CHANGELOG.md)
 
-## Runtime model
+TS Phone is the Android/iOS Flutter client for
+[ResearchAgent](https://github.com/iawnix/TSPi). Use the same research workspaces
+and sessions as your terminal, send messages, select models, inspect tool
+output, and manage task monitors. Execution and durable session history stay
+on the ResearchAgent server.
+
+## Install and connect
+
+1. Download the **arm64-v8a release APK** from the latest GitHub release for a
+   typical Android phone. The release also contains armeabi-v7a and x86_64 APKs,
+   an AAB for store distribution, source attestations and `SHA256SUMS`.
+2. Install ResearchAgent and enable Phone access through a trusted HTTPS Link
+   Relay. On the server, run:
+
+   ```bash
+   research-agent --workspace reaction-a
+   research-agent phone pair
+   ```
+
+3. Enter the Relay URL, eight-character pairing code and device name in the app.
+   The code expires after five minutes and works once.
+
+The current client targets ResearchAgent **0.18.0** and the
+`research-agent-host/2` / `research-agent-link.v1` contracts. Upgrading from the
+old TSPi protocol requires a new app and **re-pairing**; old `tspd_` credentials
+cannot be reused. Compatibility follows these contracts, not matching app and
+server version numbers. See each release's notes for its supported server.
+
+Android is the published binary target. iOS source is maintained, but requires
+macOS, an Apple signing team and provisioning; no signed iOS download is provided.
+
+## Architecture
 
 ```text
-TS Phone -- outbound WSS --> TSPi Relay <-- outbound WSS -- TSPi Host
-                                                        |
-                                               Pi Harness worker
-                                                        |
-                                           workspace / local terminal
+TS Phone -- WSS --> ResearchAgent Link Relay <-- WSS -- ResearchAgent Host
+                                                              |
+                                                        Pi Harness
+                                                              |
+                                                   workspace / terminal
 ```
 
-Open a workspace with the TSPi launcher; it starts the installation Host when
-needed:
-
-```bash
-./TSPi --workspace reaction-a
-```
-
-Run `TSPi phone pair` on that installation, then enter the printed TSPi Relay
-URL and eight-character code in the app. The app redeems the one-time code for
-its own revocable device authorization. It carries `research-agent-host/2` UTF-8 NDJSON
-over the `research-agent-link.v1` WebSocket subprotocol. Every session operation includes
-its workspace and session identity. Reconnection attaches again for a complete
-snapshot; an uncertain input retry preserves its original message ID.
-
-This client requires a Host implementing `research-agent-host/2`. Apps built with
-`research-agent-host/2` must be rebuilt and updated after upgrading the Host.
-
-## Repository layout
-
-- `apps/mobile` — Flutter Android/iOS application.
-- `apps/mobile/lib/data/tspi_link_pairing.dart` — one-time device pairing.
-- `apps/mobile/lib/data/host_rpc_client.dart` — Host JSON RPC through TSPi Link.
-- `apps/mobile/lib/data/host_gateway.dart` — session, model and monitor API projection.
-- `apps/mobile/lib/features/monitors/monitor_page.dart` — project task monitors.
-- `apps/mobile/lib/data/session_gateway.dart` — workspace/session management contracts.
-- `apps/mobile/lib/features/sessions/context_switcher.dart` — searchable home with a project picker.
-- `apps/mobile/tool/build_release_android.sh` — signed APK/AAB build with
-  source attestations.
-- `apps/mobile/tool/mobile-build-attestation.py` — reproducible source and
-  artifact attestation.
-
-There is intentionally no Node server package or TS Phone protocol package in
-this repository. The Host implementation lives in the TSPi package.
+The phone uses the Host API for workspaces, sessions, models and monitors.
+It stores device authorization in platform secure storage. Provider credentials,
+execution and session storage stay on the server. A reconnect obtains a fresh
+snapshot; manual retries preserve the original message ID. Use a trusted Relay:
+WSS encrypts each connection, but the Relay can observe forwarded traffic.
 
 ## Development
 
-Install Flutter 3.44 (or a compatible stable release), then run:
+Use Flutter **3.44.0**, Python **3.10+**, and the committed `pubspec.lock`.
+JDK 17 and Android SDK 36 are additionally needed for Android releases.
 
 ```bash
-cd apps/mobile
-flutter pub get
-dart format --output=none --set-exit-if-changed lib test
-flutter analyze
-flutter test
-```
-
-The root helper runs the same checks:
-
-```bash
+python3 tool/version.py check
 ./tool/iterate.sh dev
 ```
 
-`candidate` builds a local arm64 APK and `release` builds the signed Android
-release set. Release builds include a source snapshot in every artifact and
-publish only Android files under `dist/android-current`.
+The helper checks version consistency and runs release-tool tests, Dart format,
+Flutter analysis and independent mobile tests in a private source copy. Configure
+SDK/cache locations first as described in [development](docs/development.md).
+Real Host/Pi interoperability uses the separate local ResearchAgent test runner.
+Automated tests do not constitute physical-device acceptance.
 
-## Security boundary
+## Repository and releases
 
-The device token is used only for the TSPi Link WebSocket and is stored by the
-mobile platform's secure storage. It is never shown in the connection UI. Host session state remains on the server workspace; the phone keeps only UI
-preferences and a recent session selection.
+| Path | Responsibility |
+| --- | --- |
+| `apps/mobile/lib/` | Flutter UI, Host client and local settings |
+| `apps/mobile/test/` | Widget/unit tests and opt-in Host integration |
+| `apps/mobile/tool/` | Android signing, build verification and source attestations |
+| `tool/` | Version management and development checks |
+| `.github/workflows/` | Pull-request checks and tagged Android releases |
+| `docs/` | Architecture, development, versioning, deployment and recovery |
 
-See [docs/architecture.md](docs/architecture.md) for the protocol and
-ownership details and [docs/deployment.md](docs/deployment.md) for Android
-release operations.
+`apps/mobile/pubspec.yaml` is the **single version source**. To prepare a release:
+
+```bash
+python3 tool/version.py set 0.19.1+62   # example: next compatible fix
+# Add the matching CHANGELOG.md entry, validate, and commit.
+python3 tool/version.py tag
+```
+
+Build numbers always increase. Tags use `ts-phone-v<version>+<build>` and published
+assets are never overwritten. See [versioning](docs/versioning.md) and
+[release operations](docs/deployment.md). This repository contains only the mobile
+client; ResearchAgent Host and Link Relay are maintained in the TSPi repository.
+
+Additional references: [architecture](docs/architecture.md),
+[artifacts](docs/artifacts.md), [security](docs/security.md),
+[recovery](docs/recovery.md), and [contributor conventions](AGENTS.md).

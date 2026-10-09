@@ -17,3 +17,14 @@ __pycache__/
 .vscode/
 apps/mobile/android/local.properties
 apps/mobile/ios/Flutter/ephemeral/
+
+# Private local data and Android signing material must never be committed.
+local_debug/
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.pass
+key.properties
+.env
+.env.*

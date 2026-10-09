@@ -1,7 +1,6 @@
 # Architecture
 
-TS Phone is a presentation client of `research-agent-host/2`. Ordinary Pi sessions own
-their execution, conversation and JSONL history. Host owns workspace routing,
+TS Phone is a presentation client of `research-agent-host/2`. Pi sessions own their execution, conversation and durable history. Host owns workspace routing,
 session discovery and routing to the native Pi Harness worker. Task monitoring
 belongs to the server and continues independently of the phone screen.
 
