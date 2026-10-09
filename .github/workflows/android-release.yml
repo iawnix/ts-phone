@@ -26,11 +26,13 @@ jobs:
       contents: write
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-      TS_PHONE_TEST_ROOT: ${{ runner.temp }}/ts-phone-tests
-      PUB_CACHE: ${{ runner.temp }}/ts-phone-pub
-      GRADLE_USER_HOME: ${{ runner.temp }}/ts-phone-gradle
       FLUTTER_SUPPRESS_ANALYTICS: "true"
     steps:
+      - name: Set private runner paths
+        run: |
+          echo "TS_PHONE_TEST_ROOT=$RUNNER_TEMP/ts-phone-tests" >> "$GITHUB_ENV"
+          echo "PUB_CACHE=$RUNNER_TEMP/ts-phone-pub" >> "$GITHUB_ENV"
+          echo "GRADLE_USER_HOME=$RUNNER_TEMP/ts-phone-gradle" >> "$GITHUB_ENV"
       - name: Check out tagged source
         uses: actions/checkout@v4
         with:

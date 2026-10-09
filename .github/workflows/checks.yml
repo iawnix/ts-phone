@@ -14,10 +14,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      TS_PHONE_TEST_ROOT: ${{ runner.temp }}/ts-phone-tests
-      PUB_CACHE: ${{ runner.temp }}/ts-phone-pub
       FLUTTER_SUPPRESS_ANALYTICS: "true"
     steps:
+      - name: Set private runner paths
+        run: |
+          echo "TS_PHONE_TEST_ROOT=$RUNNER_TEMP/ts-phone-tests" >> "$GITHUB_ENV"
+          echo "PUB_CACHE=$RUNNER_TEMP/ts-phone-pub" >> "$GITHUB_ENV"
+          echo "GRADLE_USER_HOME=$RUNNER_TEMP/ts-phone-gradle" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
