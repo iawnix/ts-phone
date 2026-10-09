@@ -70,7 +70,7 @@ python3 tool/version.py check
 `apps/mobile/pubspec.yaml` 是**唯一版本来源**。准备发布时运行：
 
 ```bash
-python3 tool/version.py set 0.19.1+62   # 示例：下一次兼容修复
+python3 tool/version.py set 0.19.1+63   # 示例：下一次兼容修复
 # 补充对应 CHANGELOG.md 条目，验证并提交。
 python3 tool/version.py tag
 ```
