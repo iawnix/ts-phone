@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/models/connection_settings.dart';
+import 'package:corhub/models/connection_settings.dart';
 
 void main() {
   const hostId = '123e4567-e89b-42d3-a456-426614174000';

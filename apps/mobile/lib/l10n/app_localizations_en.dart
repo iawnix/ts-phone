@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'TS Phone';
+  String get appTitle => 'CoRHub';
 
   @override
   String get back => 'Back';
@@ -21,7 +21,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionSettings => 'Connection settings';
 
   @override
-  String get connectTsPhone => 'Pair TS Phone';
+  String get connectCorHub => 'Pair CoRHub';
 
   @override
   String get mobileCompanion => 'Connect this device to your TSPi Host';
@@ -42,7 +42,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceName => 'Device name';
 
   @override
-  String get deviceNameHint => 'TS Phone';
+  String get deviceNameHint => 'CoRHub';
 
   @override
   String get pair => 'Pair';
@@ -142,7 +142,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionDetails => 'Connection details';
 
   @override
-  String get tsPhoneService => 'TSPi Link';
+  String get corHubService => 'ResearchAgent Link';
 
   @override
   String get notConfigured => 'Not configured';
@@ -196,7 +196,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemModelAuthMissing =>
-      'The model needs authentication on the Pi App Server. Your TS Phone connection is still valid.';
+      'The model needs authentication on the Pi App Server. Your CoRHub connection is still valid.';
 
   @override
   String get problemModelCheckFailed =>

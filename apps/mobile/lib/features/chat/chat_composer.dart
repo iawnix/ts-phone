@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/workspace.dart';
 import 'model_presentation.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import 'model_provider_mark.dart';
 
 class ChatComposer extends StatelessWidget {
@@ -247,7 +247,7 @@ class _ContextUsageIndicator extends StatelessWidget {
         : percent >= 85
         ? theme.colorScheme.error
         : percent >= 70
-        ? TsPhoneStatusTheme.resolve(context).warning
+        ? CorHubStatusTheme.resolve(context).warning
         : theme.colorScheme.onSurfaceVariant;
     final used = usage.usedTokens;
     final label = used == null

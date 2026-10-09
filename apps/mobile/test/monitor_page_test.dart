@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/features/monitors/monitor_page.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/host_monitor.dart';
-import 'package:ts_phone/models/workspace.dart';
+import 'package:corhub/features/monitors/monitor_page.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/models/host_monitor.dart';
+import 'package:corhub/models/workspace.dart';
 
 void main() {
   testWidgets('shows task status and persists enable/disable through Host', (

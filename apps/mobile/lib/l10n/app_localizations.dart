@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'TS Phone'**
+  /// **'CoRHub'**
   String get appTitle;
 
   /// No description provided for @back.
@@ -122,11 +122,11 @@ abstract class AppLocalizations {
   /// **'Connection settings'**
   String get connectionSettings;
 
-  /// No description provided for @connectTsPhone.
+  /// No description provided for @connectCorHub.
   ///
   /// In en, this message translates to:
-  /// **'Pair TS Phone'**
-  String get connectTsPhone;
+  /// **'Pair CoRHub'**
+  String get connectCorHub;
 
   /// No description provided for @mobileCompanion.
   ///
@@ -167,7 +167,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceNameHint.
   ///
   /// In en, this message translates to:
-  /// **'TS Phone'**
+  /// **'CoRHub'**
   String get deviceNameHint;
 
   /// No description provided for @pair.
@@ -344,11 +344,11 @@ abstract class AppLocalizations {
   /// **'Connection details'**
   String get connectionDetails;
 
-  /// No description provided for @tsPhoneService.
+  /// No description provided for @corHubService.
   ///
   /// In en, this message translates to:
-  /// **'TSPi Link'**
-  String get tsPhoneService;
+  /// **'ResearchAgent Link'**
+  String get corHubService;
 
   /// No description provided for @notConfigured.
   ///
@@ -443,7 +443,7 @@ abstract class AppLocalizations {
   /// No description provided for @problemModelAuthMissing.
   ///
   /// In en, this message translates to:
-  /// **'The model needs authentication on the Pi App Server. Your TS Phone connection is still valid.'**
+  /// **'The model needs authentication on the Pi App Server. Your CoRHub connection is still valid.'**
   String get problemModelAuthMissing;
 
   /// No description provided for @problemModelCheckFailed.

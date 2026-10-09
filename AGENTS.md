@@ -1,4 +1,4 @@
-# TS Phone 开发约定
+# CoRHub 开发约定
 
 ## 项目边界
 
@@ -24,7 +24,7 @@
 - BUILD 每次发布必须递增，不能随 major/minor 重置。当前 Flutter split APK 使用 ABI 偏移；BUILD 暂限 1..999，超限前先设计兼容的 versionCode 迁移。
 - 0.x 阶段不兼容的 Host 协议切换提升 minor；兼容修复提升 patch。日常提交不必改版本；准备发布时统一更新。
 - 发布前更新 `CHANGELOG.md`，记录兼容性、迁移步骤、验证范围和限制。README 中不要维护另一份“最新版本”数字，使用 GitHub latest release 链接。
-- tag 必须是 `ts-phone-vX.Y.Z+N`，指向通过检查的干净提交。禁止移动/覆盖已发布 tag、替换正式附件或把旧包改名冒充新构建。失败后重跑同一 tag 只允许完成尚未发布的 draft。
+- 新 tag 必须是 `corhub-vX.Y.Z+N`；旧 `ts-phone-v*` 标签保留并参与构建号校验。新标签指向通过检查的干净提交。禁止移动/覆盖已发布 tag、替换正式附件或把旧包改名冒充新构建。失败后重跑同一 tag 只允许完成尚未发布的 draft。
 - 正式构建由 GitHub Actions 从 tag 源码完成，包含三种 ABI 的签名 APK、AAB、源码摘要证明与 SHA256SUMS；本机私有测试产物不得上传。
 - 不生成或替换生产签名身份。已有 Android 包名 `xyz.iawnix.ts_phone` 和生产证书必须保持；签名私钥与密码只能来自受保护目录/GitHub secrets，禁止输出或提交。
 - 只有用户授权发布时才推送发布 tag、正式发布或修改仓库设置。一般代码工作可准备分支和 PR。
@@ -34,3 +34,5 @@
 - `README.md` / `README.zh-CN.md` 同步维护，文档命令使用 `research-agent`，TSPi 只作为服务端仓库名称。
 - 界面文案同时维护英文、中文 ARB 并生成本地化文件；保持可访问性、键盘、窄屏/宽屏与大字号行为。
 - 不把开发路径、协议调试细节或凭据放进面向普通用户的界面。修改文档中的服务/存储说明时核对当前服务端实现。
+
+- CoRHub 更名保留 `TS_PHONE_*` 环境变量/GitHub secrets、签名文件和别名、Android/iOS 包标识、安全存储命名空间及服务端协议，避免破坏升级与配对。品牌 SVG 及生成方式见 `apps/mobile/assets/branding/README.md`。

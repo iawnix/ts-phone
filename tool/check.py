@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
-    private = Path(os.environ.get("TS_PHONE_TEST_ROOT", "/home/iaw/project/TSPi/local_debug/ts-phone")).resolve()
+    private = Path(os.environ.get("TS_PHONE_TEST_ROOT", "/home/iaw/project/TSPi/local_debug/corhub")).resolve()
     private.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix="check-", dir=private))
     env = os.environ.copy()

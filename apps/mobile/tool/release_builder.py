@@ -91,7 +91,7 @@ def inspect_source(root: Path) -> tuple[dict[str, Any], list[bytes]]:
     root = root.resolve()
     top_level = run_git(root, ["rev-parse", "--show-toplevel"], "locate source repository")
     if Path(os.fsdecode(top_level).strip()).resolve() != root:
-        raise ComponentReleaseError("source root must be the top level of the TS Phone Git repository")
+        raise ComponentReleaseError("source root must be the top level of the CoRHub Git repository")
     git_commit = run_git(root, ["rev-parse", "--verify", "HEAD"], "read source commit").decode("ascii").strip()
     if not GIT_OBJECT_ID.fullmatch(git_commit):
         raise ComponentReleaseError("source commit is not a full Git object ID")
@@ -257,7 +257,7 @@ def validate_mobile_build_attestation_payload(value: object, *, artifact_name: s
 
 
 def mobile_artifact_name(version: str, build: int, artifact_format: str, abi: str) -> str:
-    prefix = f"ts-phone-v{version}-build{build}"
+    prefix = f"corhub-v{version}-build{build}"
     if artifact_format == "apk" and abi in MOBILE_APK_ABIS:
         return f"{prefix}-{abi}-release.apk"
     if artifact_format == "aab" and abi == "universal":
@@ -319,7 +319,7 @@ def read_mobile_version(path: Path) -> tuple[str, int]:
         raise ComponentReleaseError("invalid mobile pubspec version")
     version, build = MOBILE_VERSION.fullmatch(match.group(1)).groups()  # type: ignore[union-attr]
     identity = require_regular_file(path.parent / "lib/app_identity.dart").read_text(encoding="utf-8")
-    if re.findall(r"(?m)^const String tsPhoneAppVersion = '([^']+)';$", identity) != [version] or re.findall(r"(?m)^const String tsPhoneAppBuild = '([^']+)';$", identity) != [build]:
+    if re.findall(r"(?m)^const String corHubAppVersion = '([^']+)';$", identity) != [version] or re.findall(r"(?m)^const String corHubAppBuild = '([^']+)';$", identity) != [build]:
         raise ComponentReleaseError("mobile app identity version or build does not match pubspec")
     return version, int(build)
 
@@ -329,7 +329,7 @@ def publish_android_release_set(artifact_root: Path, output_root: Path, mobile_v
     destination = output_root.expanduser().resolve()
     if not SEMANTIC_VERSION.fullmatch(mobile_version) or not isinstance(mobile_build, int) or mobile_build <= 0 or source.is_symlink() or not source.is_dir():
         raise ComponentReleaseError("Android release metadata or staging directory is invalid")
-    prefix = f"ts-phone-v{mobile_version}-build{mobile_build}"
+    prefix = f"corhub-v{mobile_version}-build{mobile_build}"
     expected = {f"{prefix}-{abi}-release.apk" for abi in ANDROID_RELEASE_ABIS} | {f"{prefix}-{abi}-release.apk.attestation.json" for abi in ANDROID_RELEASE_ABIS} | {f"{prefix}-release.aab", f"{prefix}-release.aab.attestation.json"}
     actual = {path.name for path in source.iterdir() if path.is_file() and not path.is_symlink()}
     if actual != expected:

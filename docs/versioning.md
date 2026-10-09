@@ -31,10 +31,15 @@ does not bypass `check` or release validation. Fetch tags before release work.
 clean checkout, and a nonempty matching CHANGELOG section. GitHub performs
 this check **before** provisioning signing credentials or building.
 
-Tags are `ts-phone-vMAJOR.MINOR.PATCH+BUILD`. Never force-update/delete an
+Tags are `corhub-vMAJOR.MINOR.PATCH+BUILD`. Never force-update/delete an
 already published tag or replace release assets. The workflow creates a draft,
 uploads and verifies the complete expected inventory, then publishes it. A
 rerun may repair an unpublished draft only. Once published, issue a new version.
+
+Legacy `ts-phone-v*` tags remain unchanged and continue to participate in version
+and build-number validation. Renaming does not start a new version sequence.
+Unreleased source may keep the last version while it is being edited, but release
+validation refuses to publish that same build again under a `corhub-v*` tag.
 
 The 0.19.0+62 release removes obsolete component version 0.9.1. Source versions
 0.18.4 through 0.18.9 were not published GitHub releases. README download links

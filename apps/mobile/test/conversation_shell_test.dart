@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/settings_store.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/data/session_gateway.dart';
-import 'package:ts_phone/features/sessions/conversation_shell.dart';
-import 'package:ts_phone/features/sessions/context_switcher.dart';
-import 'package:ts_phone/features/chat/chat_page.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/connection_settings.dart';
-import 'package:ts_phone/models/workspace.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
+import 'package:corhub/data/settings_store.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/data/session_gateway.dart';
+import 'package:corhub/features/sessions/conversation_shell.dart';
+import 'package:corhub/features/sessions/context_switcher.dart';
+import 'package:corhub/features/chat/chat_page.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/models/connection_settings.dart';
+import 'package:corhub/models/workspace.dart';
+import 'package:corhub/theme/corhub_theme.dart';
 
 final settings = ConnectionSettings(
   serverUrl: 'https://link.example.test',
@@ -39,7 +39,7 @@ SessionSummary session(String id) => SessionSummary(
   capabilities: const {'command.model'},
 );
 
-class ConversationGateway implements TsPhoneGateway, SessionManagementGateway {
+class ConversationGateway implements CorHubGateway, SessionManagementGateway {
   List<WorkspaceSummary> workspaces = [appServer];
   List<SessionSummary> sessions = [session('one'), session('two')];
   int created = 0;
@@ -73,10 +73,10 @@ class ConversationGateway implements TsPhoneGateway, SessionManagementGateway {
   }
 
   @override
-  Future<TsPhoneMessageSnapshot> getMessages(
+  Future<CorHubMessageSnapshot> getMessages(
     String workspaceId,
     String sessionId,
-  ) async => TsPhoneMessageSnapshot(
+  ) async => CorHubMessageSnapshot(
     sessionId: sessionId,
     sessionRevision: session(sessionId).sessionRevision,
     messages: const [],
@@ -102,7 +102,7 @@ class ConversationGateway implements TsPhoneGateway, SessionManagementGateway {
   }) async {}
 
   @override
-  Stream<TsPhoneEvent> events(
+  Stream<CorHubEvent> events(
     String workspaceId,
     String sessionId, {
     String? lastEventId,
@@ -117,7 +117,7 @@ Widget shellApp(
   ConversationGateway gateway, {
   ConversationSelectionStore? selectionStore,
 }) => MaterialApp(
-  theme: TsPhoneTheme.light(),
+  theme: CorHubTheme.light(),
   supportedLocales: AppLocalizations.supportedLocales,
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   home: ConversationShell(
@@ -171,7 +171,7 @@ void main() {
     var settingsOpened = 0;
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: ConversationShell(

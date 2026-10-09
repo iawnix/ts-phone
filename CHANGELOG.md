@@ -3,6 +3,24 @@
 Release versions follow `MAJOR.MINOR.PATCH+BUILD`. Unreleased source is not an
 installable GitHub release. See [versioning](docs/versioning.md).
 
+## Unreleased
+
+### CoRHub rebrand / 品牌更新
+
+- Rename TS Phone to **CoRHub** and move repository links to `iawnix/corhub`.
+  Update English/Chinese screens, Android/iOS display names and the client name
+  sent to ResearchAgent Host.
+- Adopt the refined teal/blue crab and golden ring. Versioned SVG masters now
+  generate in-app, small-size, monochrome, Android and iOS artwork.
+- New releases use `corhub-vMAJOR.MINOR.PATCH+BUILD` and `corhub-` artifact names.
+  Version checks still include all legacy `ts-phone-v*` tags. Existing tags and
+  published assets remain immutable; a new release must increase the build.
+- Preserve Android/iOS application identifiers, signing identity, secure storage,
+  saved pairing and Host/Link contracts. Existing installations can upgrade
+  without a brand-related re-pairing or data migration.
+- 应用与仓库更名为 CoRHub，采用优化后的螃蟹图标；保留现有安装身份和配对数据。
+  本次源码更新尚未发布安装包，latest 下载仍可能显示 TS Phone。
+
 ## 0.19.0+62
 
 ### ResearchAgent compatibility / 兼容性

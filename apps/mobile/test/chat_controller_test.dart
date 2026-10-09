@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/features/chat/chat_controller.dart';
-import 'package:ts_phone/features/chat/chat_view_memory.dart';
-import 'package:ts_phone/models/chat_message.dart';
-import 'package:ts_phone/models/workspace.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/features/chat/chat_controller.dart';
+import 'package:corhub/features/chat/chat_view_memory.dart';
+import 'package:corhub/models/chat_message.dart';
+import 'package:corhub/models/workspace.dart';
 
 const revision = '11111111-1111-4111-8111-111111111111';
 ChatController controllerFor(
@@ -27,7 +27,7 @@ Future<void> flush() => Future<void>.delayed(Duration.zero);
 void main() {
   test('Host snapshots preserve errors and real tool output', () async {
     final api = FakeGateway()
-      ..snapshot = TsPhoneMessageSnapshot(
+      ..snapshot = CorHubMessageSnapshot(
         sessionId: 'session-test',
         sessionRevision: revision,
         messages: [
@@ -107,7 +107,7 @@ void main() {
       addTearDown(chat.dispose);
       await chat.initialize();
       await chat.send('hello');
-      api.snapshot = TsPhoneMessageSnapshot(
+      api.snapshot = CorHubMessageSnapshot(
         sessionId: 'session-test',
         sessionRevision: revision,
         messages: [userMessage('hello', id: api.sentIds.single)],
@@ -129,7 +129,7 @@ void main() {
   });
   test('definitive rejection removes optimistic message', () async {
     final api = FakeGateway()
-      ..sendError = const TsPhoneApiException(
+      ..sendError = const CorHubApiException(
         'rejected',
         code: 'prompt_rejected',
         statusCode: 409,
@@ -139,7 +139,7 @@ void main() {
     await chat.initialize();
     expect(await chat.send('denied'), isFalse);
     expect(chat.messages.where((m) => m.text == 'denied'), isEmpty);
-    expect(chat.problem?.code, TsPhoneProblemCode.promptRejected);
+    expect(chat.problem?.code, CorHubProblemCode.promptRejected);
   });
   test('memory preserves uncertain send across page disposal', () async {
     final memory = ChatViewMemory();
@@ -208,7 +208,7 @@ void main() {
     'snapshot timeout unblocks retry and late completion is ignored',
     () async {
       final api = FakeGateway();
-      final pending = Completer<TsPhoneMessageSnapshot>();
+      final pending = Completer<CorHubMessageSnapshot>();
       api.nextSnapshot = pending.future;
       final chat = controllerFor(api, timeout: const Duration(milliseconds: 5));
       addTearDown(chat.dispose);
@@ -217,7 +217,7 @@ void main() {
       expect(chat.canSend, isFalse);
       await chat.refreshMessages();
       pending.complete(
-        TsPhoneMessageSnapshot(
+        CorHubMessageSnapshot(
           sessionId: 'session-test',
           sessionRevision: revision,
           messages: [userMessage('stale')],
@@ -311,8 +311,8 @@ void main() {
   });
 }
 
-class FakeGateway implements TsPhoneGateway {
-  final eventsController = StreamController<TsPhoneEvent>.broadcast();
+class FakeGateway implements CorHubGateway {
+  final eventsController = StreamController<CorHubEvent>.broadcast();
   int sequence = 0,
       eventConnectionCount = 0,
       messageSnapshotCalls = 0,
@@ -322,8 +322,8 @@ class FakeGateway implements TsPhoneGateway {
   final sentIds = <String>[];
   Object? sendError;
   Future<void>? nextSend;
-  Future<TsPhoneMessageSnapshot>? nextSnapshot;
-  TsPhoneMessageSnapshot snapshot = TsPhoneMessageSnapshot(
+  Future<CorHubMessageSnapshot>? nextSnapshot;
+  CorHubMessageSnapshot snapshot = CorHubMessageSnapshot(
     sessionId: 'session-test',
     sessionRevision: revision,
     messages: [userMessage('existing')],
@@ -337,7 +337,7 @@ class FakeGateway implements TsPhoneGateway {
     bool online = true,
     bool canPrompt = true,
   }) => eventsController.add(
-    TsPhoneEvent(
+    CorHubEvent(
       id: 'epoch:${++sequence}',
       workspaceId: 'ts_001',
       sessionId: 'session-test',
@@ -362,7 +362,7 @@ class FakeGateway implements TsPhoneGateway {
   void failEventStream() =>
       eventsController.addError(StateError('network suspended'));
   @override
-  Future<TsPhoneMessageSnapshot> getMessages(
+  Future<CorHubMessageSnapshot> getMessages(
     String workspaceId,
     String sessionId,
   ) {
@@ -373,7 +373,7 @@ class FakeGateway implements TsPhoneGateway {
   }
 
   @override
-  Stream<TsPhoneEvent> events(
+  Stream<CorHubEvent> events(
     String workspaceId,
     String sessionId, {
     String? lastEventId,

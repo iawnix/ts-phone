@@ -1,8 +1,10 @@
-# TS Phone
+# CoRHub
 
-[English](README.md) · [下载 Android](https://github.com/iawnix/ts-phone/releases/latest) · [更新记录](CHANGELOG.md)
+<img src="apps/mobile/assets/branding/corhub-mark.png" alt="CoRHub 螃蟹标志" width="144">
 
-TS Phone 是 [ResearchAgent](https://github.com/iawnix/TSPi) 的 Android/iOS
+[English](README.md) · [下载 Android](https://github.com/iawnix/corhub/releases/latest) · [更新记录](CHANGELOG.md)
+
+CoRHub（原 TS Phone）是 [ResearchAgent](https://github.com/iawnix/TSPi) 的 Android/iOS
 Flutter 客户端。在手机上访问与终端相同的研究工作区和会话、发送消息、切换模型、
 查看工具输出和管理任务监控。任务执行与持久化会话历史保留在 ResearchAgent 服务端。
 
@@ -31,7 +33,7 @@ provisioning profile 构建，暂不提供签名 iOS 下载。
 ## 架构
 
 ```text
-TS Phone -- WSS --> ResearchAgent Link Relay <-- WSS -- ResearchAgent Host
+CoRHub -- WSS --> ResearchAgent Link Relay <-- WSS -- ResearchAgent Host
                                                               |
                                                         Pi Harness
                                                               |
@@ -75,7 +77,7 @@ python3 tool/version.py set 0.19.1+63   # 示例：下一次兼容修复
 python3 tool/version.py tag
 ```
 
-构建号始终递增，标签格式为 `ts-phone-v<version>+<build>`，正式附件不可覆盖。
+构建号始终递增，标签格式为 `corhub-v<version>+<build>`，正式附件不可覆盖。
 详见[版本管理](docs/versioning.md)和[发布操作](docs/deployment.md)。本仓库只维护
 手机客户端，ResearchAgent Host 和 Link Relay 在 TSPi 仓库维护。
 

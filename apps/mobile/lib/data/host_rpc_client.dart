@@ -107,7 +107,7 @@ class HostRpcClient {
       final response = await _request('initialize', {
         'protocol': tspiHostProtocol,
         'server_id': serverId,
-        'client': {'name': 'ts-phone'},
+        'client': {'name': 'corhub'},
       });
       if (response is! Map || response['protocol'] != tspiHostProtocol) {
         throw const HostRpcException(

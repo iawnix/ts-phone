@@ -1,8 +1,10 @@
-# TS Phone
+# CoRHub
 
-[简体中文](README.zh-CN.md) · [Download Android](https://github.com/iawnix/ts-phone/releases/latest) · [Changelog](CHANGELOG.md)
+<img src="apps/mobile/assets/branding/corhub-mark.png" alt="CoRHub crab" width="144">
 
-TS Phone is the Android/iOS Flutter client for
+[简体中文](README.zh-CN.md) · [Download Android](https://github.com/iawnix/corhub/releases/latest) · [Changelog](CHANGELOG.md)
+
+CoRHub (formerly TS Phone) is the Android/iOS Flutter client for
 [ResearchAgent](https://github.com/iawnix/TSPi). Use the same research workspaces
 and sessions as your terminal, send messages, select models, inspect tool
 output, and manage task monitors. Execution and durable session history stay
@@ -36,7 +38,7 @@ macOS, an Apple signing team and provisioning; no signed iOS download is provide
 ## Architecture
 
 ```text
-TS Phone -- WSS --> ResearchAgent Link Relay <-- WSS -- ResearchAgent Host
+CoRHub -- WSS --> ResearchAgent Link Relay <-- WSS -- ResearchAgent Host
                                                               |
                                                         Pi Harness
                                                               |
@@ -84,7 +86,7 @@ python3 tool/version.py set 0.19.1+63   # example: next compatible fix
 python3 tool/version.py tag
 ```
 
-Build numbers always increase. Tags use `ts-phone-v<version>+<build>` and published
+Build numbers always increase. Tags use `corhub-v<version>+<build>` and published
 assets are never overwritten. See [versioning](docs/versioning.md) and
 [release operations](docs/deployment.md). This repository contains only the mobile
 client; ResearchAgent Host and Link Relay are maintained in the TSPi repository.

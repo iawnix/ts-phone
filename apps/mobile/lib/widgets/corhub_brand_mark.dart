@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-const _colorMarkAsset = 'assets/branding/ts-phone-mark.png';
-const _monochromeMarkAsset = 'assets/branding/ts-phone-mark-monochrome.png';
+const _colorMarkAsset = 'assets/branding/corhub-mark.png';
+const _smallMarkAsset = 'assets/branding/corhub-mark-small.png';
+const _monochromeMarkAsset = 'assets/branding/corhub-mark-monochrome.png';
 
-class TsPhoneBrandMark extends StatelessWidget {
-  const TsPhoneBrandMark({super.key, required this.size, this.color});
+class CorHubBrandMark extends StatelessWidget {
+  const CorHubBrandMark({super.key, required this.size, this.color});
 
   final double size;
   final Color? color;
@@ -14,7 +15,11 @@ class TsPhoneBrandMark extends StatelessWidget {
     final cacheSize = (size * MediaQuery.devicePixelRatioOf(context)).ceil();
     return ExcludeSemantics(
       child: Image.asset(
-        color == null ? _colorMarkAsset : _monochromeMarkAsset,
+        color != null
+            ? _monochromeMarkAsset
+            : size <= 32
+            ? _smallMarkAsset
+            : _colorMarkAsset,
         width: size,
         height: size,
         cacheWidth: cacheSize,
@@ -29,8 +34,8 @@ class TsPhoneBrandMark extends StatelessWidget {
   }
 }
 
-class TsPhoneBrandBadge extends StatelessWidget {
-  const TsPhoneBrandBadge({super.key, required this.size});
+class CorHubBrandBadge extends StatelessWidget {
+  const CorHubBrandBadge({super.key, required this.size});
 
   final double size;
 
@@ -38,7 +43,7 @@ class TsPhoneBrandBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (size < 24) {
-      return TsPhoneBrandMark(size: size, color: theme.colorScheme.primary);
+      return CorHubBrandMark(size: size, color: theme.colorScheme.primary);
     }
     return SizedBox.square(
       dimension: size,
@@ -60,7 +65,7 @@ class TsPhoneBrandBadge extends StatelessWidget {
             ),
           ],
         ),
-        child: Center(child: TsPhoneBrandMark(size: size * 0.94)),
+        child: Center(child: CorHubBrandMark(size: size * 0.94)),
       ),
     );
   }

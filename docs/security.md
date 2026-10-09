@@ -1,6 +1,6 @@
 # Security
 
-TS Phone is intentionally unable to act as a server. The only network
+CoRHub is intentionally unable to act as a server. The only network
 transport is an authenticated ResearchAgent Link WebSocket to a trusted Relay.
 
 - Device credentials are kept in platform secure storage and never entered or

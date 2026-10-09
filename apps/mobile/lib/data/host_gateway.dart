@@ -6,7 +6,7 @@ import '../models/phone_model.dart';
 import '../models/workspace.dart';
 import 'session_gateway.dart';
 import 'host_rpc_client.dart';
-import 'ts_phone_api.dart';
+import 'corhub_api.dart';
 
 /// Transport state is independent from a session's runtime state. A session
 /// can remain readable while the relay is recovering.
@@ -23,8 +23,8 @@ enum HostTransportState {
 /// Pi owns messages and turns. The phone owns only projections and its outbox.
 class HostGateway
     implements
-        TsPhoneGateway,
-        TsPhoneModelGateway,
+        CorHubGateway,
+        CorHubModelGateway,
         SessionManagementGateway,
         WorkspaceManagementGateway,
         WorkspaceSessionGateway,
@@ -109,7 +109,7 @@ class HostGateway
         final result = _object(
           await _client.request('workspace/create', {
             'workspace_id': workspaceId,
-            'request_id': createTsPhoneClientMessageId(),
+            'request_id': createCorHubClientMessageId(),
           }),
         );
         final workspace = _object(result['workspace'] ?? result);
@@ -151,7 +151,7 @@ class HostGateway
   Future<SessionSummary> createSession() async {
     final workspace = _workspaceId ?? (await listWorkspaces()).firstOrNull?.id;
     if (workspace == null) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Select a project first',
         code: 'workspace_not_found',
       );
@@ -165,7 +165,7 @@ class HostGateway
         final result = _object(
           await _client.request('session/create', {
             'workspace_id': workspaceId,
-            'request_id': createTsPhoneClientMessageId(),
+            'request_id': createCorHubClientMessageId(),
           }),
         );
         return _summary(_object(result['session'] ?? result), workspaceId);
@@ -179,7 +179,7 @@ class HostGateway
     final result = _object(
       await _client.request('session/resume', {
         ..._target(workspaceId, sessionId),
-        'request_id': createTsPhoneClientMessageId(),
+        'request_id': createCorHubClientMessageId(),
       }),
     );
     return _summary(_object(result['session'] ?? result), workspaceId);
@@ -189,7 +189,7 @@ class HostGateway
   Future<void> removeSession(String sessionId) async {
     final workspace = _sessionWorkspaces[sessionId];
     if (workspace == null) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Session is not in this project',
         code: 'session_not_found',
       );
@@ -202,14 +202,14 @@ class HostGateway
       _guard(() async {
         await _client.request('session/remove', {
           ..._target(workspaceId, sessionId),
-          'request_id': createTsPhoneClientMessageId(),
+          'request_id': createCorHubClientMessageId(),
         });
         _sessions.remove(_key(workspaceId, sessionId));
         _sessionWorkspaces.remove(sessionId);
       });
 
   @override
-  Future<TsPhoneMessageSnapshot> getMessages(
+  Future<CorHubMessageSnapshot> getMessages(
     String workspaceId,
     String sessionId,
   ) => _guard(() async {
@@ -218,7 +218,7 @@ class HostGateway
     );
     _rememberRead(result, workspaceId, sessionId);
     final snapshot = _object(result['snapshot']);
-    return TsPhoneMessageSnapshot(
+    return CorHubMessageSnapshot(
       sessionId: sessionId,
       sessionRevision: _revision(workspaceId, sessionId),
       messages: _messages(snapshot),
@@ -244,13 +244,13 @@ class HostGateway
       }),
     );
     if (result['state'] == 'uncertain') {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Message delivery is uncertain',
         code: 'command_ambiguous',
       );
     }
     if (result['accepted'] != true) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Host rejected the message',
         code: 'prompt_rejected',
         statusCode: 409,
@@ -267,19 +267,19 @@ class HostGateway
   }) => _guard(() async {
     await _client.request('turn/interrupt', {
       ..._target(workspaceId, sessionId),
-      'request_id': createTsPhoneClientMessageId(),
+      'request_id': createCorHubClientMessageId(),
       'turn_id': agentRunId,
     });
   });
 
   @override
-  Stream<TsPhoneEvent> events(
+  Stream<CorHubEvent> events(
     String workspaceId,
     String sessionId, {
     String? lastEventId,
     void Function()? onConnected,
   }) {
-    late final StreamController<TsPhoneEvent> controller;
+    late final StreamController<CorHubEvent> controller;
     StreamSubscription<Map<String, Object?>>? subscription;
     final buffered = <Map<String, Object?>>[];
     var hydrated = false;
@@ -308,7 +308,7 @@ class HostGateway
         payload['runtimeError'] = Map<String, Object?>.from(backendEvent);
       }
       controller.add(
-        TsPhoneEvent(
+        CorHubEvent(
           id: _eventId(value),
           workspaceId: workspaceId,
           sessionId: sessionId,
@@ -381,7 +381,7 @@ class HostGateway
       }
     }
 
-    controller = StreamController<TsPhoneEvent>(
+    controller = StreamController<CorHubEvent>(
       onListen: () => unawaited(start()),
       onCancel: () async {
         cancelled = true;
@@ -428,7 +428,7 @@ class HostGateway
     final result = _object(
       await _client.request('model/select', {
         ..._target(workspaceId, sessionId),
-        'request_id': createTsPhoneClientMessageId(),
+        'request_id': createCorHubClientMessageId(),
         'model': {'provider': model.provider, 'id': model.id},
       }),
     );
@@ -436,7 +436,7 @@ class HostGateway
       return _summary(_object(result['session']), workspaceId);
     }
     if (result['accepted'] != true) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Host rejected the model',
         code: 'model_unavailable',
       );
@@ -469,11 +469,11 @@ class HostGateway
       await _client.request(enabled ? 'monitor/enable' : 'monitor/disable', {
         'workspace_id': workspaceId,
         'monitor_id': monitorId,
-        'request_id': createTsPhoneClientMessageId(),
+        'request_id': createCorHubClientMessageId(),
       }),
     );
     if (result['updated'] != 1) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Monitor no longer exists',
         code: 'monitor_not_found',
       );
@@ -491,7 +491,7 @@ class HostGateway
     final workspace = _workspaceId;
     final session = _sessionId;
     if (workspace == null || session == null) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Select a session first',
         code: 'session_not_found',
       );
@@ -667,7 +667,7 @@ class HostGateway
 
   Future<T> _guard<T>(Future<T> Function() action) async {
     if (_closed) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Host connection closed',
         code: 'connection_closed',
       );
@@ -692,7 +692,7 @@ class HostGateway
       .toList(growable: false);
 
   HostTransportState _stateForError(Object error) {
-    if (error is TsPhoneApiException &&
+    if (error is CorHubApiException &&
         (error.statusCode == 401 ||
             error.statusCode == 403 ||
             error.code == 'authentication' ||
@@ -706,7 +706,7 @@ class HostGateway
 
   static bool _isTransient(Object error) {
     if (error is TimeoutException) return true;
-    if (error is TsPhoneApiException) {
+    if (error is CorHubApiException) {
       return error.retryable == true ||
           const {
             'connection_closed',
@@ -774,7 +774,7 @@ Object _translate(Object error) {
       'legacy_session_read_only',
       'model_unavailable',
     }.contains(error.code);
-    return TsPhoneApiException(
+    return CorHubApiException(
       error.message,
       code: error.code,
       retryable: error.retryable,
@@ -785,7 +785,7 @@ Object _translate(Object error) {
   // platforms. Normalize that transport-only failure so cached projections
   // can remain visible while the next request reconnects.
   if (error is StateError) {
-    return TsPhoneApiException(
+    return CorHubApiException(
       error.toString(),
       code: 'connection_failed',
       retryable: true,

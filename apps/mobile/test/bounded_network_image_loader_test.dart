@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ts_phone/data/bounded_network_image_loader.dart';
+import 'package:corhub/data/bounded_network_image_loader.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

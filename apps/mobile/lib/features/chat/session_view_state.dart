@@ -1,4 +1,4 @@
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../models/workspace.dart';
 import 'chat_controller.dart';
 
@@ -62,7 +62,7 @@ SessionViewState resolveSessionViewState({
   required RuntimeState runtimeState,
   required EventConnectionState eventConnectionState,
   required bool isSynchronizing,
-  required TsPhoneProblem? problem,
+  required CorHubProblem? problem,
   bool recoveredSession = false,
   required bool historyOnly,
   required bool canSend,
@@ -110,7 +110,7 @@ SessionUiPhase _resolvePhase({
   required RuntimeState runtimeState,
   required EventConnectionState eventConnectionState,
   required bool isSynchronizing,
-  required TsPhoneProblem? problem,
+  required CorHubProblem? problem,
   required bool recoveredSession,
   required bool historyOnly,
 }) {
@@ -123,10 +123,10 @@ SessionUiPhase _resolvePhase({
   final transientEventProblem =
       eventConnectionState == EventConnectionState.reconnecting &&
       switch (problem?.code) {
-        TsPhoneProblemCode.serviceUnavailable ||
-        TsPhoneProblemCode.connectionFailed ||
-        TsPhoneProblemCode.requestTimeout ||
-        TsPhoneProblemCode.networkRetrying => true,
+        CorHubProblemCode.serviceUnavailable ||
+        CorHubProblemCode.connectionFailed ||
+        CorHubProblemCode.requestTimeout ||
+        CorHubProblemCode.networkRetrying => true,
         _ => false,
       };
   if (problem != null && !transientEventProblem) {

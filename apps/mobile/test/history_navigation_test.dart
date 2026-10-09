@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/features/chat/chat_composer.dart';
-import 'package:ts_phone/features/chat/chat_page.dart';
-import 'package:ts_phone/features/chat/chat_view_memory.dart';
-import 'package:ts_phone/features/sessions/session_tile.dart';
-import 'package:ts_phone/features/sessions/context_switcher.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/workspace.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
-import 'package:ts_phone/widgets/markdown_message.dart';
-import 'package:ts_phone/widgets/text_detail_view.dart';
+import 'package:corhub/features/chat/chat_composer.dart';
+import 'package:corhub/features/chat/chat_page.dart';
+import 'package:corhub/features/chat/chat_view_memory.dart';
+import 'package:corhub/features/sessions/session_tile.dart';
+import 'package:corhub/features/sessions/context_switcher.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/models/workspace.dart';
+import 'package:corhub/theme/corhub_theme.dart';
+import 'package:corhub/widgets/markdown_message.dart';
+import 'package:corhub/widgets/text_detail_view.dart';
 import 'chat_controller_test.dart' as fixtures;
 import 'conversation_shell_test.dart' as shell;
 
@@ -24,7 +24,7 @@ const session = SessionSummary(
   accessMode: SessionAccessMode.controller,
 );
 Widget app(Widget child, {ThemeData? theme, double scale = 1}) => MaterialApp(
-  theme: theme ?? TsPhoneTheme.light(),
+  theme: theme ?? CorHubTheme.light(),
   locale: const Locale('en'),
   supportedLocales: AppLocalizations.supportedLocales,
   localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -203,7 +203,7 @@ void main() {
       await open(
         tester,
         fixtures.FakeGateway(),
-        theme: dark ? TsPhoneTheme.dark() : TsPhoneTheme.light(),
+        theme: dark ? CorHubTheme.dark() : CorHubTheme.light(),
         scale: 2,
       );
       tester.view.viewInsets = const FakeViewPadding(bottom: 280);
@@ -218,10 +218,10 @@ void main() {
   }
   test('input boundary has 3:1 contrast in all themes', () {
     for (final theme in [
-      TsPhoneTheme.light(),
-      TsPhoneTheme.dark(),
-      TsPhoneTheme.highContrastLight(),
-      TsPhoneTheme.highContrastDark(),
+      CorHubTheme.light(),
+      CorHubTheme.dark(),
+      CorHubTheme.highContrastLight(),
+      CorHubTheme.highContrastDark(),
     ]) {
       final a = theme.colorScheme.outline.computeLuminance();
       final b = theme.colorScheme.surfaceContainerHigh.computeLuminance();

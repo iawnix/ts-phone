@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'TS Phone';
+  String get appTitle => 'CoRHub';
 
   @override
   String get back => '返回';
@@ -21,7 +21,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionSettings => '连接设置';
 
   @override
-  String get connectTsPhone => '配对 TS Phone';
+  String get connectCorHub => '配对 CoRHub';
 
   @override
   String get mobileCompanion => '将此设备连接到你的 TSPi Host';
@@ -42,7 +42,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceName => '设备名称';
 
   @override
-  String get deviceNameHint => 'TS Phone';
+  String get deviceNameHint => 'CoRHub';
 
   @override
   String get pair => '配对';
@@ -132,7 +132,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionDetails => '连接详情';
 
   @override
-  String get tsPhoneService => 'TSPi Link';
+  String get corHubService => 'ResearchAgent Link';
 
   @override
   String get notConfigured => '尚未配置';
@@ -186,7 +186,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemModelAuthMissing =>
-      '模型需要在 Pi App Server 上配置认证。手机与 TS Phone 的连接仍然有效。';
+      '模型需要在 Pi App Server 上配置认证。手机与 CoRHub 的连接仍然有效。';
 
   @override
   String get problemModelCheckFailed => 'Pi App Server 无法核验模型配置。';

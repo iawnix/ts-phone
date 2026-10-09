@@ -4,8 +4,8 @@ import 'dart:math';
 import '../models/phone_model.dart';
 import '../models/workspace.dart';
 
-class TsPhoneApiException implements Exception {
-  const TsPhoneApiException(
+class CorHubApiException implements Exception {
+  const CorHubApiException(
     this.message, {
     this.statusCode,
     this.code,
@@ -21,9 +21,9 @@ class TsPhoneApiException implements Exception {
   String toString() => message;
 }
 
-enum TsPhoneProblemKind { authentication, incompatible, unavailable, request }
+enum CorHubProblemKind { authentication, incompatible, unavailable, request }
 
-enum TsPhoneProblemCode {
+enum CorHubProblemCode {
   incompatible,
   authentication,
   sessionOffline,
@@ -68,91 +68,91 @@ enum TsPhoneProblemCode {
   generationIncomplete,
 }
 
-class TsPhoneProblem {
-  const TsPhoneProblem(this.kind, this.code);
+class CorHubProblem {
+  const CorHubProblem(this.kind, this.code);
 
-  final TsPhoneProblemKind kind;
-  final TsPhoneProblemCode code;
+  final CorHubProblemKind kind;
+  final CorHubProblemCode code;
 }
 
-TsPhoneProblem describeTsPhoneProblem(Object error) {
+CorHubProblem describeCorHubProblem(Object error) {
   if (error is FormatException) {
-    return const TsPhoneProblem(
-      TsPhoneProblemKind.incompatible,
-      TsPhoneProblemCode.incompatible,
+    return const CorHubProblem(
+      CorHubProblemKind.incompatible,
+      CorHubProblemCode.incompatible,
     );
   }
   if (error is TimeoutException) {
-    return const TsPhoneProblem(
-      TsPhoneProblemKind.unavailable,
-      TsPhoneProblemCode.requestTimeout,
+    return const CorHubProblem(
+      CorHubProblemKind.unavailable,
+      CorHubProblemCode.requestTimeout,
     );
   }
-  if (error is TsPhoneApiException) {
+  if (error is CorHubApiException) {
     final code = switch (error.code) {
-      'authentication' || 'unauthorized' => TsPhoneProblemCode.authentication,
-      'request_timeout' => TsPhoneProblemCode.requestTimeout,
-      'session_offline' => TsPhoneProblemCode.sessionOffline,
-      'workspace_busy' || 'session_busy' => TsPhoneProblemCode.resourcesBusy,
-      'turn_mismatch' => TsPhoneProblemCode.agentRunChanged,
+      'authentication' || 'unauthorized' => CorHubProblemCode.authentication,
+      'request_timeout' => CorHubProblemCode.requestTimeout,
+      'session_offline' => CorHubProblemCode.sessionOffline,
+      'workspace_busy' || 'session_busy' => CorHubProblemCode.resourcesBusy,
+      'turn_mismatch' => CorHubProblemCode.agentRunChanged,
       'session_lifecycle_unavailable' =>
-        TsPhoneProblemCode.managementUnsupported,
+        CorHubProblemCode.managementUnsupported,
       'session_start_timeout' ||
-      'request_uncertain' => TsPhoneProblemCode.deliveryUncertain,
+      'request_uncertain' => CorHubProblemCode.deliveryUncertain,
       'service_unavailable' ||
-      'connection_closed' => TsPhoneProblemCode.serviceUnavailable,
+      'connection_closed' => CorHubProblemCode.serviceUnavailable,
       'session_not_found' ||
-      'workspace_not_found' => TsPhoneProblemCode.sessionChanged,
+      'workspace_not_found' => CorHubProblemCode.sessionChanged,
       'service_not_found' ||
       'service_member_not_found' ||
       'version' ||
       'protocol_mismatch' ||
-      'method_not_found' => TsPhoneProblemCode.incompatible,
-      'model_unavailable' => TsPhoneProblemCode.modelUnavailable,
+      'method_not_found' => CorHubProblemCode.incompatible,
+      'model_unavailable' => CorHubProblemCode.modelUnavailable,
       'invalid_model' ||
       'model_not_found' ||
-      'model_unconfigured' => TsPhoneProblemCode.modelUnavailable,
-      'model_auth_missing' => TsPhoneProblemCode.modelAuthMissing,
-      'provider_unavailable' => TsPhoneProblemCode.providerUnavailable,
-      'provider_rate_limited' => TsPhoneProblemCode.providerRateLimited,
-      'provider_auth_failed' => TsPhoneProblemCode.providerAuthFailed,
-      'provider_error' => TsPhoneProblemCode.providerError,
-      'prompt_rejected' => TsPhoneProblemCode.promptRejected,
-      'runtime_extension_error' => TsPhoneProblemCode.runtimeExtensionError,
-      'generation_incomplete' => TsPhoneProblemCode.generationIncomplete,
+      'model_unconfigured' => CorHubProblemCode.modelUnavailable,
+      'model_auth_missing' => CorHubProblemCode.modelAuthMissing,
+      'provider_unavailable' => CorHubProblemCode.providerUnavailable,
+      'provider_rate_limited' => CorHubProblemCode.providerRateLimited,
+      'provider_auth_failed' => CorHubProblemCode.providerAuthFailed,
+      'provider_error' => CorHubProblemCode.providerError,
+      'prompt_rejected' => CorHubProblemCode.promptRejected,
+      'runtime_extension_error' => CorHubProblemCode.runtimeExtensionError,
+      'generation_incomplete' => CorHubProblemCode.generationIncomplete,
       'agent_run_stale' ||
-      'agent_not_running' => TsPhoneProblemCode.agentRunChanged,
-      _ => TsPhoneProblemCode.requestFailed,
+      'agent_not_running' => CorHubProblemCode.agentRunChanged,
+      _ => CorHubProblemCode.requestFailed,
     };
     if (error.statusCode == 401 || error.statusCode == 403) {
-      return const TsPhoneProblem(
-        TsPhoneProblemKind.authentication,
-        TsPhoneProblemCode.authentication,
+      return const CorHubProblem(
+        CorHubProblemKind.authentication,
+        CorHubProblemCode.authentication,
       );
     }
     if (error.statusCode case final status? when status >= 500) {
-      return const TsPhoneProblem(
-        TsPhoneProblemKind.unavailable,
-        TsPhoneProblemCode.serviceUnavailable,
+      return const CorHubProblem(
+        CorHubProblemKind.unavailable,
+        CorHubProblemCode.serviceUnavailable,
       );
     }
-    return TsPhoneProblem(
-      code == TsPhoneProblemCode.authentication
-          ? TsPhoneProblemKind.authentication
-          : code == TsPhoneProblemCode.incompatible
-          ? TsPhoneProblemKind.incompatible
-          : TsPhoneProblemKind.request,
+    return CorHubProblem(
+      code == CorHubProblemCode.authentication
+          ? CorHubProblemKind.authentication
+          : code == CorHubProblemCode.incompatible
+          ? CorHubProblemKind.incompatible
+          : CorHubProblemKind.request,
       code,
     );
   }
-  return const TsPhoneProblem(
-    TsPhoneProblemKind.unavailable,
-    TsPhoneProblemCode.connectionFailed,
+  return const CorHubProblem(
+    CorHubProblemKind.unavailable,
+    CorHubProblemCode.connectionFailed,
   );
 }
 
-class TsPhoneEvent {
-  const TsPhoneEvent({
+class CorHubEvent {
+  const CorHubEvent({
     required this.id,
     required this.workspaceId,
     required this.sessionId,
@@ -175,8 +175,8 @@ class TsPhoneEvent {
   final DateTime at;
 }
 
-class TsPhoneMessageSnapshot {
-  const TsPhoneMessageSnapshot({
+class CorHubMessageSnapshot {
+  const CorHubMessageSnapshot({
     required this.sessionId,
     required this.sessionRevision,
     required this.messages,
@@ -193,11 +193,11 @@ class TsPhoneMessageSnapshot {
   final List<String>? messageIds;
 }
 
-abstract interface class TsPhoneGateway {
+abstract interface class CorHubGateway {
   Future<Map<String, Object?>> version();
   Future<List<WorkspaceSummary>> listWorkspaces();
   Future<List<SessionSummary>> listSessions(String workspaceId);
-  Future<TsPhoneMessageSnapshot> getMessages(
+  Future<CorHubMessageSnapshot> getMessages(
     String workspaceId,
     String sessionId,
   );
@@ -214,7 +214,7 @@ abstract interface class TsPhoneGateway {
     required String sessionRevision,
     required String agentRunId,
   });
-  Stream<TsPhoneEvent> events(
+  Stream<CorHubEvent> events(
     String workspaceId,
     String sessionId, {
     String? lastEventId,
@@ -223,7 +223,7 @@ abstract interface class TsPhoneGateway {
   void close();
 }
 
-abstract interface class TsPhoneModelGateway {
+abstract interface class CorHubModelGateway {
   Future<List<PhoneModel>> models();
   Future<SessionSummary> selectModel(
     String workspaceId,
@@ -233,7 +233,7 @@ abstract interface class TsPhoneModelGateway {
   );
 }
 
-String createTsPhoneClientMessageId() {
+String createCorHubClientMessageId() {
   final random = Random.secure();
   final timestamp = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
   final entropy = List.generate(

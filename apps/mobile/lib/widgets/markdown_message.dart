@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -10,7 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/bounded_network_image_loader.dart';
 import '../l10n/app_localizations_extensions.dart';
 import '../navigation/adaptive_page_route.dart';
-import '../theme/ts_phone_theme.dart';
+import '../theme/corhub_theme.dart';
 import 'presentation.dart';
 
 class MarkdownMessage extends StatefulWidget {
@@ -28,7 +28,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = TsPhoneStatusTheme.resolve(context);
+    final status = CorHubStatusTheme.resolve(context);
     return MarkdownBody(
       data: widget.data,
       selectable: true,
@@ -77,12 +77,12 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         ),
         codeblockDecoration: BoxDecoration(
           color: status.terminalBackground,
-          borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+          borderRadius: BorderRadius.circular(CorHubRadii.small),
           border: Border.all(
             color: status.terminalMuted.withValues(alpha: 0.34),
           ),
         ),
-        codeblockPadding: const EdgeInsets.all(TsPhoneSpacing.medium),
+        codeblockPadding: const EdgeInsets.all(CorHubSpacing.medium),
         blockquoteDecoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerLow,
           border: Border(
@@ -90,10 +90,10 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
           ),
         ),
         blockquotePadding: const EdgeInsets.fromLTRB(
-          TsPhoneSpacing.medium,
-          TsPhoneSpacing.small,
-          TsPhoneSpacing.small,
-          TsPhoneSpacing.small,
+          CorHubSpacing.medium,
+          CorHubSpacing.small,
+          CorHubSpacing.small,
+          CorHubSpacing.small,
         ),
         tableBorder: TableBorder.all(color: theme.colorScheme.outlineVariant),
         tableHead: TextStyle(
@@ -103,8 +103,8 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         ),
         tableBody: theme.textTheme.bodySmall,
         tableCellsPadding: const EdgeInsets.symmetric(
-          horizontal: TsPhoneSpacing.small,
-          vertical: TsPhoneSpacing.small,
+          horizontal: CorHubSpacing.small,
+          vertical: CorHubSpacing.small,
         ),
         a: TextStyle(
           color: theme.colorScheme.primary,
@@ -131,8 +131,8 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         style: TextButton.styleFrom(
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(
-            horizontal: TsPhoneSpacing.small,
-            vertical: TsPhoneSpacing.xSmall,
+            horizontal: CorHubSpacing.small,
+            vertical: CorHubSpacing.xSmall,
           ),
         ),
         icon: const Icon(AppIcons.image_outlined),
@@ -171,7 +171,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     if (_previewOpen) return;
     _previewOpen = true;
     try {
-      await pushTsPhonePage<void>(
+      await pushCorHubPage<void>(
         context: context,
         fullscreenDialog: true,
         builder: (_) =>
@@ -352,11 +352,11 @@ class _ImagePreviewFailure extends StatelessWidget {
     final theme = Theme.of(context);
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(TsPhoneSpacing.large),
+        padding: const EdgeInsets.all(CorHubSpacing.large),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
           child: TsContentSurface(
-            padding: const EdgeInsets.all(TsPhoneSpacing.large),
+            padding: const EdgeInsets.all(CorHubSpacing.large),
             child: Semantics(
               liveRegion: true,
               child: Column(
@@ -369,13 +369,13 @@ class _ImagePreviewFailure extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: TsPhoneSpacing.medium),
+                  const SizedBox(height: CorHubSpacing.medium),
                   Text(
                     context.l10n.imageLoadFailed,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: TsPhoneSpacing.medium),
+                  const SizedBox(height: CorHubSpacing.medium),
                   IconButton.filledTonal(
                     key: const ValueKey<String>('markdown-image-retry'),
                     onPressed: onRetry,

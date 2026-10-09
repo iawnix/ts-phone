@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/features/sessions/context_switcher.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/workspace.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
+import 'package:corhub/features/sessions/context_switcher.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/models/workspace.dart';
+import 'package:corhub/theme/corhub_theme.dart';
 
 void main() {
   testWidgets('context switcher renders and selects a session', (tester) async {
@@ -25,7 +25,7 @@ void main() {
     var selected = false;
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: Scaffold(
@@ -80,7 +80,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: Scaffold(

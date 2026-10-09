@@ -4,7 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../models/chat_message.dart';
 import '../../models/workspace.dart';
 import '../../models/phone_model.dart';
@@ -40,7 +40,7 @@ class ChatController extends ChangeNotifier {
     this.snapshotTimeout = const Duration(seconds: 15),
     this.streamRenderInterval = const Duration(milliseconds: 100),
     this.streamPreviewCharacterLimit = 6000,
-    this.clientMessageIdFactory = createTsPhoneClientMessageId,
+    this.clientMessageIdFactory = createCorHubClientMessageId,
     ChatHistoryPreview? initialPreview,
     SessionSummary? initialSession,
     ChatOutbox? outbox,
@@ -64,7 +64,7 @@ class ChatController extends ChangeNotifier {
     _syncOutbox();
   }
 
-  final TsPhoneGateway api;
+  final CorHubGateway api;
   final ChatOutbox outbox;
   final String workspaceId;
   final String sessionId;
@@ -86,8 +86,8 @@ class ChatController extends ChangeNotifier {
   EventConnectionState _eventConnectionState = EventConnectionState.connecting;
   List<String>? _streamingTextChunks;
   int _streamingTextLength = 0;
-  TsPhoneProblem? _operationProblem;
-  TsPhoneProblem? _eventProblem;
+  CorHubProblem? _operationProblem;
+  CorHubProblem? _eventProblem;
   String? _promptProblem;
   String? _lastEventId;
   String _sessionRevision;
@@ -102,7 +102,7 @@ class ChatController extends ChangeNotifier {
   bool _snapshotReady = false;
   bool _disposed = false;
   bool _sendingRequest = false;
-  StreamSubscription<TsPhoneEvent>? _eventSubscription;
+  StreamSubscription<CorHubEvent>? _eventSubscription;
   Future<void>? _eventCancellation;
   Future<void>? _snapshotSynchronization;
   bool _connectAfterCancellationScheduled = false;
@@ -125,19 +125,19 @@ class ChatController extends ChangeNotifier {
   bool get hasFailedOutput => _messages.any(
     (message) => message.outputState == AssistantOutputState.failed,
   );
-  TsPhoneProblem? get problem =>
+  CorHubProblem? get problem =>
       _operationProblem ??
       (_promptProblem == null
           ? null
-          : describeTsPhoneProblem(
-              TsPhoneApiException('Model not ready', code: _promptProblem),
+          : describeCorHubProblem(
+              CorHubApiException('Model not ready', code: _promptProblem),
             )) ??
       (outbox.messages.any(
             (value) => value.state == ChatDeliveryState.uncertain,
           )
-          ? const TsPhoneProblem(
-              TsPhoneProblemKind.request,
-              TsPhoneProblemCode.deliveryUncertain,
+          ? const CorHubProblem(
+              CorHubProblemKind.request,
+              CorHubProblemCode.deliveryUncertain,
             )
           : null) ??
       _eventProblem;
@@ -148,7 +148,7 @@ class ChatController extends ChangeNotifier {
   /// connection indicator communicates the transient state in the app bar.
   bool get hasTransientEventProblem =>
       _eventConnectionState == EventConnectionState.reconnecting &&
-      _eventProblem?.code == TsPhoneProblemCode.networkRetrying;
+      _eventProblem?.code == CorHubProblemCode.networkRetrying;
   String? get sessionTitle => _sessionTitle;
   SessionRuntimeSnapshot? get sessionRuntime => _sessionRuntime;
   String get sessionRevision => _sessionRevision;
@@ -167,8 +167,8 @@ class ChatController extends ChangeNotifier {
       _promptStateReady &&
       _eventConnectionState == EventConnectionState.connected;
 
-  TsPhoneModelGateway? get modelGateway =>
-      api is TsPhoneModelGateway ? api as TsPhoneModelGateway : null;
+  CorHubModelGateway? get modelGateway =>
+      api is CorHubModelGateway ? api as CorHubModelGateway : null;
   String? get selectedModelReference {
     final model = _sessionRuntime?.model;
     final current = model == null ? null : '${model.provider}/${model.id}';
@@ -189,7 +189,7 @@ class ChatController extends ChangeNotifier {
   bool get canRefresh => _historyAvailable || _runtimeState.isAvailable;
   Future<void> selectModel(PhoneModel model) async {
     if (!canSelectModel) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Session is not ready for model selection',
         code: 'session_not_ready',
       );
@@ -208,7 +208,7 @@ class ChatController extends ChangeNotifier {
       if (_sessionRevision != revision ||
           session.sessionId != sessionId ||
           session.sessionRevision != revision) {
-        throw const TsPhoneApiException(
+        throw const CorHubApiException(
           'Session changed',
           code: 'session_resync_required',
         );
@@ -256,7 +256,7 @@ class ChatController extends ChangeNotifier {
         .where((value) => value.sessionId == sessionId)
         .firstOrNull;
     if (session == null) {
-      throw const TsPhoneApiException(
+      throw const CorHubApiException(
         'Conversation is no longer available',
         statusCode: 404,
         code: 'session_not_found',
@@ -346,7 +346,7 @@ class ChatController extends ChangeNotifier {
         // Keep the failure in the status channel so the chat does not flash an
         // error page for a transient snapshot request failure.
         if (hadCachedSnapshot && _isTransientTransportError(error)) {
-          _operationProblem = describeTsPhoneProblem(error);
+          _operationProblem = describeCorHubProblem(error);
           _eventConnectionState = EventConnectionState.reconnecting;
           _armEventError(error);
         } else {
@@ -397,7 +397,7 @@ class ChatController extends ChangeNotifier {
     if (retry != null) {
       if (retry.revision != revision) {
         _setError(
-          const TsPhoneApiException(
+          const CorHubApiException(
             'Session changed',
             code: 'session_changed',
             statusCode: 409,
@@ -447,7 +447,7 @@ class ChatController extends ChangeNotifier {
         return true;
       }
       final definitive =
-          error is TsPhoneApiException &&
+          error is CorHubApiException &&
           !const {
             'command_ambiguous',
             'connection_closed',
@@ -538,8 +538,8 @@ class ChatController extends ChangeNotifier {
       );
       return true;
     } on Object catch (error) {
-      final problem = describeTsPhoneProblem(error);
-      if (problem.code == TsPhoneProblemCode.agentRunChanged) {
+      final problem = describeCorHubProblem(error);
+      if (problem.code == CorHubProblemCode.agentRunChanged) {
         // The App Server has authoritative evidence that this run is no longer
         // active. Retire the stale local identity before reconciling the
         // replacement (or idle state) from a fresh transcript snapshot.
@@ -664,7 +664,7 @@ class ChatController extends ChangeNotifier {
     _notify();
   }
 
-  void _receiveEvent(int generation, TsPhoneEvent event) {
+  void _receiveEvent(int generation, CorHubEvent event) {
     if (!_isCurrentEventStream(generation)) return;
     if (event.workspaceId != workspaceId || event.sessionId != sessionId) {
       _finishEventStream(
@@ -717,7 +717,7 @@ class ChatController extends ChangeNotifier {
     if (_isFatalEventError(error)) {
       _eventErrorTimer?.cancel();
       _eventErrorTimer = null;
-      _eventProblem = describeTsPhoneProblem(error);
+      _eventProblem = describeCorHubProblem(error);
       _eventConnectionState = EventConnectionState.failed;
       _notify();
       return;
@@ -740,9 +740,9 @@ class ChatController extends ChangeNotifier {
           _eventConnectionState != EventConnectionState.reconnecting) {
         return;
       }
-      _eventProblem = const TsPhoneProblem(
-        TsPhoneProblemKind.unavailable,
-        TsPhoneProblemCode.networkRetrying,
+      _eventProblem = const CorHubProblem(
+        CorHubProblemKind.unavailable,
+        CorHubProblemCode.networkRetrying,
       );
       _notify();
     });
@@ -762,9 +762,7 @@ class ChatController extends ChangeNotifier {
           FlutterErrorDetails(
             exception: error,
             stack: stackTrace,
-            context: ErrorDescription(
-              'while closing the TS Phone event stream',
-            ),
+            context: ErrorDescription('while closing the CoRHub event stream'),
           ),
         );
       },
@@ -783,7 +781,7 @@ class ChatController extends ChangeNotifier {
 
   bool _isFatalEventError(Object error) {
     if (error is FormatException) return true;
-    if (error is! TsPhoneApiException) return false;
+    if (error is! CorHubApiException) return false;
     return switch (error.statusCode) {
       400 || 401 || 403 || 404 => true,
       _ => false,
@@ -791,17 +789,17 @@ class ChatController extends ChangeNotifier {
   }
 
   static bool _isTransientTransportError(Object error) {
-    final problem = describeTsPhoneProblem(error);
+    final problem = describeCorHubProblem(error);
     return const {
-      TsPhoneProblemCode.connectionFailed,
-      TsPhoneProblemCode.requestTimeout,
-      TsPhoneProblemCode.serviceUnavailable,
-      TsPhoneProblemCode.sessionOffline,
-      TsPhoneProblemCode.networkRetrying,
+      CorHubProblemCode.connectionFailed,
+      CorHubProblemCode.requestTimeout,
+      CorHubProblemCode.serviceUnavailable,
+      CorHubProblemCode.sessionOffline,
+      CorHubProblemCode.networkRetrying,
     }.contains(problem.code);
   }
 
-  void _handleEvent(TsPhoneEvent event) {
+  void _handleEvent(CorHubEvent event) {
     if (event.type != 'session.snapshot') return;
     final payload = _asMap(event.payload);
     if (payload == null || payload['messages'] is! List) {
@@ -810,7 +808,7 @@ class ChatController extends ChangeNotifier {
     _operationProblem = null;
     _promptProblem = payload['promptProblem'] as String?;
     _applyMessageSnapshot(
-      TsPhoneMessageSnapshot(
+      CorHubMessageSnapshot(
         sessionId: sessionId,
         sessionRevision: _sessionRevision,
         messages: (payload['messages'] as List).cast<Object?>(),
@@ -843,7 +841,7 @@ class ChatController extends ChangeNotifier {
     _notify();
   }
 
-  void _applyMessageSnapshot(TsPhoneMessageSnapshot snapshot) {
+  void _applyMessageSnapshot(CorHubMessageSnapshot snapshot) {
     final identity = jsonEncode([
       snapshot.sessionRevision,
       snapshot.messages,
@@ -904,9 +902,9 @@ class ChatController extends ChangeNotifier {
         Map<String, Object?>.from(value),
       );
     } on FormatException {
-      _operationProblem = const TsPhoneProblem(
-        TsPhoneProblemKind.incompatible,
-        TsPhoneProblemCode.invalidHistoryMessage,
+      _operationProblem = const CorHubProblem(
+        CorHubProblemKind.incompatible,
+        CorHubProblemCode.invalidHistoryMessage,
       );
     }
   }
@@ -962,9 +960,9 @@ class ChatController extends ChangeNotifier {
     try {
       accessMode = SessionAccessMode.parse(value);
     } on FormatException {
-      _operationProblem = const TsPhoneProblem(
-        TsPhoneProblemKind.incompatible,
-        TsPhoneProblemCode.incompatible,
+      _operationProblem = const CorHubProblem(
+        CorHubProblemKind.incompatible,
+        CorHubProblemCode.incompatible,
       );
     }
   }
@@ -972,9 +970,9 @@ class ChatController extends ChangeNotifier {
   void _updateCapabilities(Object? value) {
     if (value == null) return;
     if (value is! List || value.any((item) => item is! String)) {
-      _operationProblem = const TsPhoneProblem(
-        TsPhoneProblemKind.incompatible,
-        TsPhoneProblemCode.incompatible,
+      _operationProblem = const CorHubProblem(
+        CorHubProblemKind.incompatible,
+        CorHubProblemCode.incompatible,
       );
       return;
     }
@@ -1050,7 +1048,7 @@ class ChatController extends ChangeNotifier {
   }
 
   void _setError(Object error) {
-    _operationProblem = describeTsPhoneProblem(error);
+    _operationProblem = describeCorHubProblem(error);
     _notify();
   }
 
@@ -1066,8 +1064,8 @@ class ChatController extends ChangeNotifier {
         : error['summary'] is String
         ? error['summary']! as String
         : 'Pi runtime error';
-    _operationProblem = describeTsPhoneProblem(
-      TsPhoneApiException(message, code: code, statusCode: statusCode),
+    _operationProblem = describeCorHubProblem(
+      CorHubApiException(message, code: code, statusCode: statusCode),
     );
   }
 

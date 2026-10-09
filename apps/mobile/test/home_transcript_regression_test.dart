@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/features/chat/session_notice.dart';
-import 'package:ts_phone/features/sessions/session_list_page.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/features/chat/session_notice.dart';
+import 'package:corhub/features/sessions/session_list_page.dart';
 import 'chat_controller_test.dart' as fixtures;
 import 'conversation_shell_test.dart' as shell;
 import 'history_navigation_test.dart' as ui;
@@ -39,7 +39,7 @@ void main() {
     tester,
   ) async {
     final api = fixtures.FakeGateway()
-      ..snapshot = TsPhoneMessageSnapshot(
+      ..snapshot = CorHubMessageSnapshot(
         sessionId: 'session-test',
         sessionRevision: fixtures.revision,
         messages: List.generate(
@@ -63,12 +63,12 @@ void main() {
     tester,
   ) async {
     final api = fixtures.FakeGateway()
-      ..sendError = const TsPhoneApiException(
+      ..sendError = const CorHubApiException(
         'rejected',
         code: 'prompt_rejected',
         statusCode: 409,
       )
-      ..snapshot = TsPhoneMessageSnapshot(
+      ..snapshot = CorHubMessageSnapshot(
         sessionId: 'session-test',
         sessionRevision: fixtures.revision,
         messages: List.generate(50, (i) => fixtures.userMessage('History $i')),

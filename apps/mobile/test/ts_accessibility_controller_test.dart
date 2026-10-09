@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/platform/ts_accessibility_controller.dart';
+import 'package:corhub/platform/ts_accessibility_controller.dart';
 
 void main() {
   testWidgets('loads and follows reduce-transparency changes', (tester) async {

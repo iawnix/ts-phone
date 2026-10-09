@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/features/chat/chat_controller.dart';
-import 'package:ts_phone/features/chat/session_view_state.dart';
-import 'package:ts_phone/models/workspace.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/features/chat/chat_controller.dart';
+import 'package:corhub/features/chat/session_view_state.dart';
+import 'package:corhub/models/workspace.dart';
 
 void main() {
   test('session state gives failures and recovery one stable priority', () {
@@ -10,9 +10,9 @@ void main() {
       runtimeState: RuntimeState.running,
       eventConnectionState: EventConnectionState.connected,
       isSynchronizing: false,
-      problem: const TsPhoneProblem(
-        TsPhoneProblemKind.unavailable,
-        TsPhoneProblemCode.serviceUnavailable,
+      problem: const CorHubProblem(
+        CorHubProblemKind.unavailable,
+        CorHubProblemCode.serviceUnavailable,
       ),
       historyOnly: false,
       canSend: true,
@@ -47,9 +47,9 @@ void main() {
       runtimeState: RuntimeState.idle,
       eventConnectionState: EventConnectionState.reconnecting,
       isSynchronizing: false,
-      problem: const TsPhoneProblem(
-        TsPhoneProblemKind.unavailable,
-        TsPhoneProblemCode.networkRetrying,
+      problem: const CorHubProblem(
+        CorHubProblemKind.unavailable,
+        CorHubProblemCode.networkRetrying,
       ),
       historyOnly: false,
       canSend: false,

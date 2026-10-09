@@ -1,24 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
 import '../../app_identity.dart';
 import '../../data/host_gateway.dart';
 import '../../data/host_rpc_client.dart';
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../models/app_theme_preference.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/app_locale_preference.dart';
 import '../../models/connection_settings.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
-import '../../widgets/ts_phone_brand_mark.dart';
+import '../../widgets/corhub_brand_mark.dart';
 
 typedef SettingsGatewayBuilder =
-    TsPhoneGateway Function(ConnectionSettings settings);
+    CorHubGateway Function(ConnectionSettings settings);
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -142,7 +142,7 @@ class _SettingsPageState extends State<SettingsPage>
       _diagnosing = true;
       _diagnostics = null;
     });
-    TsPhoneGateway? gateway;
+    CorHubGateway? gateway;
     try {
       gateway =
           widget.gatewayBuilder?.call(connection) ?? HostGateway(connection);
@@ -159,7 +159,7 @@ class _SettingsPageState extends State<SettingsPage>
       if (!mounted || generation != _diagnosticsGeneration) return;
       setState(() {
         _diagnostics = _ConnectionDiagnostics(
-          problem: describeTsPhoneProblem(error),
+          problem: describeCorHubProblem(error),
         );
       });
       if (announce) ActionFeedback.error();
@@ -181,16 +181,16 @@ class _SettingsPageState extends State<SettingsPage>
     final l10n = context.l10n;
     final endpointSummary = connection?.serverUrl ?? l10n.notConfigured;
     final diagnostics = _diagnostics;
-    final statusTheme = TsPhoneStatusTheme.resolve(context);
+    final statusTheme = CorHubStatusTheme.resolve(context);
     final authValue = connection == null
         ? l10n.notConfigured
-        : diagnostics?.problem?.kind == TsPhoneProblemKind.authentication
+        : diagnostics?.problem?.kind == CorHubProblemKind.authentication
         ? l10n.diagnosticFailed
         : diagnostics?.problem == null && diagnostics != null
         ? l10n.diagnosticVerified
         : l10n.diagnosticConfigured;
     final authColor =
-        diagnostics?.problem?.kind == TsPhoneProblemKind.authentication
+        diagnostics?.problem?.kind == CorHubProblemKind.authentication
         ? statusTheme.error
         : diagnostics?.problem == null && diagnostics != null
         ? statusTheme.connected
@@ -206,7 +206,7 @@ class _SettingsPageState extends State<SettingsPage>
         child: SafeArea(
           top: false,
           child: ListView(
-            padding: const EdgeInsets.only(bottom: TsPhoneSpacing.xxLarge),
+            padding: const EdgeInsets.only(bottom: CorHubSpacing.xxLarge),
             children: <Widget>[
               Align(
                 alignment: Alignment.topCenter,
@@ -258,7 +258,7 @@ class _SettingsPageState extends State<SettingsPage>
                                 'connection-service-edit',
                               ),
                               icon: AppIcons.link_rounded,
-                              title: l10n.tsPhoneService,
+                              title: l10n.corHubService,
                               endpoint: endpointSummary,
                               onTap: () {
                                 ActionFeedback.selection();
@@ -296,13 +296,13 @@ class _SettingsPageState extends State<SettingsPage>
                               },
                             ),
                             AnimatedSize(
-                              duration: TsPhoneMotion.resolve(
+                              duration: CorHubMotion.resolve(
                                 context,
-                                TsPhoneMotion.standard,
+                                CorHubMotion.standard,
                               ),
-                              reverseDuration: TsPhoneMotion.resolve(
+                              reverseDuration: CorHubMotion.resolve(
                                 context,
-                                TsPhoneMotion.quick,
+                                CorHubMotion.quick,
                               ),
                               curve: Curves.easeOutCubic,
                               alignment: Alignment.topCenter,
@@ -385,14 +385,14 @@ class _SettingsPageState extends State<SettingsPage>
                                             },
                                           ),
                                           AnimatedSize(
-                                            duration: TsPhoneMotion.resolve(
+                                            duration: CorHubMotion.resolve(
                                               context,
-                                              TsPhoneMotion.standard,
+                                              CorHubMotion.standard,
                                             ),
                                             reverseDuration:
-                                                TsPhoneMotion.resolve(
+                                                CorHubMotion.resolve(
                                                   context,
-                                                  TsPhoneMotion.quick,
+                                                  CorHubMotion.quick,
                                                 ),
                                             curve: Curves.easeOutCubic,
                                             alignment: Alignment.topCenter,
@@ -509,7 +509,7 @@ class _ConnectionDiagnostics {
 
   final String? apiVersion;
   final String? serviceVersion;
-  final TsPhoneProblem? problem;
+  final CorHubProblem? problem;
 }
 
 class _SettingsDivider extends StatelessWidget {
@@ -521,7 +521,7 @@ class _SettingsDivider extends StatelessWidget {
     return Divider(
       height: 0.5,
       thickness: 0.5,
-      indent: TsPhoneSpacing.large,
+      indent: CorHubSpacing.large,
       color: theme.dividerTheme.color,
     );
   }
@@ -552,7 +552,7 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
       useSafeArea: true,
       isScrollControlled: true,
       showDragHandle: true,
-      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(
+      sheetAnimationStyle: CorHubMotion.resolveAnimationStyle(
         context,
         reverseCurve: Curves.easeOutCubic,
       ),
@@ -565,7 +565,7 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(label, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: TsPhoneSpacing.large),
+              const SizedBox(height: CorHubSpacing.large),
               for (final entry in choices.entries)
                 Semantics(
                   label: entry.value,
@@ -615,7 +615,7 @@ class _PreferenceRow<T extends Object> extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(width: TsPhoneSpacing.medium),
+              const SizedBox(width: CorHubSpacing.medium),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -716,7 +716,7 @@ class _ConnectionServiceRow extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 64),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: TsPhoneSpacing.large,
+              horizontal: CorHubSpacing.large,
               vertical: 10,
             ),
             child: Row(
@@ -725,7 +725,7 @@ class _ConnectionServiceRow extends StatelessWidget {
                   message: title,
                   child: Icon(icon, size: 22, color: colors.primary),
                 ),
-                const SizedBox(width: TsPhoneSpacing.medium),
+                const SizedBox(width: CorHubSpacing.medium),
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -737,7 +737,7 @@ class _ConnectionServiceRow extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: TsPhoneSpacing.xSmall),
+                      const SizedBox(height: CorHubSpacing.xSmall),
                       Text(
                         endpoint,
                         key: const ValueKey<String>(
@@ -750,7 +750,7 @@ class _ConnectionServiceRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: TsPhoneSpacing.medium),
+                const SizedBox(width: CorHubSpacing.medium),
                 Icon(
                   AppIcons.edit_outlined,
                   key: const ValueKey<String>('connection-edit-affordance'),
@@ -790,8 +790,8 @@ class _ConnectionDetailsToggle extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: TsPhoneSpacing.large,
-              vertical: TsPhoneSpacing.small,
+              horizontal: CorHubSpacing.large,
+              vertical: CorHubSpacing.small,
             ),
             child: Row(
               children: <Widget>[
@@ -799,7 +799,7 @@ class _ConnectionDetailsToggle extends StatelessWidget {
                   message: context.l10n.connectionDetails,
                   child: Icon(icon, size: 20, color: colors.onSurfaceVariant),
                 ),
-                const SizedBox(width: TsPhoneSpacing.medium),
+                const SizedBox(width: CorHubSpacing.medium),
                 Expanded(
                   child: Text(
                     context.l10n.connectionDetails,
@@ -828,14 +828,14 @@ class _ConnectionProblem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final error = TsPhoneStatusTheme.resolve(context).error;
+    final error = CorHubStatusTheme.resolve(context).error;
     return Padding(
-      padding: const EdgeInsets.all(TsPhoneSpacing.medium),
+      padding: const EdgeInsets.all(CorHubSpacing.medium),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Icon(AppIcons.error_outline_rounded, size: 18, color: error),
-          const SizedBox(width: TsPhoneSpacing.small),
+          const SizedBox(width: CorHubSpacing.small),
           Expanded(
             child: Text(
               message,
@@ -859,26 +859,26 @@ class _AppIdentityFooter extends StatelessWidget {
     return Padding(
       key: const ValueKey<String>('settings-app-identity'),
       padding: const EdgeInsets.fromLTRB(
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large,
+        CorHubSpacing.large,
+        CorHubSpacing.large,
+        CorHubSpacing.large,
         0,
       ),
       child: Wrap(
         alignment: WrapAlignment.center,
         crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: TsPhoneSpacing.small,
-        runSpacing: TsPhoneSpacing.xSmall,
+        spacing: CorHubSpacing.small,
+        runSpacing: CorHubSpacing.xSmall,
         children: <Widget>[
-          const TsPhoneBrandBadge(size: 18),
+          const CorHubBrandBadge(size: 18),
           Text(
-            tsPhoneAppName,
+            corHubAppName,
             style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           Text(
-            context.l10n.clientVersionBuild(tsPhoneAppVersion, tsPhoneAppBuild),
+            context.l10n.clientVersionBuild(corHubAppVersion, corHubAppBuild),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -936,8 +936,8 @@ class _DiagnosticRow extends StatelessWidget {
       constraints: BoxConstraints(minHeight: useStacked ? 64 : 44),
       child: Padding(
         padding: const EdgeInsets.symmetric(
-          horizontal: TsPhoneSpacing.large,
-          vertical: TsPhoneSpacing.small,
+          horizontal: CorHubSpacing.large,
+          vertical: CorHubSpacing.small,
         ),
         child: useStacked
             ? Column(
@@ -951,7 +951,7 @@ class _DiagnosticRow extends StatelessWidget {
                           size: 18,
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
-                        const SizedBox(width: TsPhoneSpacing.small),
+                        const SizedBox(width: CorHubSpacing.small),
                       ],
                       Expanded(
                         child: Text(label, style: theme.textTheme.bodyMedium),
@@ -959,7 +959,7 @@ class _DiagnosticRow extends StatelessWidget {
                       ?trailing,
                     ],
                   ),
-                  const SizedBox(height: TsPhoneSpacing.xSmall),
+                  const SizedBox(height: CorHubSpacing.xSmall),
                   valueWidget,
                 ],
               )
@@ -971,12 +971,12 @@ class _DiagnosticRow extends StatelessWidget {
                       size: 18,
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(width: TsPhoneSpacing.small),
+                    const SizedBox(width: CorHubSpacing.small),
                   ],
                   Expanded(
                     child: Text(label, style: theme.textTheme.bodyMedium),
                   ),
-                  const SizedBox(width: TsPhoneSpacing.medium),
+                  const SizedBox(width: CorHubSpacing.medium),
                   Flexible(child: valueWidget),
                 ],
               ),
@@ -1006,8 +1006,8 @@ class _TechnicalDetailsToggle extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: TsPhoneSpacing.large,
-              vertical: TsPhoneSpacing.small,
+              horizontal: CorHubSpacing.large,
+              vertical: CorHubSpacing.small,
             ),
             child: Row(
               children: <Widget>[
@@ -1016,7 +1016,7 @@ class _TechnicalDetailsToggle extends StatelessWidget {
                   size: 20,
                   color: colors.onSurfaceVariant,
                 ),
-                const SizedBox(width: TsPhoneSpacing.medium),
+                const SizedBox(width: CorHubSpacing.medium),
                 Expanded(
                   child: Text(
                     label,
@@ -1057,7 +1057,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    final status = TsPhoneStatusTheme.resolve(context);
+    final status = CorHubStatusTheme.resolve(context);
     final problem = diagnostics?.problem;
     final (label, color) = diagnosing
         ? (l10n.diagnosticsRunning, theme.colorScheme.primary)
@@ -1069,9 +1069,9 @@ class _DiagnosticsActionRow extends StatelessWidget {
         ? (l10n.diagnosticVerified, status.connected)
         : (l10n.diagnosticNotChecked, theme.colorScheme.onSurfaceVariant);
     final canRetry = enabled && !diagnosing && problem != null;
-    final motionDuration = TsPhoneMotion.resolveFade(
+    final motionDuration = CorHubMotion.resolveFade(
       context,
-      TsPhoneMotion.standard,
+      CorHubMotion.standard,
     );
     return Semantics(
       button: false,
@@ -1084,7 +1084,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 50),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: TsPhoneSpacing.large,
+              horizontal: CorHubSpacing.large,
               vertical: 6,
             ),
             child: Row(
@@ -1099,7 +1099,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
                         : theme.colorScheme.outline,
                   ),
                 ),
-                const SizedBox(width: TsPhoneSpacing.medium),
+                const SizedBox(width: CorHubSpacing.medium),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1126,7 +1126,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: TsPhoneSpacing.small),
+                const SizedBox(width: CorHubSpacing.small),
                 if (canRetry)
                   IconButton(
                     key: const ValueKey<String>('retry-connection-diagnostics'),

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/features/settings/settings_page.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/app_locale_preference.dart';
-import 'package:ts_phone/models/app_theme_preference.dart';
-import 'package:ts_phone/models/connection_settings.dart';
-import 'package:ts_phone/theme/app_icons.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
-import 'package:ts_phone/widgets/presentation.dart';
-import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/features/settings/settings_page.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/models/app_locale_preference.dart';
+import 'package:corhub/models/app_theme_preference.dart';
+import 'package:corhub/models/connection_settings.dart';
+import 'package:corhub/theme/app_icons.dart';
+import 'package:corhub/theme/corhub_theme.dart';
+import 'package:corhub/widgets/presentation.dart';
+import 'package:corhub/widgets/corhub_brand_mark.dart';
 
 void main() {
   const hostId = '123e4567-e89b-42d3-a456-426614174000';
@@ -57,7 +57,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('TSPi Link'), findsOneWidget);
+      expect(find.text('ResearchAgent Link'), findsOneWidget);
       expect(find.text('Endpoint'), findsNothing);
       final copy = find.byKey(const ValueKey('copy-server-address'));
       await tester.ensureVisible(copy);
@@ -102,8 +102,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('connection-service-edit')));
     expect(editCount, 1);
 
-    final brand = tester.widget<TsPhoneBrandBadge>(
-      find.byType(TsPhoneBrandBadge),
+    final brand = tester.widget<CorHubBrandBadge>(
+      find.byType(CorHubBrandBadge),
     );
     expect(brand.size, 18);
   });
@@ -277,7 +277,7 @@ void main() {
   });
 }
 
-class _DiagnosticGateway implements TsPhoneGateway {
+class _DiagnosticGateway implements CorHubGateway {
   @override
   Future<Map<String, Object?>> version() async => const {
     'apiVersion': 'pi-app-server/8',
@@ -305,7 +305,7 @@ Widget _settingsApp({
     locale: locale,
     supportedLocales: AppLocalizations.supportedLocales,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
-    theme: TsPhoneTheme.light(),
+    theme: CorHubTheme.light(),
     home: SettingsPage(
       key: key,
       connectionSettings: connection,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture source identity and attest TS Phone Android build artifacts."""
+"""Capture source identity and attest CoRHub Android build artifacts."""
 
 from __future__ import annotations
 
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.build,
             )
     except (ComponentReleaseError, json.JSONDecodeError, OSError, UnicodeError) as error:
-        print(f"TS Phone mobile build attestation failed: {error}", file=sys.stderr)
+        print(f"CoRHub mobile build attestation failed: {error}", file=sys.stderr)
         return 1
 
     print(destination)

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ts_phone/data/tspi_link_pairing.dart';
+import 'package:corhub/data/tspi_link_pairing.dart';
 
 const _hostId = '123e4567-e89b-42d3-a456-426614174000';
 const _deviceId = '223e4567-e89b-42d3-a456-426614174000';

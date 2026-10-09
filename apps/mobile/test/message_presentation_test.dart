@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/chat_message.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
-import 'package:ts_phone/widgets/chat_message_view.dart';
-import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
-import 'package:ts_phone/widgets/content_display_error.dart';
-import 'package:ts_phone/widgets/text_detail_view.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/models/chat_message.dart';
+import 'package:corhub/theme/corhub_theme.dart';
+import 'package:corhub/widgets/chat_message_view.dart';
+import 'package:corhub/widgets/corhub_brand_mark.dart';
+import 'package:corhub/widgets/content_display_error.dart';
+import 'package:corhub/widgets/text_detail_view.dart';
 
 Widget presentation(Widget child) => MaterialApp(
-  theme: TsPhoneTheme.light(),
+  theme: CorHubTheme.light(),
   locale: const Locale('en'),
   supportedLocales: AppLocalizations.supportedLocales,
   localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -110,7 +110,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text(text), findsOneWidget);
-      expect(find.byType(TsPhoneBrandMark), findsNothing);
+      expect(find.byType(CorHubBrandMark), findsNothing);
       expect(find.text('TSPi'), findsNothing);
       expect(tester.takeException(), isNull);
     });

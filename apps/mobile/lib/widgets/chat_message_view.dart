@@ -3,16 +3,16 @@ import 'package:flutter/services.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 
 import '../models/chat_message.dart';
 import '../l10n/app_localizations_extensions.dart';
-import '../theme/ts_phone_theme.dart';
+import '../theme/corhub_theme.dart';
 import 'markdown_message.dart';
 import 'presentation.dart';
 import 'activity_label.dart';
 import 'conversation_time.dart';
-import 'ts_phone_brand_mark.dart';
+import 'corhub_brand_mark.dart';
 
 class ChatMessageView extends StatelessWidget {
   const ChatMessageView({
@@ -85,7 +85,7 @@ class ChatMessageView extends StatelessWidget {
     if (!animate) return frame;
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
-      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.standard),
+      duration: CorHubMotion.resolve(context, CorHubMotion.standard),
       curve: Curves.easeOut,
       child: frame,
       builder: (context, value, child) => Opacity(
@@ -314,21 +314,21 @@ class _MessageFrame extends StatelessWidget {
         width: isUser ? null : double.infinity,
         constraints: BoxConstraints(maxWidth: maxWidth),
         margin: EdgeInsets.symmetric(
-          horizontal: TsPhoneSpacing.large,
-          vertical: compactAssistant ? 0 : TsPhoneSpacing.xSmall,
+          horizontal: CorHubSpacing.large,
+          vertical: compactAssistant ? 0 : CorHubSpacing.xSmall,
         ),
         padding: isUser
             ? const EdgeInsets.fromLTRB(14, 10, 14, 10)
             : compactAssistant
             ? EdgeInsets.zero
             : const EdgeInsets.symmetric(
-                horizontal: TsPhoneSpacing.xSmall,
-                vertical: TsPhoneSpacing.small,
+                horizontal: CorHubSpacing.xSmall,
+                vertical: CorHubSpacing.small,
               ),
         decoration: isUser
             ? BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(TsPhoneRadii.bubble),
+                borderRadius: BorderRadius.circular(CorHubRadii.bubble),
               )
             : null,
         child: Column(
@@ -343,22 +343,19 @@ class _MessageFrame extends StatelessWidget {
                 timestamp: timestamp,
                 deliveryState: deliveryState,
               ),
-              const SizedBox(height: TsPhoneSpacing.xSmall),
+              const SizedBox(height: CorHubSpacing.xSmall),
             ] else if (showAssistantAttribution) ...<Widget>[
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   if (isStreaming) ...<Widget>[
                     TsStatusDot(
-                      color: TsPhoneStatusTheme.resolve(context).connected,
+                      color: CorHubStatusTheme.resolve(context).connected,
                       pulsing: true,
                     ),
-                    const SizedBox(width: TsPhoneSpacing.small),
+                    const SizedBox(width: CorHubSpacing.small),
                   ] else ...<Widget>[
-                    TsPhoneBrandMark(
-                      size: 15,
-                      color: theme.colorScheme.primary,
-                    ),
+                    CorHubBrandMark(size: 15, color: theme.colorScheme.primary),
                     const SizedBox(width: 6),
                   ],
                   Text(
@@ -370,7 +367,7 @@ class _MessageFrame extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: TsPhoneSpacing.xSmall),
+              const SizedBox(height: CorHubSpacing.xSmall),
             ],
             child,
             if (!isUser && showAssistantTimestamp)
@@ -444,7 +441,7 @@ class _AssistantMessageTimestamp extends StatelessWidget {
     final label = conversationTimeLabel(timestamp);
     if (label == null) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(top: TsPhoneSpacing.xSmall),
+      padding: const EdgeInsets.only(top: CorHubSpacing.xSmall),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -464,7 +461,7 @@ class _ToolDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final terminal = TsPhoneStatusTheme.resolve(context);
+    final terminal = CorHubStatusTheme.resolve(context);
     final stateColor = detail.isError ? terminal.error : terminal.connected;
     final title = detail.title.isEmpty ? context.l10n.toolResult : detail.title;
     final stateLabel = detail.isError
@@ -484,7 +481,7 @@ class _ToolDetailView extends StatelessWidget {
           backgroundColor: Colors.transparent,
           collapsedBackgroundColor: Colors.transparent,
           tilePadding: const EdgeInsets.symmetric(
-            horizontal: TsPhoneSpacing.medium,
+            horizontal: CorHubSpacing.medium,
           ),
           textColor: theme.colorScheme.onSurface,
           collapsedTextColor: theme.colorScheme.onSurface,
@@ -513,7 +510,7 @@ class _ToolDetailView extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: TsPhoneSpacing.small),
+              const SizedBox(width: CorHubSpacing.small),
               if (detail.isError)
                 Text(
                   stateLabel,
@@ -534,7 +531,7 @@ class _ToolDetailView extends StatelessWidget {
                 ),
               if (conversationTimeLabel(timestamp)
                   case final time?) ...<Widget>[
-                const SizedBox(width: TsPhoneSpacing.small),
+                const SizedBox(width: CorHubSpacing.small),
                 Text(
                   time,
                   maxLines: 1,
@@ -546,9 +543,9 @@ class _ToolDetailView extends StatelessWidget {
             ],
           ),
           childrenPadding: const EdgeInsets.fromLTRB(
-            TsPhoneSpacing.medium,
+            CorHubSpacing.medium,
             0,
-            TsPhoneSpacing.medium,
+            CorHubSpacing.medium,
             4,
           ),
           children: <Widget>[

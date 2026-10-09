@@ -5,14 +5,14 @@ import 'dart:typed_data';
 import 'package:async/async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stream_channel/stream_channel.dart';
-import 'package:ts_phone/data/host_gateway.dart';
-import 'package:ts_phone/data/host_rpc_client.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/features/chat/chat_controller.dart';
-import 'package:ts_phone/models/chat_message.dart';
-import 'package:ts_phone/models/connection_settings.dart';
-import 'package:ts_phone/models/phone_model.dart';
-import 'package:ts_phone/models/workspace.dart';
+import 'package:corhub/data/host_gateway.dart';
+import 'package:corhub/data/host_rpc_client.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/features/chat/chat_controller.dart';
+import 'package:corhub/models/chat_message.dart';
+import 'package:corhub/models/connection_settings.dart';
+import 'package:corhub/models/phone_model.dart';
+import 'package:corhub/models/workspace.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 const _serverId = '123e4567-e89b-42d3-a456-426614174000';
@@ -455,7 +455,7 @@ void main() {
       await expectLater(
         gateway.setMonitorEnabled('ts_001', 'missing', false),
         throwsA(
-          isA<TsPhoneApiException>().having(
+          isA<CorHubApiException>().having(
             (e) => e.code,
             'code',
             'monitor_not_found',
@@ -526,7 +526,7 @@ void main() {
     await expectLater(
       gateway.setMonitorEnabled('ts_001', 'm-1', false),
       throwsA(
-        isA<TsPhoneApiException>().having(
+        isA<CorHubApiException>().having(
           (error) => error.code,
           'code',
           'workspace_not_found',

@@ -1,17 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 
 import '../../data/host_gateway.dart';
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/chat_message.dart';
 import '../../models/connection_settings.dart';
 import '../../models/workspace.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/chat_message_view.dart';
 import '../../widgets/presentation.dart';
@@ -40,8 +40,8 @@ class ChatPage extends StatefulWidget {
   final WorkspaceSummary workspace;
   final SessionSummary session;
   final bool recoveredSession;
-  final TsPhoneGateway? gateway;
-  final TsPhoneGateway Function()? gatewayFactory;
+  final CorHubGateway? gateway;
+  final CorHubGateway Function()? gatewayFactory;
   final ChatViewMemory? memory;
   final bool embedded;
 
@@ -514,7 +514,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     try {
       final confirmed = await showDialog<bool>(
         context: context,
-        animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+        animationStyle: CorHubMotion.resolveAnimationStyle(context),
         builder: (dialogContext) => AlertDialog(
           icon: Icon(AppIcons.stop_circle_outlined, color: colors.error),
           title: Text(context.l10n.abortGeneration),
@@ -566,7 +566,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       context: context,
       useSafeArea: true,
       showDragHandle: true,
-      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+      sheetAnimationStyle: CorHubMotion.resolveAnimationStyle(context),
       builder: (context) => _SessionStatusSheet(
         state: state,
         runtimeState: _controller.runtimeState,
@@ -583,7 +583,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       context: context,
       useSafeArea: true,
       showDragHandle: true,
-      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+      sheetAnimationStyle: CorHubMotion.resolveAnimationStyle(context),
       builder: (context) => _ContextUsageSheet(usage: usage),
     );
   }
@@ -608,10 +608,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           duration: const Duration(milliseconds: 1400),
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.fromLTRB(
-            TsPhoneSpacing.medium,
+            CorHubSpacing.medium,
             0,
-            TsPhoneSpacing.medium,
-            TsPhoneSpacing.large,
+            CorHubSpacing.medium,
+            CorHubSpacing.large,
           ),
         ),
       );
@@ -779,7 +779,7 @@ class _SessionStatusButton extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           icon: AnimatedSwitcher(
-            duration: TsPhoneMotion.resolveFade(context, TsPhoneMotion.quick),
+            duration: CorHubMotion.resolveFade(context, CorHubMotion.quick),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeOutCubic,
             child: _SessionStatusGlyph(
@@ -845,7 +845,7 @@ class _SessionStatusSheet extends StatelessWidget {
 
   final SessionViewState state;
   final RuntimeState runtimeState;
-  final TsPhoneProblem? problem;
+  final CorHubProblem? problem;
   final bool hasCachedContent;
   final VoidCallback onRetry;
 
@@ -860,10 +860,10 @@ class _SessionStatusSheet extends StatelessWidget {
         state.phase != SessionUiPhase.history;
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        TsPhoneSpacing.large,
+        CorHubSpacing.large,
         0,
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large + MediaQuery.viewPaddingOf(context).bottom,
+        CorHubSpacing.large,
+        CorHubSpacing.large + MediaQuery.viewPaddingOf(context).bottom,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -875,7 +875,7 @@ class _SessionStatusSheet extends StatelessWidget {
                 visual: visual,
                 runtimeRunning: runtimeState == RuntimeState.running,
               ),
-              const SizedBox(width: TsPhoneSpacing.medium),
+              const SizedBox(width: CorHubSpacing.medium),
               Expanded(
                 child: Text(
                   _sessionStatusLabel(context, state),
@@ -886,7 +886,7 @@ class _SessionStatusSheet extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: TsPhoneSpacing.small),
+          const SizedBox(height: CorHubSpacing.small),
           if (runtimeState == RuntimeState.running &&
               state.phase != SessionUiPhase.running)
             Text(
@@ -896,7 +896,7 @@ class _SessionStatusSheet extends StatelessWidget {
               ),
             ),
           if (hasCachedContent && canRetry) ...<Widget>[
-            const SizedBox(height: TsPhoneSpacing.xSmall),
+            const SizedBox(height: CorHubSpacing.xSmall),
             Text(
               l10n.sessionRuntimeLastKnown,
               style: theme.textTheme.bodySmall?.copyWith(
@@ -905,7 +905,7 @@ class _SessionStatusSheet extends StatelessWidget {
             ),
           ],
           if (problem != null && !_isTransportProblem(problem)) ...<Widget>[
-            const SizedBox(height: TsPhoneSpacing.small),
+            const SizedBox(height: CorHubSpacing.small),
             Text(
               problem!.localizedMessage(l10n),
               style: theme.textTheme.bodySmall?.copyWith(
@@ -914,7 +914,7 @@ class _SessionStatusSheet extends StatelessWidget {
             ),
           ],
           if (canRetry) ...<Widget>[
-            const SizedBox(height: TsPhoneSpacing.medium),
+            const SizedBox(height: CorHubSpacing.medium),
             Align(
               alignment: AlignmentDirectional.centerStart,
               child: FilledButton.tonalIcon(
@@ -946,7 +946,7 @@ class _ContextUsageSheet extends StatelessWidget {
         : percent >= 85
         ? theme.colorScheme.error
         : percent >= 70
-        ? TsPhoneStatusTheme.resolve(context).warning
+        ? CorHubStatusTheme.resolve(context).warning
         : theme.colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
@@ -1054,7 +1054,7 @@ class _EmptyConversationView extends StatelessWidget {
     final theme = Theme.of(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(TsPhoneSpacing.large),
+        padding: const EdgeInsets.all(CorHubSpacing.large),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -1063,7 +1063,7 @@ class _EmptyConversationView extends StatelessWidget {
               size: 28,
               color: theme.colorScheme.outline,
             ),
-            const SizedBox(height: TsPhoneSpacing.small),
+            const SizedBox(height: CorHubSpacing.small),
             Text(
               context.l10n.noMessages,
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -1096,7 +1096,7 @@ _SessionStatusVisual _sessionStatusVisual(
   SessionViewState state,
 ) {
   final theme = Theme.of(context);
-  final status = TsPhoneStatusTheme.resolve(context);
+  final status = CorHubStatusTheme.resolve(context);
   return switch (state.phase) {
     SessionUiPhase.failed => _SessionStatusVisual(
       kind: TsStatusGlyphKind.icon,
@@ -1163,9 +1163,9 @@ String _sessionStatusAccessibleLabel(
     ? '${_sessionStatusLabel(context, state)} · ${runtimeState.localizedCompactLabel(context.l10n)}'
     : _sessionStatusLabel(context, state);
 
-bool _isTransportProblem(TsPhoneProblem? problem) =>
-    problem?.code == TsPhoneProblemCode.serviceUnavailable ||
-    problem?.code == TsPhoneProblemCode.connectionFailed ||
-    problem?.code == TsPhoneProblemCode.requestTimeout ||
-    problem?.code == TsPhoneProblemCode.networkRetrying ||
-    problem?.code == TsPhoneProblemCode.sessionOffline;
+bool _isTransportProblem(CorHubProblem? problem) =>
+    problem?.code == CorHubProblemCode.serviceUnavailable ||
+    problem?.code == CorHubProblemCode.connectionFailed ||
+    problem?.code == CorHubProblemCode.requestTimeout ||
+    problem?.code == CorHubProblemCode.networkRetrying ||
+    problem?.code == CorHubProblemCode.sessionOffline;

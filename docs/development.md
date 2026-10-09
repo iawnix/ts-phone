@@ -17,7 +17,7 @@ independent suite. Detailed logs remain local and are not uploaded.
 On this workstation, use the private SDK and existing offline cache:
 
 ```bash
-export TS_PHONE_TEST_ROOT=/home/iaw/project/TSPi/local_debug/ts-phone
+export TS_PHONE_TEST_ROOT=/home/iaw/project/TSPi/local_debug/corhub
 export FLUTTER_BIN=/home/iaw/project/TSPi/local_debug/deps/flutter/3.44.0/bin/flutter
 export PUB_CACHE=/home/iaw/project/TSPi/local_debug/deps/flutter-pub
 export TS_PHONE_OFFLINE=1
@@ -37,7 +37,7 @@ From the TSPi checkout, after preparing its deterministic test environment:
 
 ```bash
 python3 tools/test/runner.py phone \
-  --phone-source /home/iaw/project/ts-phone \
+  --phone-source /home/iaw/project/corhub \
   --flutter-root /home/iaw/project/TSPi/local_debug/deps/flutter/3.44.0 \
   --pub-cache /home/iaw/project/TSPi/local_debug/deps/flutter-pub
 ```
