@@ -1,6 +1,6 @@
 """Mobile-only release and source-attestation primitives.
 
-The runtime lives in TSPi. This module deliberately contains no server,
+The runtime lives in ResearchAgent (the TSPi repository). This module deliberately contains no server,
 bridge, protocol archive, or deployment code.
 """
 
@@ -42,7 +42,7 @@ if not SHA256.fullmatch(EXPECTED_ANDROID_CERTIFICATE_SHA256):
     raise ValueError("TS_PHONE_RELEASE_CERTIFICATE_SHA256 must be a 64-character SHA-256 fingerprint")
 
 REQUIRED_SOURCE_PATHS = {
-    b"package.json",
+    b"tool/version.py",
     b"apps/mobile/pubspec.yaml",
     b"apps/mobile/lib/app_identity.dart",
     b"apps/mobile/tool/mobile-build-attestation.py",
@@ -54,6 +54,11 @@ EMBEDDED_SOURCE_SNAPSHOT_PATHS = {
 }
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 MAX_EMBEDDED_SOURCE_SNAPSHOT_BYTES = 16 * 1024
+
+
+def reject_private_source(relative: PurePosixPath) -> None:
+    if "local_debug" in relative.parts or relative.suffix.lower() in {".p12", ".pfx", ".jks", ".keystore"} or relative.name in {"keystore.pass", "key.properties", ".env"} or relative.name.startswith(".env."):
+        raise ComponentReleaseError(f"private data must not enter release source: {relative}")
 
 
 def source_snapshot(root: Path) -> dict[str, Any]:
@@ -107,6 +112,7 @@ def snapshot_from_tree(root: Path, relative_names: Iterable[bytes], *, git_commi
     digest.update(SOURCE_SNAPSHOT_SCHEMA_VERSION.encode("ascii") + b"\0")
     for raw_name in relative_names:
         relative = safe_relative(os.fsdecode(raw_name))
+        reject_private_source(relative)
         path = root.joinpath(*relative.parts)
         if path.is_symlink():
             raise ComponentReleaseError(f"release source must not contain symlinks: {relative}")
@@ -127,6 +133,7 @@ def snapshot_from_tree(root: Path, relative_names: Iterable[bytes], *, git_commi
 def copy_source_entries(root: Path, destination: Path, relative_names: Iterable[bytes]) -> None:
     for raw_name in relative_names:
         relative = safe_relative(os.fsdecode(raw_name))
+        reject_private_source(relative)
         source = root.joinpath(*relative.parts)
         if not source.exists():
             continue
@@ -143,6 +150,7 @@ def export_git_source(root: Path, destination: Path, git_commit: str, expected_n
         with tarfile.open(fileobj=io.BytesIO(encoded), mode="r:") as archive:
             for member in archive.getmembers():
                 relative = safe_relative(member.name.rstrip("/"))
+                reject_private_source(relative)
                 target = destination.joinpath(*relative.parts)
                 if member.isdir():
                     target.mkdir(mode=0o700, parents=True, exist_ok=True)

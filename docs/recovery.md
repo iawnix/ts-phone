@@ -1,20 +1,26 @@
 # Recovery
 
-TSPi Host is authoritative for sessions and transcripts. A phone restart,
+ResearchAgent Host/Pi owns durable sessions and transcripts. A phone restart,
 network loss, or app update does not remove server state.
 
-When the TSPi Link WebSocket closes, TS Phone marks the live view offline and
-keeps completed messages and unsent drafts on screen. The next refresh opens a
-new v8 connection, performs `hello`, reloads the session directory, attaches
-the selected session, and hydrates a complete transcript snapshot before
-re-enabling prompts. No prompt is retried automatically.
+After a Link disconnect the app marks the view offline and retains the current
+transcript and draft. Reconnection uses `initialize` with
+`research-agent-host/2`, reloads sessions and calls `session/attach` to obtain
+a fresh snapshot before enabling input. An uncertain input is never retried
+automatically; a manual retry retains its original message identity.
 
-If a session disappears from `pi.session-directory`, select another session or
-create one from the Host. If the Host is offline, open a workspace with
-`TSPi --workspace <name>` or restart `ts-app-server-tspi.service`, then retry.
-If device authorization was revoked or the Host identity changed, create a new
-code with `TSPi phone pair` and pair the phone again.
+If a session is unavailable, select another session or create one. If Host is
+offline, check the ResearchAgent installation and its managed service, or open
+`research-agent --workspace <name>`. If authorization was revoked, the Host
+identity changed, or the old TSPi protocol was upgraded, run
+`research-agent phone pair` and pair again. Do not edit token prefixes.
 
-For a local terminal, exiting the TSPi client only detaches that client. Stop
-the Host explicitly when maintenance is required. Pi JSONL files under
-the workspace `.pi` directory remain the recovery source.
+ResearchAgent 0.18.0 stores Pi durable session data in its installation state,
+not in a phone database. Follow the server's backup/recovery documentation;
+leaving the terminal or phone does not cancel a running server-side task.
+
+Android normally rejects APK downgrades. Prefer publishing a corrected build
+with a higher build number; installing an older APK may require uninstalling
+first, which deletes local settings and device authorization. The AAB is a store
+upload artifact, not a directly installable rollback package. Old protocol
+versions also require a compatible server; server workspace data remains separate.

@@ -1,0 +1,33 @@
+name: Client checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TS_PHONE_TEST_ROOT: ${{ runner.temp }}/ts-phone-tests
+      PUB_CACHE: ${{ runner.temp }}/ts-phone-pub
+      FLUTTER_SUPPRESS_ANALYTICS: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.0"
+          channel: stable
+          cache: false
+      - name: Check versions, release tools, analysis and independent mobile tests
+        run: ./tool/iterate.sh dev
+      - name: Remove private test files
+        if: always()
+        run: rm -rf -- "$TS_PHONE_TEST_ROOT" "$PUB_CACHE"

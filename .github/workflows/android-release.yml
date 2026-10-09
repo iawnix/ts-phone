@@ -2,101 +2,90 @@ name: TS Phone Android Release
 
 on:
   push:
-    tags:
-      - "ts-phone-v*"
+    tags: ["ts-phone-v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, for example ts-phone-v0.18.3+48"
+        description: "Existing immutable tag, e.g. ts-phone-v0.19.0+61"
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: ts-phone-release-${{ github.ref }}
+  group: ts-phone-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   android:
-    name: Build and publish Android artifacts
+    name: Check, build and publish Android
     runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-      TS_PHONE_RELEASE_CERTIFICATE_SHA256: ${{ secrets.TS_PHONE_RELEASE_CERTIFICATE_SHA256 }}
+      TS_PHONE_TEST_ROOT: ${{ runner.temp }}/ts-phone-tests
+      PUB_CACHE: ${{ runner.temp }}/ts-phone-pub
+      GRADLE_USER_HOME: ${{ runner.temp }}/ts-phone-gradle
+      FLUTTER_SUPPRESS_ANALYTICS: "true"
     steps:
-      - name: Check out the tagged source
+      - name: Check out tagged source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: Validate version, tag, changelog and unpublished release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tool/publish_release.py --tag "$RELEASE_TAG" --check
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.44.0"
           channel: stable
-          cache: true
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+          cache: false
+      - uses: android-actions/setup-android@v3
       - name: Install Android build tools
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Check release signing configuration
+      - name: Run independent checks
+        run: ./tool/iterate.sh dev
+      - name: Provision existing production signing identity
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.TS_PHONE_RELEASE_KEYSTORE_B64 }}
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.TS_PHONE_RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_CERTIFICATE: ${{ secrets.TS_PHONE_RELEASE_CERTIFICATE_SHA256 }}
         run: |
+          set -euo pipefail
+          umask 077
           test -n "$RELEASE_KEYSTORE_B64"
           test -n "$RELEASE_KEYSTORE_PASSWORD"
-          test -n "$TS_PHONE_RELEASE_CERTIFICATE_SHA256"
+          test -n "$RELEASE_CERTIFICATE"
           mkdir -p "$RUNNER_TEMP/ts-phone-signing"
           printf '%s' "$RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/ts-phone-signing/ts-phone-release.p12"
           printf '%s' "$RELEASE_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/ts-phone-signing/keystore.pass"
-          chmod 600 "$RUNNER_TEMP/ts-phone-signing"/*
-
-      - name: Run mobile checks
+      - name: Build and verify signed APKs and AAB
+        env:
+          TS_PHONE_SIGNING_DIR: ${{ runner.temp }}/ts-phone-signing
+          TS_PHONE_RELEASE_CERTIFICATE_SHA256: ${{ secrets.TS_PHONE_RELEASE_CERTIFICATE_SHA256 }}
         run: |
-          cd apps/mobile
-          dart format --output=none --set-exit-if-changed lib test
-          flutter analyze
-          flutter test
-
-      - name: Build signed Android artifacts
-        run: |
-          TS_PHONE_SIGNING_DIR="$RUNNER_TEMP/ts-phone-signing" \
           TS_PHONE_FLUTTER="$(command -v flutter)" \
           TS_PHONE_ANDROID_SDK="$ANDROID_HOME" \
           TS_PHONE_BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0" \
           TS_PHONE_JAVA_HOME="$JAVA_HOME" \
           apps/mobile/tool/build_release_android.sh
-
-      - name: Verify tag and package versions
-        run: |
-          mobile_version=$(awk '$1 == "version:" { print $2; exit }' apps/mobile/pubspec.yaml)
-          expected_tag="ts-phone-v${mobile_version}"
-          test "$RELEASE_TAG" = "$expected_tag"
-
-      - name: Publish GitHub Release
+      - name: Generate release checksums
+        working-directory: dist/android-current
+        run: sha256sum *.apk *.aab *.attestation.json | LC_ALL=C sort -k2 > SHA256SUMS
+      - name: Stage, verify and publish the complete release
         env:
           GH_TOKEN: ${{ github.token }}
+        run: python3 tool/publish_release.py --tag "$RELEASE_TAG"
+      - name: Remove signing material and private test files
+        if: always()
         run: |
-          mapfile -t assets < <(find -L dist/android-current -maxdepth 1 -type f -print | sort)
-          test "${#assets[@]}" -gt 0
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-          else
-            gh release create "$RELEASE_TAG" "${assets[@]}" \
-              --title "TS Phone ${RELEASE_TAG#ts-phone-}" \
-              --generate-notes \
-              --target "$GITHUB_SHA"
-          fi
+          rm -rf -- "$RUNNER_TEMP/ts-phone-signing" "$TS_PHONE_TEST_ROOT" "$PUB_CACHE" "$GRADLE_USER_HOME" "$RUNNER_TEMP/android-build"

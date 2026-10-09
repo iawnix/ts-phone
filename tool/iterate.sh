@@ -1,135 +1,23 @@
 #!/usr/bin/env bash
-
 set -Eeuo pipefail
-umask 077
-
 readonly ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-readonly MOBILE_ROOT="$ROOT/apps/mobile"
-readonly FLUTTER_BIN="${FLUTTER_BIN:-/home/iaw/soft/flutter/bin/flutter}"
-readonly DART_BIN="${DART_BIN:-/home/iaw/soft/flutter/bin/dart}"
-readonly ANDROID_SDK="${ANDROID_SDK:-/home/iaw/soft/android/sdk}"
-readonly JAVA_HOME_PATH="${JAVA_HOME_PATH:-/home/iaw/soft/jdk21-local/usr/lib/jvm/java-21-openjdk-amd64}"
-readonly DEFAULT_SIGNING_DIR="/home/iaw/.config/ts-phone/android-signing"
-
-die() {
-    printf 'Error[ts-phone-iterate]: %s\n' "$*" >&2
-    exit 1
-}
-
-log() {
-    printf 'Info[ts-phone-iterate]: %s\n' "$*"
-}
-
-usage() {
-    cat <<'EOF'
-Usage: tool/iterate.sh MODE [OPTIONS]
-
-Modes:
-  dev        Format, analyze, and test the Flutter client.
-  candidate  Run the complete client checks and build one arm64 APK.
-  release    Run the checks and build the signed Android release set.
-
-Options:
-  --allow-dirty  Allow a local dirty checkout for release attestation.
-  -h, --help     Show this help.
-
-Examples:
-  tool/iterate.sh dev
-  tool/iterate.sh candidate
-  tool/iterate.sh release
-  tool/iterate.sh release --allow-dirty
-EOF
-}
-
-run_step() {
-    local label=$1
+case "${1:-dev}" in
+  dev)
+    [[ $# -le 1 ]] || { echo 'dev accepts no options' >&2; exit 2; }
+    exec python3 "$ROOT/tool/check.py"
+    ;;
+  release)
     shift
-    local started=$SECONDS
-    log "$label"
-    "$@"
-    log "$label completed in $((SECONDS - started))s"
-}
-
-run_mobile() {
-    local label=$1
-    shift
-    run_step "$label" bash -c 'cd -- "$1" && shift && exec "$@"' bash "$MOBILE_ROOT" "$@"
-}
-
-verify_mobile_identity() {
-    local mobile_version version build identity_version identity_build
-    mobile_version=$(awk '$1 == "version:" { print $2; exit }' "$MOBILE_ROOT/pubspec.yaml")
-    version=${mobile_version%%+*}
-    build=${mobile_version##*+}
-    identity_version=$(sed -n "s/^const String tsPhoneAppVersion = '\([^']*\)';$/\1/p" "$MOBILE_ROOT/lib/app_identity.dart")
-    identity_build=$(sed -n "s/^const String tsPhoneAppBuild = '\([^']*\)';$/\1/p" "$MOBILE_ROOT/lib/app_identity.dart")
-    [[ "$identity_version" == "$version" && "$identity_build" == "$build" ]] ||
-        die "mobile app identity ($identity_version+$identity_build) does not match pubspec ($mobile_version)"
-}
-
-require_tools() {
-    [[ -x "$DART_BIN" ]] || die "Dart is missing: $DART_BIN"
-    [[ -x "$FLUTTER_BIN" ]] || die "Flutter is missing: $FLUTTER_BIN"
-}
-
-mobile_checks() {
-    require_tools
-    verify_mobile_identity
-    run_mobile "mobile format check" "$DART_BIN" format --output=none --set-exit-if-changed lib test
-    run_mobile "mobile analyzer" "$FLUTTER_BIN" analyze
-    run_mobile "mobile tests" "$FLUTTER_BIN" test
-}
-
-configure_flutter_environment() {
-    export JAVA_HOME="$JAVA_HOME_PATH"
-    export ANDROID_HOME="$ANDROID_SDK"
-    export ANDROID_SDK_ROOT="$ANDROID_SDK"
-    export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$ROOT/.gradle}"
-    export PUB_CACHE="${PUB_CACHE:-$ROOT/.pub-cache}"
-    [[ -x "$JAVA_HOME_PATH/bin/java" ]] || die "JDK is missing: $JAVA_HOME_PATH"
-    [[ -d "$ANDROID_SDK" ]] || die "Android SDK is missing: $ANDROID_SDK"
-}
-
-candidate_mobile_build() {
-    configure_flutter_environment
-    local signing_dir="${TS_PHONE_SIGNING_DIR:-$DEFAULT_SIGNING_DIR}"
-    [[ -f "$signing_dir/ts-phone-release.p12" && -f "$signing_dir/keystore.pass" ]] ||
-        die "candidate signing is unavailable; run apps/mobile/tool/setup_release_signing.sh or set TS_PHONE_SIGNING_DIR"
-    export TS_PHONE_SIGNING_DIR="$signing_dir"
-    run_mobile "candidate arm64 release APK" "$FLUTTER_BIN" build apk --release --target-platform android-arm64
-    log "candidate APK: $MOBILE_ROOT/build/app/outputs/flutter-apk/app-release.apk"
-}
-
-release_mode() {
-    local allow_dirty=false
-    while (($#)); do
-        case "$1" in
-            --allow-dirty) allow_dirty=true ;;
-            *) die "unknown release option: $1" ;;
-        esac
-        shift
-    done
-    mobile_checks
-    configure_flutter_environment
-    local build_args=()
-    [[ "$allow_dirty" == true ]] && build_args+=(--allow-dirty)
-    run_step "signed Android release set" "$ROOT/apps/mobile/tool/build_release_android.sh" "${build_args[@]}"
-}
-
-mode=${1:-}
-[[ -n "$mode" ]] || { usage; exit 2; }
-shift
-case "$mode" in
-    dev)
-        (($# == 0)) || die "dev accepts no options"
-        mobile_checks
-        ;;
-    candidate)
-        (($# == 0)) || die "candidate accepts no options"
-        mobile_checks
-        candidate_mobile_build
-        ;;
-    release) release_mode "$@" ;;
-    -h|--help) usage ;;
-    *) die "unknown mode: $mode" ;;
+    python3 "$ROOT/tool/check.py"
+    exec "$ROOT/apps/mobile/tool/build_release_android.sh" "$@"
+    ;;
+  candidate)
+    [[ $# -eq 1 ]] || { echo 'candidate accepts no options' >&2; exit 2; }
+    python3 "$ROOT/tool/check.py"
+    exec "$ROOT/apps/mobile/tool/build_release_android.sh" --allow-dirty
+    ;;
+  -h|--help)
+    echo 'Usage: tool/iterate.sh dev | candidate | release [--allow-dirty]'
+    ;;
+  *) echo 'Unknown mode; use --help.' >&2; exit 2 ;;
 esac

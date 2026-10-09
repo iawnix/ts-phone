@@ -1,74 +1,83 @@
 # TS Phone
 
-TS Phone 是 TSPi Host 的 Flutter 客户端。Host 将工作区内的请求转交普通 Pi 会话，
-Pi 负责执行和 JSONL 历史。手机展示同一会话，并提供任务监控的状态和启停入口。
+[English](README.md) · [下载 Android](https://github.com/iawnix/ts-phone/releases/latest) · [更新记录](CHANGELOG.md)
 
-## 运行架构
+TS Phone 是 [ResearchAgent](https://github.com/iawnix/TSPi) 的 Android/iOS
+Flutter 客户端。在手机上访问与终端相同的研究工作区和会话、发送消息、切换模型、
+查看工具输出和管理任务监控。任务执行与持久化会话历史保留在 ResearchAgent 服务端。
+
+## 安装和连接
+
+1. 从 GitHub 最新 Release 下载 **arm64-v8a release APK**，适用于大多数 Android
+   手机。发布页还提供 armeabi-v7a / x86_64 APK、用于商店分发的 AAB、源码摘要证明
+   和 `SHA256SUMS`。
+2. 安装 ResearchAgent，通过可信 HTTPS Link Relay 启用 Phone access。在服务端运行：
+
+   ```bash
+   research-agent --workspace reaction-a
+   research-agent phone pair
+   ```
+
+3. 在 App 中输入 Relay URL、8 位配对码和设备名。配对码五分钟内有效，只能使用一次。
+
+当前客户端面向 ResearchAgent **0.18.0**，使用 `research-agent-host/2` 和
+`research-agent-link.v1`。从旧 TSPi 协议升级时，必须更新 App 并**重新配对**；旧
+`tspd_` 凭据不能复用。兼容性由接口合同决定，不要求手机与服务端版本号相同。
+每个 Release 的说明会标注对应的服务端要求。
+
+目前发布 Android 安装包。iOS 保留源码，需要在 macOS 上使用 Apple 签名团队和
+provisioning profile 构建，暂不提供签名 iOS 下载。
+
+## 架构
 
 ```text
-TS Phone -- 出站 WSS --> TSPi Relay <-- 出站 WSS -- TSPi Host
-                                                    |
-                                              Pi Harness worker
-                                                    |
-                                            工作区 / 本地终端
+TS Phone -- WSS --> ResearchAgent Link Relay <-- WSS -- ResearchAgent Host
+                                                              |
+                                                        Pi Harness
+                                                              |
+                                                        工作区 / 终端
 ```
 
-使用 TSPi 打开工作区；需要时会自动启动安装级 Host：
-
-```bash
-./TSPi --workspace reaction-a
-```
-
-在该安装中运行 `TSPi phone pair`，然后在 App 中输入输出的 TSPi Relay URL 和 8 位
-配对码。App 使用一次性配对码换取本设备独立、可撤销的授权。手机通过
-`research-agent-link.v1` WebSocket 子协议承载 `research-agent-host/2` UTF-8 NDJSON。
-会话操作始终包含工作区和会话 ID。断线后重新 attach 获取完整快照；投递不确定的
-消息重试复用原消息 ID，避免新建一次输入。
-
-此客户端需要支持 `research-agent-host/2` 的 Host。升级 Host 后，使用 `research-agent-host/2`
-构建的旧版 App 必须重新构建并安装更新。
-
-## 仓库结构
-
-- `apps/mobile`：Flutter Android/iOS 应用。
-- `apps/mobile/lib/data/tspi_link_pairing.dart`：一次性设备配对。
-- `apps/mobile/lib/data/host_rpc_client.dart`：通过 TSPi Link 使用 Host JSON RPC。
-- `apps/mobile/lib/data/host_gateway.dart`：会话、模型、监控接口适配。
-- `apps/mobile/lib/features/monitors/monitor_page.dart`：项目任务监控列表和启停。
-- 首页提供项目选择器、会话搜索和所选项目的任务监控入口。
-- 已移除旧 Pi v8/Chord 适配器、手机审批面板和结构化分支时间线；真实消息及工具输出继续由 `HostGateway` 提供。
-- `apps/mobile/tool/build_release_android.sh`：带源码证明的签名 APK/AAB 构建脚本。
-- `apps/mobile/tool/mobile-build-attestation.py`：可复现源码与构建产物证明工具。
-
-本仓库有意不再包含 Node 服务端或 TS Phone 协议包；Host 实现在 TSPi
-包中。
+手机通过 Host API 使用工作区、会话、模型和监控。设备授权保存在平台安全存储中，
+模型凭据、执行与会话存储由服务端负责。断线重连获取完整快照；手动重试保留原消息
+ID。请使用可信 Relay：WSS 加密各段连接，但 Relay 可以读取转发流量。
 
 ## 开发
 
-安装 Flutter 3.44（或兼容的 stable 版本），然后运行：
+固定使用 Flutter **3.44.0**、Python **3.10+** 和已提交的 `pubspec.lock`。
+Android 发布还需要 JDK 17、Android SDK 36。
 
 ```bash
-cd apps/mobile
-flutter pub get
-dart format --output=none --set-exit-if-changed lib test
-flutter analyze
-flutter test
-```
-
-根目录脚本执行相同检查：
-
-```bash
+python3 tool/version.py check
 ./tool/iterate.sh dev
 ```
 
-`candidate` 构建本地 arm64 APK，`release` 构建签名 Android 发布集。每个产物
-都嵌入源码快照，发布文件只位于 `dist/android-current`。
+该入口在私有源码副本中检查版本、运行发布工具测试、Dart 格式检查、Flutter 静态
+分析和独立手机测试。先按[开发说明](docs/development.md)配置 SDK 与缓存路径。
+真实 Host/Pi 联调使用单独的 ResearchAgent 本地测试入口；自动化测试不代表实机验收。
 
-## 安全边界
+## 仓库和版本发布
 
-设备 token 只用于 TSPi Link WebSocket，由移动平台的安全存储保护，并且不会在连接
-界面显示。Host 的会话状态保留在服务器工作区；手机只保存 UI 偏好和最近
-选择的会话。
+| 路径 | 职责 |
+| --- | --- |
+| `apps/mobile/lib/` | Flutter 界面、Host 客户端和本地设置 |
+| `apps/mobile/test/` | 界面/单元测试，以及显式运行的 Host 联调 |
+| `apps/mobile/tool/` | Android 签名、构建验证和源码摘要证明 |
+| `tool/` | 版本管理与开发检查 |
+| `.github/workflows/` | PR 检查与标签触发的 Android 发布 |
+| `docs/` | 架构、开发、版本、部署与恢复说明 |
 
-详见 [docs/architecture.md](docs/architecture.md) 和
-[docs/deployment.md](docs/deployment.md)。
+`apps/mobile/pubspec.yaml` 是**唯一版本来源**。准备发布时运行：
+
+```bash
+python3 tool/version.py set 0.19.1+62   # 示例：下一次兼容修复
+# 补充对应 CHANGELOG.md 条目，验证并提交。
+python3 tool/version.py tag
+```
+
+构建号始终递增，标签格式为 `ts-phone-v<version>+<build>`，正式附件不可覆盖。
+详见[版本管理](docs/versioning.md)和[发布操作](docs/deployment.md)。本仓库只维护
+手机客户端，ResearchAgent Host 和 Link Relay 在 TSPi 仓库维护。
+
+其它文档：[架构](docs/architecture.md)、[发布产物](docs/artifacts.md)、
+[安全](docs/security.md)、[恢复](docs/recovery.md)、[开发约定](AGENTS.md)。
