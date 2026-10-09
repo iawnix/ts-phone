@@ -39,7 +39,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('CoRHub'), findsWidgets);
-    expect(find.text('TSPi Relay'), findsOneWidget);
+    expect(find.text('CoRAgent Relay'), findsOneWidget);
     expect(find.text('配对码'), findsOneWidget);
     expect(find.text('设备名称'), findsOneWidget);
     expect(find.text('配对'), findsOneWidget);
@@ -161,7 +161,7 @@ void main() {
     expect(title.maxLines, 2);
     expect(title.overflow, TextOverflow.ellipsis);
     expect(find.text('就绪'), findsNothing);
-    expect(find.text('TSPi'), findsNothing);
+    expect(find.text('CoRAgent'), findsNothing);
     expect(find.byKey(const ValueKey<String>('tool-raw-output')), findsNothing);
     expect(
       tester
@@ -210,7 +210,7 @@ void main() {
       find.byKey(const ValueKey<String>('tool-disclosure-row')),
     );
     expect(disclosure.color, Colors.transparent);
-    expect(find.text('TSPi'), findsNothing);
+    expect(find.text('CoRAgent'), findsNothing);
     expect(find.text('raw calculation output'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('tool-disclosure-row')));
@@ -275,7 +275,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TSPi'), findsNothing);
+    expect(find.text('CoRAgent'), findsNothing);
     expect(find.text('Research result'), findsOneWidget);
     expect(find.text('记录研究决策'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('tool-disclosure-row')));
@@ -353,7 +353,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ResearchAgent Link').first);
+    await tester.tap(find.text('CoRAgent Link').first);
     await tester.pumpAndSettle();
 
     expect(find.text('连接设置'), findsOneWidget);
@@ -364,9 +364,9 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('设置'), findsOneWidget);
-    expect(find.text('ResearchAgent Link'), findsWidgets);
+    expect(find.text('CoRAgent Link'), findsWidgets);
 
-    await tester.tap(find.text('ResearchAgent Link').first);
+    await tester.tap(find.text('CoRAgent Link').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
@@ -585,7 +585,7 @@ void main() {
     expect(store.localePreference, AppLocalePreference.en);
     expect(find.text('Language'), findsOneWidget);
     expect(find.text('Appearance'), findsOneWidget);
-    expect(find.text('ResearchAgent Link'), findsWidgets);
+    expect(find.text('CoRAgent Link'), findsWidgets);
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
       const Locale('en'),
@@ -612,7 +612,7 @@ void main() {
     await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
 
-    expect(find.text('TSPi Relay'), findsOneWidget);
+    expect(find.text('CoRAgent Relay'), findsOneWidget);
     expect(find.text('Pairing code'), findsOneWidget);
     expect(find.text('Device name'), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);

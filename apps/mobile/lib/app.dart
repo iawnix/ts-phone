@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'data/settings_store.dart';
 import 'data/corhub_api.dart';
-import 'data/tspi_link_pairing.dart';
+import 'data/link_pairing.dart';
 import 'features/connection/connection_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/sessions/conversation_shell.dart';
@@ -37,7 +37,7 @@ class CorHubApp extends StatefulWidget {
   /// Production leaves this unset so the app connects directly to the Pi App
   /// Server configured by the user.
   final CorHubGateway Function(ConnectionSettings settings)? gatewayBuilder;
-  final TspiLinkPairingRedeemer? pairingRedeemer;
+  final LinkPairingRedeemer? pairingRedeemer;
 
   @override
   State<CorHubApp> createState() => _CorHubAppState();

@@ -51,7 +51,7 @@ class SessionNoticeView extends StatelessWidget {
       SessionNoticeKind.offline => (
         AppIcons.cloud_off_outlined,
         TsInfoTone.warning,
-        l10n.tspiDisconnectedBanner,
+        l10n.agentDisconnectedBanner,
       ),
     };
 

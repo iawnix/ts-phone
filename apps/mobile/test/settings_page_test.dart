@@ -57,7 +57,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('connection-details-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('ResearchAgent Link'), findsOneWidget);
+      expect(find.text('CoRAgent Link'), findsOneWidget);
       expect(find.text('Endpoint'), findsNothing);
       final copy = find.byKey(const ValueKey('copy-server-address'));
       await tester.ensureVisible(copy);

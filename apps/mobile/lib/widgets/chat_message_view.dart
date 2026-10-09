@@ -359,7 +359,9 @@ class _MessageFrame extends StatelessWidget {
                     const SizedBox(width: 6),
                   ],
                   Text(
-                    isStreaming ? context.l10n.tspiGenerating : 'TSPi',
+                    isStreaming
+                        ? context.l10n.agentGenerating
+                        : context.l10n.agentName,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: labelColor,
                       fontWeight: FontWeight.w600,

@@ -598,7 +598,7 @@ class _Server {
         requests.add(request);
         if (request['method'] == 'initialize') {
           respond(request, {
-            'protocol': tspiHostProtocol,
+            'protocol': hostProtocol,
             'server_id': _serverId,
             'epoch': 'epoch-a',
             'capabilities': [],
@@ -639,7 +639,7 @@ class _Channel with StreamChannelMixin<Object?> implements WebSocketChannel {
   @override
   String? get closeReason => null;
   @override
-  String? get protocol => tspiHostLinkProtocol;
+  String? get protocol => hostLinkProtocol;
 }
 
 class _Sink extends DelegatingStreamSink<Object?> implements WebSocketSink {

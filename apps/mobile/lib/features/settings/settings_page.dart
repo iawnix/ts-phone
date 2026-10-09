@@ -444,7 +444,7 @@ class _SettingsPageState extends State<SettingsPage>
                                                           value:
                                                               connection == null
                                                               ? l10n.diagnosticNotChecked
-                                                              : tspiHostLinkProtocol,
+                                                              : hostLinkProtocol,
                                                         ),
                                                         const _SettingsDivider(),
                                                         _DiagnosticRow(

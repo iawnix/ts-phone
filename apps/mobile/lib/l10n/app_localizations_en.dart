@@ -24,10 +24,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectCorHub => 'Pair CoRHub';
 
   @override
-  String get mobileCompanion => 'Connect this device to your TSPi Host';
+  String get mobileCompanion => 'Connect this device to CoRAgent';
 
   @override
-  String get relay => 'TSPi Relay';
+  String get relay => 'CoRAgent Relay';
 
   @override
   String get relayHint => 'https://link.example.com';
@@ -66,19 +66,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get validationServerId =>
-      'The Host ID returned by TSPi Relay is invalid.';
+      'The Host ID returned by CoRAgent Relay is invalid.';
 
   @override
   String get validationDeviceId =>
-      'The Device ID returned by TSPi Relay is invalid.';
+      'The Device ID returned by CoRAgent Relay is invalid.';
 
   @override
   String get validationTokenInvalid =>
-      'The device authorization returned by TSPi Relay is invalid.';
+      'The device authorization returned by CoRAgent Relay is invalid.';
 
   @override
   String get validationPairingCode =>
-      'Enter the eight-character pairing code shown by TSPi.';
+      'Enter the eight-character pairing code shown by CoRAgent.';
 
   @override
   String get validationDeviceName =>
@@ -89,18 +89,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'The pairing code is invalid, expired, or already used.';
 
   @override
-  String get pairingRelayUnavailable => 'Could not reach TSPi Relay.';
+  String get pairingRelayUnavailable => 'Could not reach CoRAgent Relay.';
 
   @override
   String get pairingRelayResponseInvalid =>
-      'TSPi Relay returned an invalid response.';
+      'CoRAgent Relay returned an invalid response.';
 
   @override
   String get pairingProtocolUnsupported =>
       'This app does not support the Relay\'s Link protocol.';
 
   @override
-  String get pairingRejected => 'TSPi Relay rejected the pairing request.';
+  String get pairingRejected => 'CoRAgent Relay rejected the pairing request.';
 
   @override
   String get preferences => 'Preferences';
@@ -142,7 +142,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionDetails => 'Connection details';
 
   @override
-  String get corHubService => 'ResearchAgent Link';
+  String get corHubService => 'CoRAgent Link';
 
   @override
   String get notConfigured => 'Not configured';
@@ -152,7 +152,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String clientDescription(String version) {
-    return 'Client $version · TSPi mobile companion';
+    return 'Client $version · CoRHub mobile companion';
   }
 
   @override
@@ -161,7 +161,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'TSPi Relay';
+  String get endpoint => 'CoRAgent Relay';
 
   @override
   String get hostId => 'Host ID';
@@ -192,7 +192,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemModelUnavailable =>
-      'No model is ready in this TSPi session. Check the model selection on the App Server.';
+      'No model is ready in this CoRAgent session. Check the model selection on the App Server.';
 
   @override
   String get problemModelAuthMissing =>
@@ -224,11 +224,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemModelStorageUnavailable =>
-      'TSPi cannot access its model credentials or cache. Check the App Server\'s Pi directory permissions.';
+      'CoRAgent cannot access its model credentials or cache. Check the App Server\'s Pi directory permissions.';
 
   @override
   String get problemRuntimeExtensionError =>
-      'An extension failed in this TSPi session. Check the latest messages and App Server logs.';
+      'An extension failed in this CoRAgent session. Check the latest messages and App Server logs.';
 
   @override
   String get problemPromptRejected =>
@@ -297,7 +297,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noWorkspacesMessage =>
-      'Create a project to start a separate TSPi research workspace.';
+      'Create a project to start a separate CoRAgent research workspace.';
 
   @override
   String get workspaces => 'Projects';
@@ -407,7 +407,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get problemPreflightUnavailable =>
-      'TSPi could not verify this operation. Check the App Server\'s TSPi configuration and try again.';
+      'CoRAgent could not verify this operation. Check the App Server\'s CoRAgent configuration and try again.';
 
   @override
   String get problemManagementUnsupported =>
@@ -541,10 +541,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadSessionsFailed => 'Could not load sessions';
 
   @override
-  String get runtimeOffline => 'TSPi not running';
+  String get runtimeOffline => 'CoRAgent not running';
 
   @override
-  String get runtimeConnecting => 'Connecting to TSPi';
+  String get runtimeConnecting => 'Connecting to CoRAgent';
 
   @override
   String get runtimeIdle => 'Connected · Ready';
@@ -693,7 +693,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get composerSynchronizing => 'Syncing...';
 
   @override
-  String get composerOffline => 'TSPi is offline';
+  String get composerOffline => 'CoRAgent is offline';
 
   @override
   String get composerHistory => 'Read-only history';
@@ -736,21 +736,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'The connection was interrupted during generation. Check the last message on your computer first; it will not be resent automatically.';
 
   @override
-  String get tspiDisconnectedBanner =>
-      'TSPi disconnected. Synchronization will resume after it restarts.';
+  String get agentDisconnectedBanner =>
+      'CoRAgent disconnected. Synchronization will resume after it restarts.';
 
   @override
   String get reconnect => 'Reconnect';
 
   @override
-  String get tspiNotStartedTitle => 'TSPi has not started';
+  String get agentNotStartedTitle => 'CoRAgent has not started';
 
   @override
-  String get tspiNotStartedDescription =>
+  String get agentNotStartedDescription =>
       'Run this command on your computer. This page will connect automatically.';
 
   @override
-  String get waitingForTspi => 'Waiting for TSPi';
+  String get waitingForAgent => 'Waiting for CoRAgent';
 
   @override
   String get generationDisconnectedTitle =>
@@ -758,7 +758,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generationDisconnectedDescription =>
-      'The last prompt will not be resent automatically. Check the TSPi session on your computer first.';
+      'The last prompt will not be resent automatically. Check the CoRAgent session on your computer first.';
 
   @override
   String get waitingForRecovery => 'Waiting for session recovery';
@@ -795,7 +795,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageSynchronizing => 'Waiting for live sync';
 
   @override
-  String get tspiGenerating => 'TSPi · Generating';
+  String get agentName => 'CoRAgent';
+
+  @override
+  String get agentGenerating => 'CoRAgent · Generating';
 
   @override
   String get toolResult => 'Tool result';
@@ -866,7 +869,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Device authorization failed. Pair this phone again.';
 
   @override
-  String get problemSessionOffline => 'The TSPi session is offline';
+  String get problemSessionOffline => 'The CoRAgent session is offline';
 
   @override
   String get problemSessionChanged => 'The session changed. Synchronize again';
@@ -1017,7 +1020,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activationInspectionFailed =>
-      'The App Server could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.';
+      'The App Server could not complete the session guard check. Check the CoRAgent installation diagnostics before retrying. History and drafts are kept.';
 
   @override
   String get activationGuardInvalid =>

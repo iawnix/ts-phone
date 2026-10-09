@@ -19,8 +19,8 @@ set is content-addressed and switched into place atomically.
 
 The artifact contains only the Flutter client. It does not bundle a CoRHub
 server, protocol package, Node runtime, systemd unit, reverse proxy, or Pi
-credentials. Host releases are produced independently by ResearchAgent and are
-selected by the ResearchAgent installation's package pointer.
+credentials. Host releases are produced independently by CoRAgent and are
+selected by the CoRAgent installation's package pointer.
 
 To inspect a source attestation:
 

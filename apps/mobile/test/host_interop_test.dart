@@ -21,8 +21,8 @@ void main() {
                 ).readAsString(),
               )
               as Map;
-      expect(tspiHostProtocol, identity['host_protocol']);
-      expect(tspiHostLinkProtocol, identity['link_protocol']);
+      expect(hostProtocol, identity['host_protocol']);
+      expect(hostLinkProtocol, identity['link_protocol']);
       expect(identity['device_token_prefix'], 'rad_');
       final directory = await Directory(
         Platform.environment['RESEARCH_AGENT_TEST_ROOT']!,

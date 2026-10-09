@@ -3,7 +3,7 @@ import 'package:corhub/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/corhub_api.dart';
-import '../../data/tspi_link_pairing.dart';
+import '../../data/link_pairing.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../theme/corhub_theme.dart';
@@ -29,7 +29,7 @@ class ConnectionPage extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onOpenSettings;
   final ConnectionVerifier? verifier;
-  final TspiLinkPairingRedeemer? pairingRedeemer;
+  final LinkPairingRedeemer? pairingRedeemer;
 
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
@@ -89,7 +89,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
       ActionFeedback.error();
       setState(() {
         _error = switch (error) {
-          TspiLinkPairingException pairing => pairing.localizedMessage(
+          LinkPairingException pairing => pairing.localizedMessage(
             context.l10n,
           ),
           ConnectionValidationException validation =>
@@ -125,7 +125,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
         deviceName: _deviceNameController.text,
       );
     }
-    final client = TspiLinkPairingClient();
+    final client = LinkPairingClient();
     try {
       return await client.redeem(
         relayUrl: _relayController.text,

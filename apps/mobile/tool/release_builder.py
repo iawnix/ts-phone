@@ -1,6 +1,6 @@
 """Mobile-only release and source-attestation primitives.
 
-The runtime lives in ResearchAgent (the TSPi repository). This module deliberately contains no server,
+The runtime lives in CoRAgent (the server repository). This module deliberately contains no server,
 bridge, protocol archive, or deployment code.
 """
 

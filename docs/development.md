@@ -2,7 +2,7 @@
 
 Use Flutter 3.44.0 (Dart 3.12), Python 3.10+, Git and the committed pub lock.
 Android release builds additionally require JDK 17, SDK platform 36 and
-build-tools 36.0.0. Node is needed only by the ResearchAgent interop fixture;
+build-tools 36.0.0. Node is needed only by the CoRAgent interop fixture;
 this repository is not an npm package.
 
 ## Independent checks
@@ -33,7 +33,7 @@ upload test artifacts, logs or caches.
 
 ## Real Host/Pi interoperability
 
-From the TSPi checkout, after preparing its deterministic test environment:
+From the CoRAgent server checkout, after preparing its deterministic test environment:
 
 ```bash
 python3 tools/test/runner.py phone \
@@ -42,9 +42,9 @@ python3 tools/test/runner.py phone \
   --pub-cache /home/iaw/project/TSPi/local_debug/deps/flutter-pub
 ```
 
-This uses real Dart transport, a real local ResearchAgent Host/Pi worker, fake
+This uses real Dart transport, a real local CoRAgent Host/Pi worker, fake
 credentials and a deterministic local model. The runner captures both source
-trees, isolates networking and cleans up owned processes. Follow TSPi's test
+trees, isolates networking and cleans up owned processes. Follow the server's test
 instructions rather than launching the fixture manually. Tests and evidence
 must remain under its `local_debug/`; do not upload that content.
 

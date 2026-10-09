@@ -111,7 +111,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(text), findsOneWidget);
       expect(find.byType(CorHubBrandMark), findsNothing);
-      expect(find.text('TSPi'), findsNothing);
+      expect(find.text('CoRAgent'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }

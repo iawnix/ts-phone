@@ -61,7 +61,7 @@ class HostGateway
     final metadata = await _client.connect();
     return {
       'apiVersion': metadata['protocol'],
-      'serviceVersion': 'TSPi Host',
+      'serviceVersion': 'CoRAgent Host',
       'serverId': metadata['server_id'] ?? settings.serverId,
     };
   });
@@ -617,7 +617,7 @@ class HostGateway
   }
 
   String _revision(String workspace, String session) =>
-      '$tspiHostProtocol:${settings.serverId}:$workspace:$session';
+      '$hostProtocol:${settings.serverId}:$workspace:$session';
   static String _key(String workspace, String session) =>
       '$workspace\u0000$session';
   static Map<String, Object?> _target(String workspace, String session) => {

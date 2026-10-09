@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
 import '../data/corhub_api.dart';
-import '../data/tspi_link_pairing.dart';
+import '../data/link_pairing.dart';
 import '../models/connection_settings.dart';
 import '../models/workspace.dart';
 import 'app_localizations.dart';
@@ -66,7 +66,7 @@ extension ConnectionValidationLocalizations on ConnectionValidationReason {
   };
 }
 
-extension TspiLinkPairingLocalizations on TspiLinkPairingException {
+extension LinkPairingLocalizations on LinkPairingException {
   String localizedMessage(AppLocalizations l10n) => switch (code) {
     'invalid_pairing_code' => l10n.validationPairingCode,
     'invalid_device_name' => l10n.validationDeviceName,

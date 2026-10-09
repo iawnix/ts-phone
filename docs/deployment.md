@@ -1,7 +1,7 @@
 # Android release operations
 
 CoRHub is a signed Flutter application. Install and enable Phone access on
-[ResearchAgent](https://github.com/iawnix/TSPi), then run on the server:
+[CoRAgent](https://github.com/iawnix/TSPi), then run on the server:
 
 ```bash
 research-agent --workspace reaction-a
@@ -11,16 +11,16 @@ research-agent phone devices
 research-agent phone revoke <device-id>
 ```
 
-Host connects outbound to ResearchAgent Link Relay; no public Host port is
+Host connects outbound to CoRAgent Link Relay; no public Host port is
 required. The app uses the trusted HTTPS Relay origin and one-time pairing
-code. Upgrading from legacy TSPi protocol identities requires re-pairing.
+code. Upgrading from legacy protocol identities requires re-pairing.
 
 ## Publish on GitHub
 
 1. Fetch tags, choose an increasing version/build with `tool/version.py set`,
    and add its exact `## X.Y.Z+N` section to `CHANGELOG.md`.
 2. Run `tool/iterate.sh dev` and, for protocol changes, the local deterministic
-   ResearchAgent interoperability suite. Review the source and merge to `main`.
+   CoRAgent interoperability suite. Review the source and merge to `main`.
 3. From that clean commit, create and push the annotated tag:
 
    ```bash
