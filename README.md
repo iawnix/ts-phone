@@ -79,7 +79,7 @@ Automated tests do not constitute physical-device acceptance.
 `apps/mobile/pubspec.yaml` is the **single version source**. To prepare a release:
 
 ```bash
-python3 tool/version.py set 0.19.1+62   # example: next compatible fix
+python3 tool/version.py set 0.19.1+63   # example: next compatible fix
 # Add the matching CHANGELOG.md entry, validate, and commit.
 python3 tool/version.py tag
 ```

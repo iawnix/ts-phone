@@ -3,7 +3,7 @@
 Release versions follow `MAJOR.MINOR.PATCH+BUILD`. Unreleased source is not an
 installable GitHub release. See [versioning](docs/versioning.md).
 
-## 0.19.0+61
+## 0.19.0+62
 
 ### ResearchAgent compatibility / 兼容性
 
@@ -33,6 +33,11 @@ installable GitHub release. See [versioning](docs/versioning.md).
   Host/Pi interoperability is a separate check; neither replaces physical-device
   acceptance. An installed Android/iOS device test is not claimed for this release.
 - iOS source is included; no signed iOS binary is published.
+
+## 0.19.0+61
+
+No binaries were published: the Android SDK setup requested the retired `tools`
+package. Superseded by build 62; the original tag is retained unchanged.
 
 ## 0.18.3+48
 
