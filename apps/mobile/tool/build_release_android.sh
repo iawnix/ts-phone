@@ -65,8 +65,8 @@ export TS_PHONE_SIGNING_DIR="$SIGNING_DIR"
 export JAVA_HOME="$JAVA_HOME_PATH"
 export ANDROID_HOME="$ANDROID_SDK"
 export ANDROID_SDK_ROOT="$ANDROID_SDK"
-export GRADLE_USER_HOME="${SOURCE_ROOT}/.gradle"
-export PUB_CACHE="${SOURCE_ROOT}/.pub-cache"
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-${SOURCE_ROOT}/.gradle}"
+export PUB_CACHE="${PUB_CACHE:-${SOURCE_ROOT}/.pub-cache}"
 
 build_root=$(mktemp -d -t ts-phone-android-build.XXXXXXXX)
 [[ -d "$build_root" && ! -L "$build_root" ]] ||

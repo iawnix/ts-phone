@@ -5,6 +5,8 @@ import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/phone_model.dart';
 import '../../theme/ts_phone_theme.dart';
+import 'model_presentation.dart';
+import 'model_provider_mark.dart';
 
 Future<PhoneModel?> showModelPicker(
   BuildContext context, {
@@ -109,6 +111,32 @@ class _ModelPickerState extends State<_ModelPicker> {
               '${model.name} ${model.reference}'.toLowerCase().contains(_query),
         )
         .toList();
+    final grouped = <String, List<PhoneModel>>{};
+    for (final model in models) {
+      grouped
+          .putIfAbsent(modelProviderLabel(model.provider), () => [])
+          .add(model);
+    }
+    for (final group in grouped.values) {
+      group.sort((a, b) {
+        final aSelected = a.reference == widget.selected;
+        final bSelected = b.reference == widget.selected;
+        if (aSelected != bSelected) return aSelected ? -1 : 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+    }
+    final providerGroups = grouped.entries.toList()
+      ..sort((a, b) {
+        final aSelected = a.value.any(
+          (model) => model.reference == widget.selected,
+        );
+        final bSelected = b.value.any(
+          (model) => model.reference == widget.selected,
+        );
+        if (aSelected != bSelected) return aSelected ? -1 : 1;
+        return a.key.compareTo(b.key);
+      });
+    final showProviderHeaders = providerGroups.length > 1;
     return PopScope(
       canPop: !_saving,
       child: Padding(
@@ -194,28 +222,80 @@ class _ModelPickerState extends State<_ModelPicker> {
                         )
                       : ListView.builder(
                           shrinkWrap: true,
-                          itemCount: models.length,
+                          itemCount: providerGroups.fold<int>(
+                            0,
+                            (count, group) =>
+                                count +
+                                group.value.length +
+                                (showProviderHeaders ? 1 : 0),
+                          ),
                           itemBuilder: (context, index) {
-                            final model = models[index];
-                            final selected = model.reference == widget.selected;
+                            var cursor = index;
+                            MapEntry<String, List<PhoneModel>>? group;
+                            PhoneModel? model;
+                            for (final candidate in providerGroups) {
+                              if (showProviderHeaders) {
+                                if (cursor == 0) {
+                                  group = candidate;
+                                  break;
+                                }
+                                cursor -= 1;
+                              }
+                              if (cursor < candidate.value.length) {
+                                group = candidate;
+                                model = candidate.value[cursor];
+                                break;
+                              }
+                              cursor -= candidate.value.length;
+                            }
+                            if (model == null) {
+                              return Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  8,
+                                  20,
+                                  4,
+                                ),
+                                child: Text(
+                                  group!.key,
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: colors.onSurfaceVariant,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              );
+                            }
+                            final currentModel = model;
+                            final selected =
+                                currentModel.reference == widget.selected;
                             return ListTile(
-                              key: ValueKey('model-${model.reference}'),
+                              key: ValueKey('model-${currentModel.reference}'),
                               enabled:
                                   !_saving && widget.canSelect?.call() != false,
+                              leading: ModelProviderMark(
+                                provider: currentModel.provider,
+                                modelId: currentModel.id,
+                                size: 24,
+                              ),
                               title: Text(
-                                model.name,
+                                modelDisplayName(currentModel.name),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
-                                '${model.provider} · ${model.id}',
+                                [
+                                  modelProviderLabel(currentModel.provider),
+                                  if (currentModel.contextWindow != null)
+                                    '${formatTokenCount(currentModel.contextWindow!)} ${l10n.sessionContextWindow}',
+                                ].join(' · '),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               trailing: selected
                                   ? const Icon(AppIcons.check_rounded)
                                   : null,
-                              onTap: () => _select(model),
+                              onTap: () => _select(currentModel),
                             );
                           },
                         ),

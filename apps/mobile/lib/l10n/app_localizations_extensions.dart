@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 
 import '../data/ts_phone_api.dart';
 import '../data/tspi_link_pairing.dart';
-import '../features/chat/chat_controller.dart';
 import '../models/connection_settings.dart';
 import '../models/workspace.dart';
 import 'app_localizations.dart';
@@ -129,18 +128,6 @@ extension TsPhoneProblemLocalizations on TsPhoneProblem {
     TsPhoneProblemCode.requestFailed => l10n.problemRequestFailed,
     TsPhoneProblemCode.networkRetrying => l10n.networkRetrying,
     TsPhoneProblemCode.invalidMessage => l10n.invalidMessage,
-    TsPhoneProblemCode.invalidApproval => l10n.invalidApproval,
     TsPhoneProblemCode.invalidHistoryMessage => l10n.invalidHistoryMessage,
-    TsPhoneProblemCode.approvalExpired => l10n.approvalExpired,
-    TsPhoneProblemCode.approvalStale => l10n.approvalStale,
-    TsPhoneProblemCode.approvalMissing => l10n.approvalMissing,
-  };
-}
-
-extension ChatActivityLocalizations on ChatActivity {
-  String localizedMessage(AppLocalizations l10n) => switch (kind) {
-    ChatActivityKind.runningTool =>
-      toolName == null ? l10n.toolRunningGeneric : l10n.toolRunning(toolName!),
-    ChatActivityKind.toolFailed => l10n.toolFailed,
   };
 }

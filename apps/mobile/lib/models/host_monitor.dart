@@ -15,21 +15,17 @@ class HostMonitor {
     if (id is! String || id.isEmpty || json['enabled'] is! bool) {
       throw const FormatException('Invalid monitor');
     }
-    final state = json['state'] is Map ? json['state']! as Map : const {};
-    final delivery = json['delivery'] is Map
-        ? json['delivery']! as Map
-        : const {};
     return HostMonitor(
       id: id,
-      title: (json['intent_id'] ?? json['node_id'] ?? id).toString(),
+      title: (json['node_id'] ?? json['job_id'] ?? id).toString(),
       enabled: json['enabled'] == true,
-      state: state['last_state']?.toString() ?? 'unknown',
+      state: json['last_state']?.toString() ?? 'unknown',
       sessionId: json['session_id'] as String?,
       lastObservedAt: DateTime.tryParse(
-        state['last_observed_at']?.toString() ?? '',
+        json['last_observed_at']?.toString() ?? '',
       ),
-      pendingCount: (delivery['pending_count'] as num?)?.toInt() ?? 0,
-      lastError: (state['last_error'] ?? delivery['last_error'])?.toString(),
+      pendingCount: (json['pending_count'] as num?)?.toInt() ?? 0,
+      lastError: json['last_error']?.toString(),
     );
   }
 

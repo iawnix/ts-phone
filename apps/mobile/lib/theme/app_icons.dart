@@ -80,6 +80,7 @@ class AppIcons {
   static const IconData science_outlined = LucideIcons.flaskConical;
   static const IconData search = LucideIcons.search;
   static const IconData search_rounded = LucideIcons.search;
+  static const IconData send_rounded = LucideIcons.send;
   static const IconData settings_backup_restore_rounded = LucideIcons.settings2;
   static const IconData settings_outlined = LucideIcons.settings;
   static const IconData shield_outlined = LucideIcons.shield;

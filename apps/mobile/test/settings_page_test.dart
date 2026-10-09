@@ -15,7 +15,7 @@ import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
 void main() {
   const hostId = '123e4567-e89b-42d3-a456-426614174000';
   const deviceId = '223e4567-e89b-42d3-a456-426614174000';
-  const token = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+  const token = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
   for (final copyFails in [false, true]) {
     testWidgets('service address copy reports its actual result: $copyFails', (

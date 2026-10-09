@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import '../models/phone_model.dart';
-import '../models/session_timeline.dart';
 import '../models/workspace.dart';
 
 class TsPhoneApiException implements Exception {
@@ -35,11 +34,7 @@ enum TsPhoneProblemCode {
   requestFailed,
   networkRetrying,
   invalidMessage,
-  invalidApproval,
   invalidHistoryMessage,
-  approvalExpired,
-  approvalStale,
-  approvalMissing,
   agentRunChanged,
   managementChanged,
   resourcesBusy,
@@ -114,6 +109,9 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
       'protocol_mismatch' ||
       'method_not_found' => TsPhoneProblemCode.incompatible,
       'model_unavailable' => TsPhoneProblemCode.modelUnavailable,
+      'invalid_model' ||
+      'model_not_found' ||
+      'model_unconfigured' => TsPhoneProblemCode.modelUnavailable,
       'model_auth_missing' => TsPhoneProblemCode.modelAuthMissing,
       'provider_unavailable' => TsPhoneProblemCode.providerUnavailable,
       'provider_rate_limited' => TsPhoneProblemCode.providerRateLimited,
@@ -122,10 +120,6 @@ TsPhoneProblem describeTsPhoneProblem(Object error) {
       'prompt_rejected' => TsPhoneProblemCode.promptRejected,
       'runtime_extension_error' => TsPhoneProblemCode.runtimeExtensionError,
       'generation_incomplete' => TsPhoneProblemCode.generationIncomplete,
-      'approval_expired' => TsPhoneProblemCode.approvalExpired,
-      'approval_stale' => TsPhoneProblemCode.approvalStale,
-      'approval_missing' ||
-      'approval_not_found' => TsPhoneProblemCode.approvalMissing,
       'agent_run_stale' ||
       'agent_not_running' => TsPhoneProblemCode.agentRunChanged,
       _ => TsPhoneProblemCode.requestFailed,
@@ -189,10 +183,6 @@ class TsPhoneMessageSnapshot {
     required this.lastEventId,
     this.activeAgentRunId,
     this.messageIds,
-    this.hasMore = false,
-    this.nextBefore,
-    this.hasLater = false,
-    this.nextAfter,
   });
 
   final String sessionId;
@@ -201,57 +191,6 @@ class TsPhoneMessageSnapshot {
   final String lastEventId;
   final String? activeAgentRunId;
   final List<String>? messageIds;
-  final bool hasMore;
-  final String? nextBefore;
-  final bool hasLater;
-  final String? nextAfter;
-}
-
-class TsPhoneTimelineSnapshot {
-  const TsPhoneTimelineSnapshot({
-    required this.sessionId,
-    required this.sessionRevision,
-    required this.items,
-    required this.history,
-    required this.hasMore,
-    required this.lastEventId,
-    required this.capabilities,
-    this.activeAgentRunId,
-    this.nextBefore,
-    this.hasLater = false,
-    this.nextAfter,
-  });
-
-  final String sessionId;
-  final String sessionRevision;
-  final List<SessionTimelineItem> items;
-  final TimelineHistorySummary history;
-  final bool hasMore;
-  final String? nextBefore;
-  final bool hasLater;
-  final String? nextAfter;
-  final String lastEventId;
-  final Set<String> capabilities;
-  final String? activeAgentRunId;
-}
-
-abstract interface class TsPhoneHistoryGateway {
-  Future<TsPhoneMessageSnapshot> getMessageWindow(
-    String workspaceId,
-    String sessionId, {
-    String? after,
-    bool fromStart = false,
-    required int limit,
-  });
-
-  Future<TsPhoneTimelineSnapshot> getTimelineWindow(
-    String workspaceId,
-    String sessionId, {
-    String? after,
-    bool fromStart = false,
-    String? branch,
-    required int limit,
-  });
 }
 
 abstract interface class TsPhoneGateway {
@@ -260,17 +199,8 @@ abstract interface class TsPhoneGateway {
   Future<List<SessionSummary>> listSessions(String workspaceId);
   Future<TsPhoneMessageSnapshot> getMessages(
     String workspaceId,
-    String sessionId, {
-    String? before,
-    int? limit,
-  });
-  Future<TsPhoneTimelineSnapshot> getTimeline(
-    String workspaceId,
-    String sessionId, {
-    String? before,
-    int? limit,
-    String? branch,
-  });
+    String sessionId,
+  );
   Future<void> sendMessage(
     String workspaceId,
     String sessionId,
@@ -283,13 +213,6 @@ abstract interface class TsPhoneGateway {
     String sessionId, {
     required String sessionRevision,
     required String agentRunId,
-  });
-  Future<void> respondToApproval(
-    String workspaceId,
-    String sessionId,
-    String approvalId, {
-    required String sessionRevision,
-    required bool approved,
   });
   Stream<TsPhoneEvent> events(
     String workspaceId,

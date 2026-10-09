@@ -1,10 +1,10 @@
 # Deployment
 
 TS Phone is deployed as a signed Flutter application. The runtime it connects
-to is the Pi App Server shipped by TSPi; this repository has no server daemon
+to is the TSPi Host shipped by TSPi; this repository has no server daemon
 to install or expose.
 
-## Pi App Server prerequisites
+## TSPi Host prerequisites
 
 On the machine that owns the TSPi installation, enable TSPi Link during
 installation and start the installation Host by opening a workspace:
@@ -58,5 +58,5 @@ revoke an old identity with `TSPi phone revoke <device-id>`.
 ## Updates and rollback
 
 Android releases are immutable. Install a previous APK/AAB from the GitHub
-release if a rollback is required. App Server sessions and workspace data are
+release if a rollback is required. Host sessions and workspace data are
 not part of the mobile artifact and are unaffected by an app update.

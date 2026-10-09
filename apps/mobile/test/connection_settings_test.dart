@@ -4,7 +4,19 @@ import 'package:ts_phone/models/connection_settings.dart';
 void main() {
   const hostId = '123e4567-e89b-42d3-a456-426614174000';
   const deviceId = '223e4567-e89b-42d3-a456-426614174000';
-  const token = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+  const token = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
+  test('rejects retired device token prefixes', () {
+    expect(
+      () => ConnectionSettings(
+        serverUrl: 'https://link.example.test',
+        serverId: hostId,
+        deviceId: deviceId,
+        token: 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      ),
+      throwsFormatException,
+    );
+  });
 
   test('normalizes HTTPS Relay origins', () {
     final settings = ConnectionSettings(

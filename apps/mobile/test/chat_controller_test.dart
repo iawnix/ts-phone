@@ -1,2000 +1,442 @@
 import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/features/chat/chat_controller.dart';
 import 'package:ts_phone/features/chat/chat_view_memory.dart';
 import 'package:ts_phone/models/chat_message.dart';
-import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 
+const revision = '11111111-1111-4111-8111-111111111111';
+ChatController controllerFor(
+  FakeGateway api, {
+  ChatViewMemory? memory,
+  Duration timeout = const Duration(seconds: 15),
+}) => ChatController(
+  api: api,
+  workspaceId: 'ts_001',
+  sessionId: 'session-test',
+  initialSessionRevision: revision,
+  initialRuntimeState: RuntimeState.idle,
+  accessMode: SessionAccessMode.controller,
+  outbox: memory?.outbox,
+  initialPreview: memory?.preview,
+  snapshotTimeout: timeout,
+);
+Future<void> flush() => Future<void>.delayed(Duration.zero);
+
 void main() {
-  test('empty assistant outcomes survive history refresh', () async {
+  test('Host snapshots preserve errors and real tool output', () async {
     final api = FakeGateway()
-      ..snapshot = const TsPhoneMessageSnapshot(
+      ..snapshot = TsPhoneMessageSnapshot(
         sessionId: 'session-test',
-        sessionRevision: '11111111-1111-4111-8111-111111111111',
+        sessionRevision: revision,
         messages: [
           {'role': 'assistant', 'content': [], 'outputState': 'failed'},
           {'role': 'assistant', 'content': [], 'outputState': 'aborted'},
+          {
+            'role': 'toolResult',
+            'toolName': 'bash',
+            'content': [
+              {'type': 'text', 'text': 'result'},
+            ],
+          },
         ],
-        lastEventId: 'epoch:0',
+        lastEventId: '0',
       );
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: api.snapshot.sessionRevision,
-      initialRuntimeState: RuntimeState.idle,
-      accessMode: SessionAccessMode.controller,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-    expect(controller.messages.map((message) => message.outputState), [
-      AssistantOutputState.failed,
-      AssistantOutputState.aborted,
-    ]);
-    await controller.refreshMessages();
-    expect(controller.messages.length, 2);
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    expect(chat.messages[0].outputState, AssistantOutputState.failed);
+    expect(chat.messages[1].outputState, AssistantOutputState.aborted);
+    expect(chat.messages[2].tools.single.body, 'result');
+    await chat.refreshMessages();
+    expect(chat.messages.length, 3);
   });
-
   test(
-    'history seek follows active appends without changing explicit branches',
-    () async {
-      var leaf = '00000003';
-      TsPhoneTimelineSnapshot page(
-        int index, {
-        bool earlier = false,
-        bool later = false,
-      }) => timelineSnapshot(
-        items: [
-          TimelineMessageItem(
-            id: index.toRadixString(16).padLeft(8, '0'),
-            turnId: '00000000',
-            message: ChatMessage.fromJson(userMessage('message-$index')),
-          ),
-        ],
-        totalItems: 6,
-        hasMore: earlier,
-        nextBefore: earlier ? index.toRadixString(16).padLeft(8, '0') : null,
-        hasLater: later,
-        nextAfter: later ? index.toRadixString(16).padLeft(8, '0') : null,
-        selectedBranchId: leaf,
-        activeBranchId: leaf,
-      );
-      final api = FakeGateway()
-        ..timelineResponder = ({before, branch}) async =>
-            page(3, earlier: true);
-      api.timelineWindowResponder =
-          ({after, required fromStart, branch, required limit}) async {
-            expect(branch, isNull);
-            if (fromStart) {
-              leaf = '00000004';
-              return page(0, later: true);
-            }
-            expect(after, '00000000');
-            leaf = '00000005';
-            return page(1, earlier: true, later: true);
-          };
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
-        initialCapabilities: {timelineCapability, 'history.seek'},
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      expect(await controller.jumpToStart(), isTrue);
-      expect(await controller.loadLaterMessages(), isTrue);
-      expect(controller.messages.map((message) => message.text), [
-        'message-0',
-        'message-1',
-      ]);
-      expect(controller.timelineHistory?.selectedBranchId, '00000005');
-      expect(controller.viewingInactiveBranch, isFalse);
-    },
-  );
-
-  test(
-    'history seek is bounded, keeps live events out, and reloads the real tail',
-    () async {
-      const revision = '11111111-1111-4111-8111-111111111111';
-      TsPhoneMessageSnapshot page(
-        int start,
-        int end, {
-        bool later = false,
-      }) => TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: revision,
-        messages: [for (var i = start; i < end; i++) userMessage('message-$i')],
-        messageIds: [
-          for (var i = start; i < end; i++) i.toRadixString(16).padLeft(8, '0'),
-        ],
-        hasMore: start > 0,
-        nextBefore: start > 0 ? start.toRadixString(16).padLeft(8, '0') : null,
-        hasLater: later,
-        nextAfter: later ? (end - 1).toRadixString(16).padLeft(8, '0') : null,
-        lastEventId: 'epoch:0',
-      );
-      final api = FakeGateway()..snapshot = page(502, 505);
-      var requests = 0;
-      api.windowResponder =
-          ({after, required fromStart, required limit}) async {
-            requests++;
-            expect(limit, 200);
-            if (fromStart) {
-              expect(after, isNull);
-              return page(0, 2, later: true);
-            }
-            expect(after, '00000001');
-            return page(2, 4, later: true);
-          };
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: revision,
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
-        initialCapabilities: {'history.seek'},
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      expect(await controller.jumpToStart(), isTrue);
-      expect(requests, 1);
-      expect(controller.messages.map((m) => m.text), [
-        'message-0',
-        'message-1',
-      ]);
-      api.addEvent('message_end', {
-        'message': assistantMessage('new live reply'),
-      });
-      api.addEvent('session.snapshot', {
-        'isStreaming': false,
-        'messages': [userMessage('latest snapshot')],
-      });
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.messages.length, 2);
-      expect(await controller.loadLaterMessages(), isTrue);
-      expect(controller.messages.map((m) => m.text), [
-        'message-0',
-        'message-1',
-        'message-2',
-        'message-3',
-      ]);
-      api.snapshot = page(504, 506);
-      expect(await controller.returnToLatest(), isTrue);
-      expect(controller.viewingHistoryWindow, isFalse);
-      expect(controller.messages.map((m) => m.text), [
-        'message-504',
-        'message-505',
-      ]);
-      expect(requests, 2);
-    },
-  );
-
-  test(
-    'failed seek preserves the previous list and branch selection',
-    () async {
-      final api = FakeGateway()
-        ..timelineResponder = ({before, branch}) async => timelineSnapshot(
-          items: [
-            TimelineMessageItem(
-              id: '00000002',
-              turnId: '00000001',
-              message: ChatMessage.fromJson(userMessage('branch tail')),
-            ),
-          ],
-          totalItems: 2,
-          hasMore: true,
-          nextBefore: '00000002',
-          selectedBranchId: '00000002',
-          includeCommands: false,
-          branches: const [
-            TimelineBranchSummary(
-              id: '00000002',
-              active: false,
-              itemCount: 2,
-              messageCount: 2,
-              activityCount: 0,
-              turnCount: 1,
-            ),
-          ],
-        );
-      api.timelineWindowResponder =
-          ({after, required fromStart, branch, required limit}) async {
-            expect(branch, '00000002');
-            expect(fromStart, isTrue);
-            expect(limit, 50);
-            throw const TsPhoneApiException('Read failed', statusCode: 409);
-          };
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
-        initialCapabilities: {timelineCapability, 'history.seek'},
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      expect(await controller.jumpToStart(), isFalse);
-      expect(controller.messages.single.text, 'branch tail');
-      expect(controller.timelineHistory?.selectedBranchId, '00000002');
-      expect(controller.canSend, isFalse);
-    },
-  );
-
-  test(
-    'model readiness is independent from phone authentication and survives snapshots',
+    'snapshot replaces transcript and deduplicates optimistic echo',
     () async {
       final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
-        initialPromptProblem: 'model_unavailable',
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      expect(controller.canSend, isFalse);
-      expect(controller.problem?.code, TsPhoneProblemCode.modelUnavailable);
-      api.addEvent('session.snapshot', {
-        'isStreaming': false,
-        'messages': [],
-        'canPrompt': false,
-        'promptProblem': 'model_auth_missing',
-      });
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.problem?.kind, TsPhoneProblemKind.request);
-      expect(controller.problem?.code, TsPhoneProblemCode.modelAuthMissing);
-      api.addEvent('session_state', {'state': 'idle', 'canPrompt': true});
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.problem, isNull);
-      expect(controller.canSend, isTrue);
+      final chat = controllerFor(api);
+      addTearDown(chat.dispose);
+      await chat.initialize();
+      expect(await chat.send('hello'), isTrue);
+      final id = api.sentIds.single;
+      api.publish(messages: [userMessage('hello', id: id)]);
+      await flush();
+      expect(chat.messages.where((m) => m.text == 'hello'), hasLength(1));
+      expect(chat.messages.single.deliveryState, isNull);
+      expect(chat.outbox.messages, isEmpty);
+      api.publish(messages: [assistantMessage('new branch history')]);
+      await flush();
+      expect(chat.messages.single.text, 'new branch history');
     },
   );
-
-  test('an early input event cannot hide a rejected preflight', () async {
+  test('echo before a delayed response remains canonical', () async {
+    final api = FakeGateway();
     final pending = Completer<void>();
-    final api = FakeGateway()..nextSend = pending.future;
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      initialRuntimeState: RuntimeState.idle,
-      accessMode: SessionAccessMode.controller,
-      clientMessageIdFactory: () => 'phone-preflight',
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-    final send = controller.send('please review');
-    api.addEvent('input', {
-      'text': 'please review',
-      'origin': 'phone',
-      'clientMessageId': 'phone-preflight',
-    });
-    await Future<void>.delayed(Duration.zero);
-    pending.completeError(
-      const TsPhoneApiException(
-        'No API key',
-        statusCode: 409,
-        code: 'model_auth_missing',
-      ),
-    );
-    expect(await send, isFalse);
-    expect(controller.problem?.code, TsPhoneProblemCode.modelAuthMissing);
-    expect(
-      controller.messages.where((m) => m.clientMessageId == 'phone-preflight'),
-      isEmpty,
-    );
+    api.nextSend = pending.future;
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    final send = chat.send('hello');
+    await flush();
+    api.publish(messages: [userMessage('hello', id: api.sentIds.single)]);
+    await flush();
+    pending.complete();
+    expect(await send, isTrue);
+    expect(chat.messages.single.deliveryState, isNull);
+    expect(chat.outbox.messages, isEmpty);
   });
-
+  test('uncertain retry reuses the same submission ID', () async {
+    final api = FakeGateway()..sendError = TimeoutException('lost response');
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    expect(await chat.send('hello'), isFalse);
+    expect(chat.outbox.uncertain('hello'), isNotNull);
+    api.sendError = null;
+    expect(await chat.send('hello'), isTrue);
+    expect(api.sentIds, hasLength(2));
+    expect(api.sentIds.toSet(), hasLength(1));
+  });
   test(
-    'transport failure retains an uncertain message and never retries it',
+    'uncertain echo in refreshed history prevents a duplicate send',
     () async {
-      final api = FakeGateway()
-        ..sendError = const TsPhoneApiException('Unavailable', statusCode: 503);
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
+      final api = FakeGateway()..sendError = TimeoutException('lost response');
+      final chat = controllerFor(api);
+      addTearDown(chat.dispose);
+      await chat.initialize();
+      await chat.send('hello');
+      api.snapshot = TsPhoneMessageSnapshot(
         sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
+        sessionRevision: revision,
+        messages: [userMessage('hello', id: api.sentIds.single)],
+        lastEventId: '1',
       );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      expect(await controller.send('only once'), isFalse);
-      expect(
-        controller.messages.last.deliveryState,
-        ChatDeliveryState.uncertain,
-      );
-      expect(controller.problem?.code, TsPhoneProblemCode.deliveryUncertain);
+      expect(await chat.send('hello'), isTrue);
       expect(api.sendCalls, 1);
     },
   );
-
-  test(
-    'cached history renders immediately but never grants command authority',
-    () async {
-      final preview = ChatHistoryPreview(
-        revision: 'revision-1',
-        messages: [ChatMessage.fromJson(userMessage('Cached history'))],
-        messageIds: const ['00000001'],
-        items: const [],
-        history: null,
-        hasMore: false,
-        before: null,
-      );
-      final controller = ChatController(
-        api: FakeGateway(),
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: 'revision-1',
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
-        initialPreview: preview,
-      );
-      addTearDown(controller.dispose);
-      expect(controller.messages.single.text, 'Cached history');
-      expect(controller.canSend, isFalse);
-      expect(await controller.send('Must not send'), isFalse);
-      final changed = ChatController(
-        api: FakeGateway(),
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: 'revision-2',
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
-        initialPreview: preview,
-      );
-      addTearDown(changed.dispose);
-      expect(changed.messages, isEmpty);
-      expect(changed.canSend, isFalse);
-    },
-  );
-
-  test('display memory is bounded and isolated by workspace and session', () {
-    final memory = ConversationMemory();
-    final first = memory.view('ts_001', 'session_1')..draft = 'first project';
-    expect(memory.view('ts_002', 'session_1').draft, isEmpty);
-    expect(memory.view('ts_001', 'session_1'), same(first));
-    for (var index = 2; index <= 10; index++) {
-      memory.view('ts_001', 'session_$index');
-    }
-    expect(memory.view('ts_001', 'session_1').draft, isEmpty);
+  test('matching text never confirms uncertain delivery', () async {
+    final api = FakeGateway()..sendError = TimeoutException('lost response');
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    await chat.send('same');
+    api.publish(messages: [userMessage('same')]);
+    await flush();
+    expect(chat.outbox.uncertain('same'), isNotNull);
   });
-
-  test(
-    'fresh history replaces a cached branch with different entry IDs',
-    () async {
-      final api = FakeGateway()
-        ..snapshot = TsPhoneMessageSnapshot(
-          sessionId: 'session-test',
-          sessionRevision: 'revision-1',
-          messages: [userMessage('New branch')],
-          messageIds: const ['00000002'],
-          lastEventId: 'event-2',
-        );
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: 'revision-1',
-        initialRuntimeState: RuntimeState.idle,
-        accessMode: SessionAccessMode.controller,
-        initialPreview: ChatHistoryPreview(
-          revision: 'revision-1',
-          messages: [ChatMessage.fromJson(userMessage('Old branch'))],
-          messageIds: const ['00000001'],
-          items: const [],
-          history: null,
-          hasMore: false,
-          before: null,
-        ),
+  test('definitive rejection removes optimistic message', () async {
+    final api = FakeGateway()
+      ..sendError = const TsPhoneApiException(
+        'rejected',
+        code: 'prompt_rejected',
+        statusCode: 409,
       );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      expect(controller.messages.map((message) => message.text), [
-        'New branch',
-      ]);
-    },
-  );
-
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    expect(await chat.send('denied'), isFalse);
+    expect(chat.messages.where((m) => m.text == 'denied'), isEmpty);
+    expect(chat.problem?.code, TsPhoneProblemCode.promptRejected);
+  });
+  test('memory preserves uncertain send across page disposal', () async {
+    final memory = ChatViewMemory();
+    final api = FakeGateway()..sendError = TimeoutException('lost');
+    final chat = controllerFor(api, memory: memory);
+    await chat.initialize();
+    await chat.send('hello');
+    final id = api.sentIds.single;
+    chat.dispose();
+    final nextApi = FakeGateway();
+    final next = controllerFor(nextApi, memory: memory);
+    addTearDown(next.dispose);
+    await next.initialize();
+    await next.send('hello');
+    expect(nextApi.sentIds.single, id);
+  });
   test(
-    'reveals the latest page before loading earlier research activity on demand',
+    'late send response survives disposal without notifying dead page',
     () async {
+      final memory = ChatViewMemory();
       final api = FakeGateway();
-      api.timelineResponder = ({before, branch}) async {
-        if (before == null) {
-          return timelineSnapshot(
-            items: <SessionTimelineItem>[
-              TimelineActivityItem(
-                id: '00000003',
-                turnId: '00000001',
-                activity: const TimelineActivity(
-                  category: TimelineActivityCategory.subagent,
-                  status: TimelineActivityStatus.completed,
-                  title: 'subagent_run',
-                  role: 'compute',
-                ),
-              ),
-              TimelineMessageItem(
-                id: '00000004',
-                turnId: '00000001',
-                message: ChatMessage.fromJson(assistantMessage('latest')),
-              ),
-            ],
-            totalItems: 4,
-            hasMore: true,
-            nextBefore: '00000003',
-          );
-        }
-        expect(before, '00000003');
-        return timelineSnapshot(
-          items: <SessionTimelineItem>[
-            TimelineMessageItem(
-              id: '00000001',
-              turnId: '00000001',
-              message: ChatMessage.fromJson(userMessage('first turn')),
-            ),
-            TimelineMessageItem(
-              id: '00000002',
-              turnId: '00000001',
-              message: ChatMessage.fromJson(assistantMessage('earlier')),
-            ),
-          ],
-          totalItems: 4,
-        );
-      };
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-        initialCapabilities: const <String>{timelineCapability},
-      );
-      addTearDown(controller.dispose);
-
-      await controller.initialize();
-
-      expect(api.timelineCalls, 1);
-      expect(controller.loadedTimelineItemCount, 2);
-      expect(controller.canLoadEarlierMessages, isTrue);
-      await controller.loadEarlierMessages();
-
-      expect(api.timelineCalls, 2);
-      expect(controller.loadedTimelineItemCount, 4);
+      final pending = Completer<void>();
+      api.nextSend = pending.future;
+      final chat = controllerFor(api, memory: memory);
+      await chat.initialize();
+      final sending = chat.send('late');
+      chat.dispose();
+      pending.complete();
+      expect(await sending, isTrue);
       expect(
-        controller.timelineItems.whereType<TimelineActivityItem>(),
-        hasLength(1),
+        memory.outbox.messages.single.state,
+        ChatDeliveryState.synchronizing,
       );
-      expect(controller.messages.map((message) => message.text), <String>[
-        'first turn',
-        'earlier',
-        'latest',
-      ]);
-      expect(controller.canLoadEarlierMessages, isFalse);
     },
   );
-
-  test(
-    'stops an earlier timeline page from mutating state after dispose',
-    () async {
-      final earlierRequested = Completer<void>();
-      final earlierResponse = Completer<TsPhoneTimelineSnapshot>();
-      final api = FakeGateway();
-      api.timelineResponder = ({before, branch}) async => timelineSnapshot(
-        items: <SessionTimelineItem>[
-          TimelineMessageItem(
-            id: '00000003',
-            turnId: '00000001',
-            message: ChatMessage.fromJson(assistantMessage('latest')),
-          ),
-        ],
-        totalItems: 1,
-      );
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-        initialCapabilities: const <String>{timelineCapability},
-      );
-      await controller.initialize();
-      api.addEvent('message_start', <String, Object?>{
-        'message': <String, Object?>{'role': 'assistant'},
-      });
-      api.addEvent('message_update', <String, Object?>{
-        'assistantMessageEvent': <String, Object?>{
-          'type': 'text_delta',
-          'delta': 'still streaming',
-        },
-      });
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.streamingText, 'still streaming');
-
-      api.timelineResponder = ({before, branch}) {
-        if (before == null) {
-          return Future<TsPhoneTimelineSnapshot>.value(
-            timelineSnapshot(
-              items: <SessionTimelineItem>[
-                TimelineMessageItem(
-                  id: '00000003',
-                  turnId: '00000001',
-                  message: ChatMessage.fromJson(assistantMessage('latest')),
-                ),
-              ],
-              totalItems: 2,
-              hasMore: true,
-              nextBefore: '00000003',
-            ),
-          );
-        }
-        expect(before, '00000003');
-        if (!earlierRequested.isCompleted) earlierRequested.complete();
-        return earlierResponse.future;
-      };
-
-      await controller.refreshMessages();
-      final refresh = controller.loadEarlierMessages();
-      await earlierRequested.future;
-      controller.dispose();
-      earlierResponse.complete(
-        timelineSnapshot(
-          items: <SessionTimelineItem>[
-            TimelineMessageItem(
-              id: '00000002',
-              turnId: '00000001',
-              message: ChatMessage.fromJson(assistantMessage('earlier')),
-            ),
-          ],
-          totalItems: 2,
-        ),
-      );
-
-      await expectLater(refresh, completes);
-      expect(controller.messages.map((message) => message.text), ['latest']);
-    },
-  );
-
-  test('an inactive timeline branch is read-only', () async {
+  test('disconnect keeps transcript and disables sending', () async {
     final api = FakeGateway();
-    api.timelineResponder = ({before, branch}) async => timelineSnapshot(
-      items: <SessionTimelineItem>[
-        TimelineMessageItem(
-          id: branch == '00000002' ? '00000002' : '00000003',
-          turnId: '00000001',
-          message: ChatMessage.fromJson(
-            assistantMessage(branch == '00000002' ? 'alternate' : 'active'),
-          ),
-        ),
-      ],
-      totalItems: 1,
-      selectedBranchId: branch ?? '00000003',
-      includeCommands: branch != '00000002',
-      branches: const <TimelineBranchSummary>[
-        TimelineBranchSummary(
-          id: '00000002',
-          active: false,
-          itemCount: 1,
-          messageCount: 1,
-          activityCount: 0,
-          turnCount: 1,
-        ),
-        TimelineBranchSummary(
-          id: '00000003',
-          active: true,
-          itemCount: 1,
-          messageCount: 1,
-          activityCount: 0,
-          turnCount: 1,
-        ),
-      ],
-    );
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-      initialCapabilities: const <String>{timelineCapability},
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-    expect(controller.viewingInactiveBranch, isFalse);
-
-    await controller.selectTimelineBranch('00000002');
-
-    expect(controller.viewingInactiveBranch, isTrue);
-    expect(controller.messages.single.text, 'alternate');
-    expect(controller.canSend, isFalse);
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'idle',
-      'canPrompt': true,
-      'capabilities': <String>[timelineCapability, promptCapability],
-    });
-    api.addEvent('input', <String, Object?>{'text': 'active prompt'});
-    api.addEvent('message_end', <String, Object?>{
-      'message': assistantMessage('active reply'),
-    });
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.messages.single.text, 'alternate');
-    expect(controller.canSend, isFalse);
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    api.failEventStream();
+    await flush();
+    expect(chat.messages.single.text, 'existing');
+    expect(chat.canSend, isFalse);
+    await chat.retryConnection();
+    await flush();
+    expect(chat.canSend, isTrue);
+    expect(api.eventConnectionCount, 2);
   });
-
-  test(
-    'load all history traverses every page above the automatic limit',
-    () async {
-      const totalItems = 2501;
-      final api = FakeGateway();
-      api.timelineResponder = ({before, branch}) async {
-        final end = before == null
-            ? totalItems
-            : int.parse(before, radix: 16) - 1;
-        final candidateStart = end - 499;
-        final start = candidateStart < 1 ? 1 : candidateStart;
-        final items = <SessionTimelineItem>[
-          for (var id = start; id <= end; id += 1)
-            TimelineMessageItem(
-              id: id.toRadixString(16).padLeft(8, '0'),
-              turnId: '00000001',
-              message: ChatMessage.fromJson(assistantMessage('message-$id')),
-            ),
-        ];
-        return timelineSnapshot(
-          items: items,
-          totalItems: totalItems,
-          hasMore: start > 1,
-          nextBefore: start > 1 ? items.first.id : null,
-        );
-      };
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-        initialCapabilities: const <String>{timelineCapability},
-      );
-      addTearDown(controller.dispose);
-
-      await controller.initialize();
-      expect(controller.loadedTimelineItemCount, 500);
-      expect(controller.canLoadEarlierMessages, isTrue);
-
-      await controller.loadAllHistory();
-
-      expect(api.timelineCalls, 6);
-      expect(controller.loadedTimelineItemCount, totalItems);
-      expect(controller.timelineItems.first.id, '00000001');
-      expect(controller.timelineItems.last.id, '000009c5');
-      expect(controller.canLoadEarlierMessages, isFalse);
-    },
-  );
-
-  test(
-    'load all history stops when the timeline cursor does not advance',
-    () async {
-      final api = FakeGateway();
-      api.timelineResponder = ({before, branch}) async => timelineSnapshot(
-        items: <SessionTimelineItem>[
-          TimelineMessageItem(
-            id: '0000000a',
-            turnId: '00000001',
-            message: ChatMessage.fromJson(assistantMessage('latest')),
-          ),
-        ],
-        totalItems: 2501,
-        hasMore: true,
-        nextBefore: '0000000a',
-      );
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-        initialCapabilities: const <String>{timelineCapability},
-      );
-      addTearDown(controller.dispose);
-
-      await controller.initialize();
-      await controller.loadAllHistory();
-
-      expect(api.timelineCalls, 2);
-      expect(controller.problem?.kind, TsPhoneProblemKind.incompatible);
-      expect(controller.problem?.code, TsPhoneProblemCode.incompatible);
-      expect(controller.loadingAllHistory, isFalse);
-    },
-  );
-
-  test('persisted timeline replaces equivalent transient messages', () async {
-    var persisted = false;
+  test('suspend and resume fences old streams and refreshes history', () async {
     final api = FakeGateway();
-    api.timelineResponder = ({before, branch}) async => timelineSnapshot(
-      items: <SessionTimelineItem>[
-        TimelineMessageItem(
-          id: '00000001',
-          turnId: '00000001',
-          message: ChatMessage.fromJson(userMessage('existing')),
-        ),
-        if (persisted)
-          TimelineMessageItem(
-            id: '00000002',
-            turnId: '00000002',
-            message: ChatMessage.fromJson(<String, Object?>{
-              'role': 'user',
-              'content': <Object?>[
-                <String, Object?>{'type': 'text', 'text': 'CLI prompt'},
-              ],
-              'timestamp': DateTime.utc(2026, 8, 15).millisecondsSinceEpoch,
-            }),
-          ),
-        if (persisted)
-          TimelineMessageItem(
-            id: '00000003',
-            turnId: '00000002',
-            message: ChatMessage.fromJson(assistantMessage('complete reply')),
-          ),
-      ],
-      totalItems: persisted ? 3 : 1,
-    );
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-      initialCapabilities: const <String>{timelineCapability},
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    api.addEvent('input', <String, Object?>{'text': 'CLI prompt'});
-    api.addEvent('message_end', <String, Object?>{
-      'message': assistantMessage('complete reply'),
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.timelineItems, hasLength(3));
-    expect(
-      controller.timelineItems.where(
-        (item) => !RegExp(r'^[0-9a-f]{8}$').hasMatch(item.id),
-      ),
-      hasLength(2),
-    );
-
-    persisted = true;
-    await controller.refreshMessages();
-
-    expect(controller.timelineItems, hasLength(3));
-    expect(controller.loadedTimelineItemCount, 3);
-    expect(controller.messages.map((message) => message.text), <String>[
-      'existing',
-      'CLI prompt',
-      'complete reply',
-    ]);
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    chat.suspendEventStream();
+    api.publish(messages: [userMessage('ignored')]);
+    await flush();
+    expect(chat.messages.single.text, 'existing');
+    expect(chat.canSend, isFalse);
+    chat.resumeEventStream();
+    await flush();
+    expect(api.messageSnapshotCalls, 2);
+    expect(chat.canSend, isTrue);
   });
-
-  test('loads offline disk history without enabling phone commands', () async {
-    final api = FakeGateway()
-      ..snapshot = TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: '11111111-1111-4111-8111-111111111111',
-        messages: <Object?>[userMessage('restored history')],
-        lastEventId: 'epoch:0',
-      );
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.observer,
-      initialRuntimeState: RuntimeState.offline,
-      initialHistoryAvailable: true,
-      initialCanPrompt: false,
-    );
-    addTearDown(controller.dispose);
-
-    await controller.initialize();
-    expect(api.messageSnapshotCalls, 1);
-    expect(controller.messages.single.text, 'restored history');
-    expect(controller.historyOnly, isTrue);
-    expect(controller.canRefresh, isTrue);
-    expect(controller.canSend, isFalse);
-    expect(await controller.send('must not send'), isFalse);
-    expect(api.lastMessage, isNull);
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'idle',
-      'isStreaming': false,
-      'historyAvailable': true,
-      'historyOnly': false,
-      'canPrompt': true,
-      'accessMode': 'controller',
-    });
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.historyOnly, isFalse);
-    expect(controller.accessMode, SessionAccessMode.controller);
-    expect(controller.canSend, isTrue);
-  });
-
-  test('prepends earlier pages and keeps them across live snapshots', () async {
-    final api = FakeGateway()
-      ..snapshot = TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: '11111111-1111-4111-8111-111111111111',
-        messages: <Object?>[
-          userMessage('current-10'),
-          assistantMessage('current-11'),
-        ],
-        messageIds: const <String>['0000000a', '0000000b'],
-        hasMore: true,
-        nextBefore: '0000000a',
-        lastEventId: 'epoch:0',
-      )
-      ..earlierSnapshot = TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: '11111111-1111-4111-8111-111111111111',
-        messages: <Object?>[
-          userMessage('earlier-8'),
-          assistantMessage('earlier-9'),
-        ],
-        messageIds: const <String>['00000008', '00000009'],
-        lastEventId: 'epoch:0',
-      );
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-
-    await controller.initialize();
-    expect(controller.canLoadEarlierMessages, isTrue);
-    expect(await controller.loadEarlierMessages(), isTrue);
-    expect(api.lastBefore, '0000000a');
-    expect(api.lastLimit, 200);
-    expect(controller.messages.map((message) => message.text), <String>[
-      'earlier-8',
-      'earlier-9',
-      'current-10',
-      'current-11',
-    ]);
-    expect(controller.canLoadEarlierMessages, isFalse);
-
-    api.addEvent('session.snapshot', <String, Object?>{
-      'sessionId': 'session-test',
-      'isStreaming': false,
-      'messages': <Object?>[
-        userMessage('current-10'),
-        assistantMessage('current-11'),
-        assistantMessage('current-12'),
-      ],
-      'messageIds': <String>['0000000a', '0000000b', '0000000c'],
-      'hasMore': true,
-      'nextBefore': '0000000a',
-    });
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.messages.map((message) => message.text), <String>[
-      'earlier-8',
-      'earlier-9',
-      'current-10',
-      'current-11',
-      'current-12',
-    ]);
-    expect(controller.canLoadEarlierMessages, isFalse);
-  });
-
-  test('replaces abandoned messages when the live Pi branch changes', () async {
-    final api = FakeGateway()
-      ..snapshot = TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: '11111111-1111-4111-8111-111111111111',
-        messages: <Object?>[
-          userMessage('root'),
-          assistantMessage('shared'),
-          assistantMessage('abandoned'),
-        ],
-        messageIds: const <String>['00000001', '00000002', '00000003'],
-        lastEventId: 'epoch:0',
-      );
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    api.addEvent('session.snapshot', <String, Object?>{
-      'sessionId': 'session-test',
-      'isStreaming': false,
-      'messages': <Object?>[
-        userMessage('root'),
-        assistantMessage('shared'),
-        assistantMessage('active branch'),
-      ],
-      'messageIds': <String>['00000001', '00000002', '00000004'],
-      'hasMore': false,
-    });
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.messages.map((message) => message.text), <String>[
-      'root',
-      'shared',
-      'active branch',
-    ]);
-  });
-
   test(
-    'mirrors CLI input and sends phone prompts to the same session',
+    'snapshot timeout unblocks retry and late completion is ignored',
     () async {
       final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-      );
-      addTearDown(controller.dispose);
-
-      await controller.initialize();
-      expect(controller.messages.single.text, 'existing');
-      expect(api.lastEventIds, <String?>['epoch:0']);
-
-      api.addEvent('input', <String, Object?>{
-        'type': 'input',
-        'text': 'CLI prompt',
-        'source': 'interactive',
-        'origin': 'local',
-      });
-      api.addEvent('agent_start', <String, Object?>{
-        'type': 'agent_start',
-        'agentRunId': 'run-cli-1',
-      });
-      api.addEvent('message_start', <String, Object?>{
-        'type': 'message_start',
-        'message': <String, Object?>{'role': 'assistant'},
-      });
-      api.addEvent('message_update', <String, Object?>{
-        'type': 'message_update',
-        'assistantMessageEvent': <String, Object?>{
-          'type': 'text_delta',
-          'delta': 'streamed',
-        },
-      });
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.messages.last.text, 'CLI prompt');
-      expect(controller.runtimeState, RuntimeState.running);
-      expect(controller.streamingText, 'streamed');
-      expect(await controller.send('phone prompt'), isTrue);
-      expect(api.lastMessage, 'phone prompt');
-    },
-  );
-
-  test('tracks the App Server agent run identity', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    expect(controller.activeAgentRunId, isNull);
-
-    api.addEvent('agent_start', <String, Object?>{
-      'type': 'agent_start',
-      'agentRunId': 'run-1',
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.runtimeState, RuntimeState.running);
-    expect(controller.activeAgentRunId, 'run-1');
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'running',
-      'isStreaming': true,
-      'activeAgentRunId': 'run-1',
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.activeAgentRunId, 'run-1');
-
-    api.addEvent('agent_settled', <String, Object?>{
-      'type': 'agent_settled',
-      'agentRunId': 'run-1',
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.runtimeState, RuntimeState.idle);
-    expect(controller.activeAgentRunId, isNull);
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'idle',
-      'isStreaming': false,
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.activeAgentRunId, isNull);
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'running',
-      'isStreaming': true,
-      'activeAgentRunId': 'run-2',
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.activeAgentRunId, 'run-2');
-
-    api.addEvent('agent_start', <String, Object?>{
-      'type': 'agent_start',
-      'agentRunId': 'run-2',
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.activeAgentRunId, 'run-2');
-  });
-
-  test(
-    'REST snapshot promotes a stale idle summary to the active run',
-    () async {
-      final api = FakeGateway()
-        ..snapshot = TsPhoneMessageSnapshot(
+      final pending = Completer<TsPhoneMessageSnapshot>();
+      api.nextSnapshot = pending.future;
+      final chat = controllerFor(api, timeout: const Duration(milliseconds: 5));
+      addTearDown(chat.dispose);
+      await chat.initialize();
+      expect(chat.isSynchronizing, isFalse);
+      expect(chat.canSend, isFalse);
+      await chat.refreshMessages();
+      pending.complete(
+        TsPhoneMessageSnapshot(
           sessionId: 'session-test',
-          sessionRevision: '11111111-1111-4111-8111-111111111111',
-          activeAgentRunId: 'run-snapshot',
-          messages: const <Object?>[],
-          lastEventId: 'epoch:1',
-        );
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
+          sessionRevision: revision,
+          messages: [userMessage('stale')],
+          lastEventId: 'old',
+        ),
       );
-      addTearDown(controller.dispose);
-
-      await controller.initialize();
-
-      expect(controller.runtimeState, RuntimeState.running);
-      expect(controller.activeAgentRunId, 'run-snapshot');
+      await flush();
+      expect(chat.messages.single.text, 'existing');
+      expect(chat.canSend, isTrue);
     },
   );
-
-  test('REST snapshot retires a stale running summary', () async {
+  test('abort targets only the current Host turn', () async {
     final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      initialActiveAgentRunId: 'run-old',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.running,
-    );
-    addTearDown(controller.dispose);
-
-    await controller.initialize();
-
-    expect(controller.runtimeState, RuntimeState.idle);
-    expect(controller.activeAgentRunId, isNull);
-  });
-
-  test('refuses an abort after the session revision changes', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'running',
-      'isStreaming': true,
-      'activeAgentRunId': 'run-original',
-    });
-    await Future<void>.delayed(Duration.zero);
-    final expectedAgentRunId = controller.activeAgentRunId!;
-    final expectedRevision = controller.sessionRevision;
-
-    api.snapshot = TsPhoneMessageSnapshot(
-      sessionId: 'session-test',
-      sessionRevision: '22222222-2222-4222-8222-222222222222',
-      messages: const <Object?>[],
-      lastEventId: 'replacement:1',
-    );
-    await controller.refreshMessages();
-
-    expect(controller.runtimeState, RuntimeState.idle);
-    expect(controller.activeAgentRunId, isNull);
-    expect(controller.sessionRevision, isNot(expectedRevision));
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    api.publish(running: true, turn: 'turn-1');
+    await flush();
     expect(
-      await controller.abort(
-        expectedSessionRevision: expectedRevision,
-        expectedAgentRunId: expectedAgentRunId,
+      await chat.abort(
+        expectedSessionRevision: revision,
+        expectedAgentRunId: 'old',
       ),
       isFalse,
     );
-    expect(api.abortCalls, 0);
-  });
-
-  test('sends abort only for the matching App Server agent run', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    api.addEvent('agent_start', <String, Object?>{
-      'type': 'agent_start',
-      'agentRunId': 'run-current',
-    });
-    await Future<void>.delayed(Duration.zero);
-
     expect(
-      await controller.abort(
-        expectedSessionRevision: controller.sessionRevision,
-        expectedAgentRunId: 'run-stale',
-      ),
-      isFalse,
-    );
-    expect(api.abortCalls, 0);
-
-    expect(
-      await controller.abort(
-        expectedSessionRevision: controller.sessionRevision,
-        expectedAgentRunId: 'run-current',
+      await chat.abort(
+        expectedSessionRevision: revision,
+        expectedAgentRunId: 'turn-1',
       ),
       isTrue,
     );
-    expect(api.abortCalls, 1);
-    expect(api.lastAbortAgentRunId, 'run-current');
-  });
-
-  for (final errorCode in <String>['agent_run_stale', 'agent_not_running']) {
-    test('reconciles the active run after $errorCode rejects abort', () async {
-      final abortResponse = Completer<void>();
-      final api = FakeGateway()..nextAbort = abortResponse.future;
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-
-      api.addEvent('agent_start', <String, Object?>{
-        'type': 'agent_start',
-        'agentRunId': 'run-original',
-      });
-      await Future<void>.delayed(Duration.zero);
-      final abort = controller.abort(
-        expectedSessionRevision: controller.sessionRevision,
-        expectedAgentRunId: 'run-original',
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      api.snapshot = TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: '11111111-1111-4111-8111-111111111111',
-        activeAgentRunId: 'run-replacement',
-        messages: const <Object?>[],
-        lastEventId: 'epoch:replacement',
-      );
-      abortResponse.completeError(
-        TsPhoneApiException(
-          'Abort target changed',
-          statusCode: 409,
-          code: errorCode,
-        ),
-      );
-
-      expect(await abort, isFalse);
-      expect(api.abortCalls, 1);
-      expect(api.messageSnapshotCalls, 2);
-      expect(controller.runtimeState, RuntimeState.running);
-      expect(controller.activeAgentRunId, 'run-replacement');
-      expect(controller.problem, isNull);
-    });
-  }
-
-  test('surfaces each phone approval once', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    final requestFuture = controller.uiRequests.first;
-    final payload = <String, Object?>{
-      'id': 'approval-1',
-      'method': 'confirm',
-      'toolName': 'bash',
-      'preview': 'Tool: bash',
-      'turnId': 'turn-1',
-      'toolCallId': 'tool-1',
-      'expiresAt': DateTime.now()
-          .add(const Duration(minutes: 1))
-          .toIso8601String(),
-    };
-    api.addEvent('approval.request', payload);
-    api.addEvent('approval.request', payload);
-    final request = await requestFuture;
-    expect(request.preview, 'Tool: bash');
-    expect(request.toolName, 'bash');
-    expect(request.sessionRevision, '11111111-1111-4111-8111-111111111111');
-    expect(await controller.respondToUi(request, approved: true), isNull);
-    expect(api.lastApprovalId, 'approval-1');
-    expect(api.lastApproval, isTrue);
-  });
-
-  test('rejects malformed optional approval identity fields', () {
+    expect(api.lastAbortAgentRunId, 'turn-1');
+    api.publish();
+    await flush();
     expect(
-      () => ExtensionUiRequest.fromJson(<String, Object?>{
-        'id': 'approval-invalid',
-        'method': 'confirm',
-        'toolName': 'bash',
-        'preview': 'Tool: bash',
-        'turnId': 42,
-        'expiresAt': DateTime.now()
-            .add(const Duration(minutes: 1))
-            .toIso8601String(),
-      }, sessionRevision: '11111111-1111-4111-8111-111111111111'),
-      throwsFormatException,
-    );
-  });
-
-  test('reconciles an optimistic phone message by client message id', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-      clientMessageIdFactory: () => 'phone-message-1',
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    expect(await controller.send('phone prompt'), isTrue);
-    expect(controller.messages.last.text, 'phone prompt');
-    expect(
-      controller.messages.last.deliveryState,
-      ChatDeliveryState.synchronizing,
-    );
-
-    api.addEvent('input', <String, Object?>{
-      'type': 'input',
-      'text': 'phone prompt',
-      'origin': 'phone',
-      'clientMessageId': 'phone-message-1',
-    });
-    await Future<void>.delayed(Duration.zero);
-
-    expect(
-      controller.messages.where((message) => message.text == 'phone prompt'),
-      hasLength(1),
-    );
-    expect(controller.messages.last.deliveryState, isNull);
-    expect(controller.messages.last.origin, 'phone');
-  });
-
-  test(
-    'removes a failed optimistic message so the draft can be retried',
-    () async {
-      final api = FakeGateway()
-        ..sendError = const TsPhoneApiException(
-          'Rejected before model execution',
-          statusCode: 409,
-          code: 'prompt_rejected',
-        );
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-        clientMessageIdFactory: () => 'phone-message-failed',
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-
-      expect(await controller.send('retry me'), isFalse);
-      expect(
-        controller.messages.any((message) => message.text == 'retry me'),
-        isFalse,
-      );
-      expect(controller.problem?.code, TsPhoneProblemCode.promptRejected);
-    },
-  );
-
-  test('does not publish a deferred send result after dispose', () async {
-    final sendResponse = Completer<void>();
-    final api = FakeGateway()..nextSend = sendResponse.future;
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    await controller.initialize();
-
-    final send = controller.send('leave before this completes');
-    await Future<void>.delayed(Duration.zero);
-    controller.dispose();
-    sendResponse.complete();
-
-    expect(await send, isTrue);
-  });
-
-  test('scopes approval deduplication to the session revision', () async {
-    const nextRevision = '22222222-2222-4222-8222-222222222222';
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-    final payload = <String, Object?>{
-      'id': 'approval-reused',
-      'method': 'confirm',
-      'toolName': 'bash',
-      'preview': 'Tool: bash',
-      'expiresAt': DateTime.now()
-          .add(const Duration(minutes: 1))
-          .toIso8601String(),
-    };
-
-    final firstFuture = controller.uiRequests.first;
-    api.addEvent('approval.request', payload);
-    expect((await firstFuture).sessionRevision, controller.sessionRevision);
-
-    api.nextSnapshot = Future<TsPhoneMessageSnapshot>.value(
-      const TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: nextRevision,
-        messages: <Object?>[],
-        lastEventId: 'next-epoch:1',
+      await chat.abort(
+        expectedSessionRevision: revision,
+        expectedAgentRunId: 'turn-1',
       ),
+      isFalse,
     );
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'idle',
-    }, sessionRevision: nextRevision);
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
-
-    final secondFuture = controller.uiRequests.first;
-    api.addEvent('approval.request', payload, sessionRevision: nextRevision);
-    expect((await secondFuture).sessionRevision, nextRevision);
+    expect(api.abortCalls, 1);
   });
-
-  test('does not send while the Pi App Server is offline', () async {
+  test('read-only and offline Host snapshots disable commands', () async {
     final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.offline,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    expect(controller.canSend, isFalse);
-    expect(await controller.send('must not leave the phone'), isFalse);
-    expect(api.lastMessage, isNull);
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    api.publish(online: false, canPrompt: false);
+    await flush();
+    expect(chat.canSend, isFalse);
+    expect(await chat.send('no'), isFalse);
+    api.publish(canPrompt: false);
+    await flush();
+    expect(chat.canSend, isFalse);
   });
-
-  test(
-    'suspends and immediately resumes one event stream without stale errors',
-    () async {
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-        eventErrorDelay: Duration.zero,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      expect(controller.eventConnectionState, EventConnectionState.connected);
-      expect(api.eventConnectionCount, 1);
-
-      api.addEvent('agent_start', <String, Object?>{
-        'type': 'agent_start',
-        'agentRunId': 'run-resume-1',
-      });
-      await Future<void>.delayed(Duration.zero);
-      final retrying = Completer<void>();
-      void observeRetry() {
-        if (!retrying.isCompleted &&
-            controller.problem?.code == TsPhoneProblemCode.networkRetrying) {
-          retrying.complete();
-        }
-      }
-
-      controller.addListener(observeRetry);
-      try {
-        api.failEventStream();
-        await retrying.future.timeout(const Duration(seconds: 2));
-      } finally {
-        controller.removeListener(observeRetry);
-      }
-      expect(
-        controller.eventConnectionState,
-        EventConnectionState.reconnecting,
-      );
-      expect(controller.problem?.code, TsPhoneProblemCode.networkRetrying);
-      expect(controller.canSend, isFalse);
-
-      controller.suspendEventStream();
-      expect(controller.eventConnectionState, EventConnectionState.suspended);
-      expect(controller.problem, isNull);
-      controller.resumeEventStream();
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.eventConnectionState, EventConnectionState.connected);
-      expect(controller.problem, isNull);
-      expect(api.eventConnectionCount, 2);
-      expect(api.lastEventIds, <String?>['epoch:0', 'epoch:0']);
-    },
-  );
-
-  test(
-    'refresh reconnects from its checkpoint without duplicating completed messages',
-    () async {
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-
-      final reply = assistantMessage('completed once');
-      api.addEvent('message_end', <String, Object?>{
-        'type': 'message_end',
-        'message': reply,
-      });
-      await Future<void>.delayed(Duration.zero);
-      expect(
-        controller.messages.where(
-          (message) => message.text == 'completed once',
-        ),
-        hasLength(1),
-      );
-
-      api.snapshot = TsPhoneMessageSnapshot(
-        sessionId: 'session-test',
-        sessionRevision: '11111111-1111-4111-8111-111111111111',
-        messages: <Object?>[userMessage('existing'), reply],
-        lastEventId: 'epoch:1',
-      );
-      await controller.refreshMessages();
-      await Future<void>.delayed(Duration.zero);
-
-      expect(api.lastEventIds, <String?>['epoch:0', 'epoch:1']);
-      expect(
-        controller.messages.where(
-          (message) => message.text == 'completed once',
-        ),
-        hasLength(1),
-      );
-    },
-  );
-
-  test('snapshot timeout clears synchronization and allows retry', () async {
+  test('streaming Markdown preview is bounded and throttled', () async {
     final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-      snapshotTimeout: const Duration(milliseconds: 20),
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    api.nextSnapshot = Completer<TsPhoneMessageSnapshot>().future;
-    await controller.refreshMessages();
-
-    expect(controller.isSynchronizing, isFalse);
-    expect(controller.canSend, isFalse);
-    expect(controller.problem?.code, TsPhoneProblemCode.requestTimeout);
-
-    await controller.refreshMessages();
-    expect(controller.isSynchronizing, isFalse);
-    expect(controller.canSend, isTrue);
-    expect(controller.problem, isNull);
+    final chat = controllerFor(api);
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    var updates = 0;
+    chat.streamingTextUpdates.addListener(() => updates++);
+    for (var i = 0; i < 20; i++) {
+      api.publish(
+        running: true,
+        turn: 'turn-1',
+        stream: '**hello** ${'a' * 10000} $i',
+      );
+    }
+    await flush();
+    expect(updates, 0);
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    expect(updates, 1);
+    expect(chat.streamingTextUpdates.value!.length, lessThanOrEqualTo(6005));
+    expect(chat.streamingText!.length, greaterThan(10000));
+    api.publish(messages: [assistantMessage('complete')]);
+    await flush();
+    expect(chat.streamingTextUpdates.value, isNull);
   });
-
-  test(
-    'resume waits for a fresh snapshot before opening the next event stream',
-    () async {
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      controller.suspendEventStream();
-
-      final snapshot = Completer<TsPhoneMessageSnapshot>();
-      api.nextSnapshot = snapshot.future;
-      controller.resumeEventStream();
-      await Future<void>.delayed(Duration.zero);
-      expect(api.eventConnectionCount, 1);
-
-      snapshot.complete(
-        TsPhoneMessageSnapshot(
-          sessionId: 'session-test',
-          sessionRevision: '11111111-1111-4111-8111-111111111111',
-          messages: <Object?>[userMessage('after resume')],
-          lastEventId: 'epoch:8',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(api.eventConnectionCount, 2);
-      expect(api.lastEventIds, <String?>['epoch:0', 'epoch:8']);
-      expect(controller.messages.single.text, 'after resume');
-    },
-  );
-
-  test(
-    'session revision change discards the stale event and resynchronizes',
-    () async {
-      const nextRevision = '22222222-2222-4222-8222-222222222222';
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-
-      api.nextSnapshot = Future<TsPhoneMessageSnapshot>.value(
-        const TsPhoneMessageSnapshot(
-          sessionId: 'session-test',
-          sessionRevision: nextRevision,
-          messages: <Object?>[
-            <String, Object?>{
-              'role': 'user',
-              'content': <Object?>[
-                <String, Object?>{'type': 'text', 'text': 'new authoritative'},
-              ],
-              'timestamp': 1,
-            },
-          ],
-          lastEventId: 'next-epoch:1',
-        ),
-      );
-      api.addEvent('input', <String, Object?>{
-        'text': 'must not be appended',
-      }, sessionRevision: nextRevision);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.sessionRevision, nextRevision);
-      expect(controller.messages.single.text, 'new authoritative');
-      expect(
-        controller.messages.any(
-          (message) => message.text == 'must not be appended',
-        ),
-        isFalse,
-      );
-      expect(api.lastEventIds.last, 'next-epoch:1');
-    },
-  );
-
-  test(
-    'shows tool results delivered by message_end during a running turn',
-    () async {
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-
-      api.addEvent('message_end', <String, Object?>{
-        'type': 'message_end',
-        'message': <String, Object?>{
-          'role': 'toolResult',
-          'toolName': 'read',
-          'content': <Object?>[
-            <String, Object?>{'type': 'text', 'text': 'tool output'},
-          ],
-          'isError': false,
-        },
-      });
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.messages.last.role, ChatRole.tool);
-      expect(controller.messages.last.tools.single.body, 'tool output');
-    },
-  );
-
-  test(
-    'keeps sending disabled until an offline workspace finishes synchronizing',
-    () async {
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.offline,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-
-      final snapshot = Completer<TsPhoneMessageSnapshot>();
-      api.nextSnapshot = snapshot.future;
-      api.addEvent('session_state', <String, Object?>{
-        'state': 'idle',
-        'isStreaming': false,
-      });
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.runtimeState, RuntimeState.idle);
-      expect(controller.isSynchronizing, isTrue);
-      expect(controller.canSend, isFalse);
-
-      snapshot.complete(
-        TsPhoneMessageSnapshot(
-          sessionId: 'session-test',
-          sessionRevision: '11111111-1111-4111-8111-111111111111',
-          messages: <Object?>[userMessage('restored safely')],
-          lastEventId: 'epoch:9',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.isSynchronizing, isFalse);
-      expect(controller.canSend, isTrue);
-      expect(controller.messages.single.text, 'restored safely');
-      expect(api.lastEventIds.last, 'epoch:9');
-    },
-  );
-
-  test('preserves completed messages when TSPi disconnects', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'offline',
-      'isStreaming': false,
-    });
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.runtimeState, RuntimeState.offline);
-    expect(controller.canSend, isFalse);
-    expect(controller.messages.single.text, 'existing');
-  });
-
-  test('manual retry replaces the current event stream', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.offline,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-    expect(api.eventConnectionCount, 1);
-
-    await controller.retryConnection();
-    await Future<void>.delayed(Duration.zero);
-
-    expect(api.eventConnectionCount, 2);
-    expect(controller.eventConnectionState, EventConnectionState.connected);
-    expect(controller.problem, isNull);
-  });
-
-  test('snapshot failure keeps input disabled after SSE reconnects', () async {
-    final snapshot = Completer<TsPhoneMessageSnapshot>();
-    final api = FakeGateway()..nextSnapshot = snapshot.future;
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-
-    final initialization = controller.initialize();
-    snapshot.completeError(StateError('snapshot unavailable'));
-    await initialization;
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.eventConnectionState, EventConnectionState.connected);
-    expect(controller.problem?.code, TsPhoneProblemCode.connectionFailed);
-    expect(controller.canSend, isFalse);
-    expect(await controller.send('must remain local'), isFalse);
-    expect(api.lastMessage, isNull);
-  });
-
-  test(
-    'isolates coalesced stream renders and flushes message_end immediately',
-    () async {
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-        streamRenderInterval: const Duration(milliseconds: 20),
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      api.addEvent('message_start', <String, Object?>{
-        'message': <String, Object?>{'role': 'assistant'},
-      });
-      await Future<void>.delayed(Duration.zero);
-
-      var notifications = 0;
-      var streamNotifications = 0;
-      controller.addListener(() => notifications += 1);
-      controller.streamingTextUpdates.addListener(
-        () => streamNotifications += 1,
-      );
-      api.addEvent('message_update', <String, Object?>{
-        'assistantMessageEvent': <String, Object?>{
-          'type': 'thinking_delta',
-          'delta': 'not rendered',
-        },
-      });
-      for (final delta in <String>['a', 'b', 'c', 'd']) {
-        api.addEvent('message_update', <String, Object?>{
-          'assistantMessageEvent': <String, Object?>{
-            'type': 'text_delta',
-            'delta': delta,
-          },
-        });
-      }
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.streamingText, 'abcd');
-      expect(notifications, 0);
-      expect(streamNotifications, 0);
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-      expect(notifications, 0);
-      expect(streamNotifications, 1);
-      expect(controller.streamingTextUpdates.value, 'abcd');
-
-      notifications = 0;
-      streamNotifications = 0;
-      api.addEvent('message_update', <String, Object?>{
-        'assistantMessageEvent': <String, Object?>{
-          'type': 'text_delta',
-          'delta': ' pending',
-        },
-      });
-      api.addEvent('message_end', <String, Object?>{
-        'message': assistantMessage('complete'),
-      });
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.streamingText, isNull);
-      expect(controller.messages.last.text, 'complete');
-      expect(notifications, 1);
-      expect(streamNotifications, 1);
-      expect(controller.streamingTextUpdates.value, isNull);
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-      expect(notifications, 1);
-      expect(streamNotifications, 1);
-    },
-  );
-
-  test(
-    'publishes timeline updates only when completed messages change',
-    () async {
-      final api = FakeGateway();
-      final controller = ChatController(
-        api: api,
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-        accessMode: SessionAccessMode.controller,
-        initialRuntimeState: RuntimeState.idle,
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-
-      var timelineNotifications = 0;
-      controller.messagesUpdates.addListener(() => timelineNotifications += 1);
-      api.addEvent('tool_execution_start', <String, Object?>{
-        'toolName': 'read',
-      });
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.activity?.kind, ChatActivityKind.runningTool);
-      expect(controller.activity?.toolName, 'read');
-      expect(timelineNotifications, 0);
-
-      api.addEvent('input', <String, Object?>{'text': 'new prompt'});
-      await Future<void>.delayed(Duration.zero);
-      expect(timelineNotifications, 1);
-      expect(controller.messagesUpdates.value.last.text, 'new prompt');
-    },
-  );
-
-  test('bounds the live preview while retaining the complete stream', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-      streamRenderInterval: const Duration(milliseconds: 5),
-      streamPreviewCharacterLimit: 8,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-    api.addEvent('message_start', <String, Object?>{
-      'message': <String, Object?>{'role': 'assistant'},
-    });
-    api.addEvent('message_update', <String, Object?>{
-      'assistantMessageEvent': <String, Object?>{
-        'type': 'text_delta',
-        'delta': 'abc😀defghij',
-      },
-    });
-    await Future<void>.delayed(const Duration(milliseconds: 15));
-
-    expect(controller.streamingText, 'abc😀defghij');
-    expect(controller.streamingTextUpdates.value, startsWith('...\n\n'));
-    expect(controller.streamingTextUpdates.value, endsWith('defghij'));
-    expect(controller.streamingTextUpdates.value, isNot(contains('\uFFFD')));
-
-    api.addEvent('message_end', <String, Object?>{
-      'message': assistantMessage('complete full response'),
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.streamingTextUpdates.value, isNull);
-    expect(controller.messages.last.text, 'complete full response');
-  });
-
-  test('updates model context from live session runtime events', () async {
-    final api = FakeGateway();
-    final controller = ChatController(
-      api: api,
-      workspaceId: 'ts_001',
-      sessionId: 'session-test',
-      initialSessionRevision: '11111111-1111-4111-8111-111111111111',
-      accessMode: SessionAccessMode.controller,
-      initialRuntimeState: RuntimeState.idle,
-    );
-    addTearDown(controller.dispose);
-    await controller.initialize();
-
-    api.addEvent('session_state', <String, Object?>{
-      'state': 'idle',
-      'runtime': sessionRuntimeJson(modelId: 'gpt-5.6-sol', usedTokens: 78214),
-    });
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.sessionRuntime?.model.id, 'gpt-5.6-sol');
-    expect(controller.sessionRuntime?.context?.usedTokens, 78214);
-
-    api.addEvent('session.snapshot', <String, Object?>{
-      'isStreaming': false,
-      'messages': <Object?>[],
-      'runtime': sessionRuntimeJson(modelId: 'gpt-5.6-sol', usedTokens: null),
-    });
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.sessionRuntime?.context?.usedTokens, isNull);
-    expect(controller.sessionRuntime?.context?.limitTokens, 128000);
+  test('display memory isolates drafts and protects newer edits', () {
+    final memory = ConversationMemory();
+    final first = memory.view('a', 'one');
+    first.draft = 'old';
+    final revision = first.takeDraft();
+    first.draft = 'new';
+    first.restoreDraft('old', revision);
+    expect(first.draft, 'new');
+    expect(memory.view('b', 'one').draft, isEmpty);
   });
 }
 
+class FakeGateway implements TsPhoneGateway {
+  final eventsController = StreamController<TsPhoneEvent>.broadcast();
+  int sequence = 0,
+      eventConnectionCount = 0,
+      messageSnapshotCalls = 0,
+      sendCalls = 0,
+      abortCalls = 0;
+  String? lastAbortAgentRunId;
+  final sentIds = <String>[];
+  Object? sendError;
+  Future<void>? nextSend;
+  Future<TsPhoneMessageSnapshot>? nextSnapshot;
+  TsPhoneMessageSnapshot snapshot = TsPhoneMessageSnapshot(
+    sessionId: 'session-test',
+    sessionRevision: revision,
+    messages: [userMessage('existing')],
+    lastEventId: 'epoch:0',
+  );
+  void publish({
+    List<Object?>? messages,
+    bool running = false,
+    String? turn,
+    String? stream,
+    bool online = true,
+    bool canPrompt = true,
+  }) => eventsController.add(
+    TsPhoneEvent(
+      id: 'epoch:${++sequence}',
+      workspaceId: 'ts_001',
+      sessionId: 'session-test',
+      sessionRevision: revision,
+      instanceEpoch: 'host',
+      sessionGeneration: 1,
+      type: 'session.snapshot',
+      at: DateTime.now(),
+      payload: {
+        'messages': messages ?? snapshot.messages,
+        'runtimeState': online ? (running ? 'running' : 'idle') : 'offline',
+        'activeAgentRunId': turn,
+        'isStreaming': running,
+        'streamingMessage': stream == null ? null : assistantMessage(stream),
+        'historyAvailable': true,
+        'canPrompt': canPrompt,
+        'capabilities': ['command.model'],
+        'accessMode': canPrompt ? 'controller' : 'observer',
+      },
+    ),
+  );
+  void failEventStream() =>
+      eventsController.addError(StateError('network suspended'));
+  @override
+  Future<TsPhoneMessageSnapshot> getMessages(
+    String workspaceId,
+    String sessionId,
+  ) {
+    messageSnapshotCalls++;
+    final pending = nextSnapshot;
+    nextSnapshot = null;
+    return pending ?? Future.value(snapshot);
+  }
+
+  @override
+  Stream<TsPhoneEvent> events(
+    String workspaceId,
+    String sessionId, {
+    String? lastEventId,
+    void Function()? onConnected,
+  }) {
+    eventConnectionCount++;
+    onConnected?.call();
+    return eventsController.stream;
+  }
+
+  @override
+  Future<void> sendMessage(
+    String workspaceId,
+    String sessionId,
+    String sessionRevision,
+    String message, {
+    required String clientMessageId,
+  }) async {
+    sendCalls++;
+    sentIds.add(clientMessageId);
+    final pending = nextSend;
+    nextSend = null;
+    if (pending != null) await pending;
+    if (sendError case final error?) throw error;
+  }
+
+  @override
+  Future<void> abort(
+    String workspaceId,
+    String sessionId, {
+    required String sessionRevision,
+    required String agentRunId,
+  }) async {
+    abortCalls++;
+    lastAbortAgentRunId = agentRunId;
+  }
+
+  @override
+  Future<List<WorkspaceSummary>> listWorkspaces() async => [];
+  @override
+  Future<List<SessionSummary>> listSessions(String workspaceId) async => [];
+  @override
+  Future<Map<String, Object?>> version() async => {'apiVersion': 'research-agent-host/2'};
+  @override
+  void close() {
+    unawaited(eventsController.close());
+  }
+}
+
+Map<String, Object?> userMessage(String text, {String? id}) => {
+  'role': 'user',
+  'content': [
+    {'type': 'text', 'text': text},
+  ],
+  'timestamp': DateTime.now().millisecondsSinceEpoch,
+  'clientMessageId': ?id,
+};
+Map<String, Object?> assistantMessage(String text) => {
+  'role': 'assistant',
+  'content': [
+    {'type': 'text', 'text': text},
+  ],
+};
 Map<String, Object?> sessionRuntimeJson({
   required String modelId,
   required int? usedTokens,
@@ -2008,271 +450,3 @@ Map<String, Object?> sessionRuntimeJson({
   },
   'updatedAt': '2026-08-31T06:32:18.000Z',
 };
-
-class FakeGateway implements TsPhoneGateway, TsPhoneHistoryGateway {
-  Future<TsPhoneMessageSnapshot> Function({
-    String? after,
-    required bool fromStart,
-    required int limit,
-  })?
-  windowResponder;
-  Future<TsPhoneTimelineSnapshot> Function({
-    String? after,
-    required bool fromStart,
-    String? branch,
-    required int limit,
-  })?
-  timelineWindowResponder;
-
-  @override
-  Future<TsPhoneMessageSnapshot> getMessageWindow(
-    String workspaceId,
-    String sessionId, {
-    String? after,
-    bool fromStart = false,
-    required int limit,
-  }) => windowResponder!(after: after, fromStart: fromStart, limit: limit);
-
-  @override
-  Future<TsPhoneTimelineSnapshot> getTimelineWindow(
-    String workspaceId,
-    String sessionId, {
-    String? after,
-    bool fromStart = false,
-    String? branch,
-    required int limit,
-  }) => timelineWindowResponder!(
-    after: after,
-    fromStart: fromStart,
-    branch: branch,
-    limit: limit,
-  );
-  final StreamController<TsPhoneEvent> _events =
-      StreamController<TsPhoneEvent>.broadcast();
-  int _sequence = 0;
-  int eventConnectionCount = 0;
-  int messageSnapshotCalls = 0;
-  int abortCalls = 0;
-  int sendCalls = 0;
-  String? lastAbortAgentRunId;
-  final List<String?> lastEventIds = <String?>[];
-  String? lastMessage;
-  Object? sendError;
-  Future<void>? nextSend;
-  Future<void>? nextAbort;
-  String? lastApprovalId;
-  bool? lastApproval;
-  TsPhoneMessageSnapshot snapshot = TsPhoneMessageSnapshot(
-    sessionId: 'session-test',
-    sessionRevision: '11111111-1111-4111-8111-111111111111',
-    messages: <Object?>[userMessage('existing')],
-    lastEventId: 'epoch:0',
-  );
-  TsPhoneMessageSnapshot? earlierSnapshot;
-  String? lastBefore;
-  int? lastLimit;
-  Future<TsPhoneMessageSnapshot>? nextSnapshot;
-  int timelineCalls = 0;
-  Future<TsPhoneTimelineSnapshot> Function({String? before, String? branch})?
-  timelineResponder;
-
-  void addEvent(
-    String type,
-    Object? payload, {
-    String sessionRevision = '11111111-1111-4111-8111-111111111111',
-  }) {
-    _sequence += 1;
-    _events.add(
-      TsPhoneEvent(
-        id: 'epoch:$_sequence',
-        workspaceId: 'ts_001',
-        sessionId: 'session-test',
-        sessionRevision: sessionRevision,
-        instanceEpoch: 'instance-1',
-        sessionGeneration: 1,
-        type: type,
-        payload: payload,
-        at: DateTime.utc(2026, 8, 15),
-      ),
-    );
-  }
-
-  void failEventStream() {
-    _events.addError(StateError('network suspended'));
-  }
-
-  @override
-  Future<void> abort(
-    String workspaceId,
-    String sessionId, {
-    required String sessionRevision,
-    required String agentRunId,
-  }) async {
-    abortCalls += 1;
-    lastAbortAgentRunId = agentRunId;
-    final pending = nextAbort;
-    nextAbort = null;
-    if (pending != null) await pending;
-  }
-
-  @override
-  void close() {
-    unawaited(_events.close());
-  }
-
-  @override
-  Stream<TsPhoneEvent> events(
-    String workspaceId,
-    String sessionId, {
-    String? lastEventId,
-    void Function()? onConnected,
-  }) {
-    eventConnectionCount += 1;
-    lastEventIds.add(lastEventId);
-    onConnected?.call();
-    return _events.stream;
-  }
-
-  @override
-  Future<TsPhoneMessageSnapshot> getMessages(
-    String workspaceId,
-    String sessionId, {
-    String? before,
-    int? limit,
-  }) {
-    messageSnapshotCalls += 1;
-    lastBefore = before;
-    lastLimit = limit;
-    final earlier = earlierSnapshot;
-    if (before != null && earlier != null) {
-      return Future<TsPhoneMessageSnapshot>.value(earlier);
-    }
-    final pending = nextSnapshot;
-    nextSnapshot = null;
-    return pending ?? Future<TsPhoneMessageSnapshot>.value(snapshot);
-  }
-
-  @override
-  Future<TsPhoneTimelineSnapshot> getTimeline(
-    String workspaceId,
-    String sessionId, {
-    String? before,
-    int? limit,
-    String? branch,
-  }) {
-    timelineCalls += 1;
-    final responder = timelineResponder;
-    if (responder == null) {
-      throw UnsupportedError('Timeline is not configured for this test');
-    }
-    return responder(before: before, branch: branch);
-  }
-
-  @override
-  Future<List<WorkspaceSummary>> listWorkspaces() async =>
-      const <WorkspaceSummary>[];
-
-  @override
-  Future<List<SessionSummary>> listSessions(String workspaceId) async =>
-      const <SessionSummary>[];
-
-  @override
-  Future<void> respondToApproval(
-    String workspaceId,
-    String sessionId,
-    String approvalId, {
-    required String sessionRevision,
-    required bool approved,
-  }) async {
-    lastApprovalId = approvalId;
-    lastApproval = approved;
-  }
-
-  @override
-  Future<void> sendMessage(
-    String workspaceId,
-    String sessionId,
-    String sessionRevision,
-    String message, {
-    required String clientMessageId,
-  }) async {
-    sendCalls += 1;
-    final pending = nextSend;
-    nextSend = null;
-    if (pending != null) await pending;
-    if (sendError case final error?) throw error;
-    lastMessage = message;
-  }
-
-  @override
-  Future<Map<String, Object?>> version() async => <String, Object?>{};
-}
-
-Map<String, Object?> userMessage(String text) => <String, Object?>{
-  'role': 'user',
-  'content': <Object?>[
-    <String, Object?>{'type': 'text', 'text': text},
-  ],
-  'timestamp': 1,
-};
-
-Map<String, Object?> assistantMessage(String text) => <String, Object?>{
-  'role': 'assistant',
-  'content': <Object?>[
-    <String, Object?>{'type': 'text', 'text': text},
-  ],
-  'timestamp': 2,
-};
-
-TsPhoneTimelineSnapshot timelineSnapshot({
-  required List<SessionTimelineItem> items,
-  required int totalItems,
-  bool hasMore = false,
-  String? nextBefore,
-  bool hasLater = false,
-  String? nextAfter,
-  String selectedBranchId = '00000003',
-  String activeBranchId = '00000003',
-  bool includeCommands = true,
-  List<TimelineBranchSummary>? branches,
-}) {
-  final resolvedBranches =
-      branches ??
-      const <TimelineBranchSummary>[
-        TimelineBranchSummary(
-          id: '00000003',
-          active: true,
-          itemCount: 4,
-          messageCount: 3,
-          activityCount: 1,
-          turnCount: 1,
-        ),
-      ];
-  return TsPhoneTimelineSnapshot(
-    sessionId: 'session-test',
-    sessionRevision: '11111111-1111-4111-8111-111111111111',
-    items: items,
-    history: TimelineHistorySummary(
-      totalItems: totalItems,
-      messageCount: totalItems,
-      activityCount: 0,
-      turnCount: 1,
-      activeBranchId: activeBranchId,
-      selectedBranchId: selectedBranchId,
-      branches: resolvedBranches,
-    ),
-    hasMore: hasMore,
-    nextBefore: nextBefore,
-    hasLater: hasLater,
-    nextAfter: nextAfter,
-    lastEventId: 'epoch:0',
-    capabilities: <String>{
-      timelineCapability,
-      timelinePaginationCapability,
-      'history.seek',
-      timelineBranchesCapability,
-      if (includeCommands) promptCapability,
-      if (includeCommands) abortCapability,
-    },
-  );
-}

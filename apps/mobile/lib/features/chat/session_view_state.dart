@@ -38,7 +38,6 @@ final class SessionViewState {
       problem: controller.problem,
       recoveredSession: controller.recoveredSession,
       historyOnly: controller.historyOnly,
-      viewingInactiveBranch: controller.viewingInactiveBranch,
       canSend: controller.canSend,
       hasActiveAgentRun: controller.activeAgentRunId != null,
       commandInFlight: controller.commandInFlight,
@@ -66,7 +65,6 @@ SessionViewState resolveSessionViewState({
   required TsPhoneProblem? problem,
   bool recoveredSession = false,
   required bool historyOnly,
-  required bool viewingInactiveBranch,
   required bool canSend,
   required bool hasActiveAgentRun,
   required bool commandInFlight,
@@ -79,7 +77,6 @@ SessionViewState resolveSessionViewState({
     problem: problem,
     recoveredSession: recoveredSession,
     historyOnly: historyOnly,
-    viewingInactiveBranch: viewingInactiveBranch,
   );
   final notice = switch (phase) {
     SessionUiPhase.failed => SessionNoticeKind.error,
@@ -87,7 +84,7 @@ SessionViewState resolveSessionViewState({
     SessionUiPhase.offline => SessionNoticeKind.offline,
     _ => null,
   };
-  final isHistorical = historyOnly || viewingInactiveBranch;
+  final isHistorical = historyOnly;
   return SessionViewState(
     phase: phase,
     notice: notice,
@@ -116,7 +113,6 @@ SessionUiPhase _resolvePhase({
   required TsPhoneProblem? problem,
   required bool recoveredSession,
   required bool historyOnly,
-  required bool viewingInactiveBranch,
 }) {
   // Actionable errors and recovery always outrank ordinary connection state.
   // A background event retry is the one exception: it belongs in the app-bar
@@ -146,7 +142,7 @@ SessionUiPhase _resolvePhase({
   if (runtimeRecovery) {
     return SessionUiPhase.recovery;
   }
-  if (historyOnly || viewingInactiveBranch) return SessionUiPhase.history;
+  if (historyOnly) return SessionUiPhase.history;
   if (runtimeState == RuntimeState.offline) return SessionUiPhase.offline;
   if (isSynchronizing || runtimeState == RuntimeState.connecting) {
     return SessionUiPhase.synchronizing;

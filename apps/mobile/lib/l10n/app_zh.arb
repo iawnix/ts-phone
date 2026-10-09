@@ -46,12 +46,22 @@
   "about": "关于",
   "clientDescription": "客户端 {version} · TSPi 移动终端",
   "clientVersionBuild": "版本 {version} · 构建 {build}",
-  "@clientVersionBuild": {"placeholders": {"version": {"type": "String"}, "build": {"type": "String"}}},
+  "@clientVersionBuild": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
   "endpoint": "TSPi Relay",
   "hostId": "Host ID",
   "deviceId": "Device ID",
   "linkProtocol": "Link 协议",
   "appServerProtocol": "App Server 协议",
+  "appServerStatus": "App Server 状态",
   "copyServerAddress": "复制服务地址",
   "serverAddressCopied": "已复制服务地址",
   "copyServerAddressFailed": "无法复制服务地址",
@@ -112,10 +122,16 @@
   "projectDeleteTitle": "删除项目？",
   "projectDeleteMessage": "项目将移到“最近删除”，直到你恢复或永久删除它。",
   "sessionDeleteTitle": "删除会话？",
-  "sessionDeleteMessage": "只会移除此对话历史，不会删除项目中的科学状态。",
+  "sessionDeleteMessage": "将永久删除此会话及其记录，无法撤销。",
   "permanentDeleteTitle": "永久删除？",
   "permanentDeleteMessage": "此操作无法撤销。请输入 {resourceId} 继续。",
-  "@permanentDeleteMessage": {"placeholders": {"resourceId": {"type": "String"}}},
+  "@permanentDeleteMessage": {
+    "placeholders": {
+      "resourceId": {
+        "type": "String"
+      }
+    }
+  },
   "confirmationValue": "确认内容",
   "deletionBlockedTitle": "当前无法删除项目",
   "deletionBlockedMessage": "请先处理活动 Worker、远程计算、待确认操作和未决远程效果。",
@@ -127,7 +143,6 @@
   "appServerVersion": "App Server 版本",
   "problemManagementCapacity": "项目和会话管理存储已满，请清理不再需要的内容后重试。",
   "remoteCalculations": "远程计算",
-  "pendingApprovals": "待确认操作",
   "unresolvedRemoteEffects": "未决远程效果",
   "archiveEmptyTitle": "没有已归档内容",
   "trashEmptyTitle": "最近删除为空",
@@ -174,7 +189,7 @@
   "sessionToken": "session {shortId}",
   "sessionRuntimeTapHint": "查看会话详情",
   "sessionRuntimeDetails": "会话详情",
-  "sessionRuntimeLastKnown": "TSPi 当前离线，以下为最后一次运行时快照。",
+  "sessionRuntimeLastKnown": "当前显示的是上次同步的内容。连接恢复后会更新。",
   "sessionRuntimeUnavailable": "此会话未保存运行时快照。",
   "copySessionId": "复制会话 ID",
   "sessionIdCopied": "会话 ID 已复制",
@@ -190,19 +205,6 @@
   "messagesSynced": "消息已同步",
   "abortRequested": "已发送中止请求",
   "abortTargetChanged": "当前生成已切换，未中止任何任务。",
-  "approvalTitle": "需要你的确认",
-  "approvalRequestDescription": "TSPi 请求执行以下受控操作。",
-  "approvalWorkspace": "工作区",
-  "approvalSession": "会话",
-  "approvalTool": "工具",
-  "approvalDetails": "操作详情",
-  "approvalExpiresIn": "{seconds} 秒后过期",
-  "approvalQueueRemaining": "还有 {count} 个请求等待处理",
-  "approvalApproving": "正在批准",
-  "approvalRejecting": "正在拒绝",
-  "approvalExpired": "该授权请求已过期",
-  "approvalStale": "该授权属于旧会话，已失效",
-  "approvalMissing": "该授权已处理或不再可用",
   "reject": "拒绝",
   "approveOnce": "仅批准本次",
   "syncing": "正在同步",
@@ -255,44 +257,11 @@
   "toolRunningGeneric": "正在运行工具",
   "toolFailed": "工具执行失败",
   "invalidMessage": "收到一个无法解析的消息",
-  "invalidApproval": "收到一个无法解析的权限请求",
   "invalidHistoryMessage": "收到一个当前客户端无法解析的历史消息。",
   "loadEarlierMessages": "加载更早消息",
   "loadingEarlierMessages": "正在加载更早消息",
   "loadAllHistory": "加载全部历史",
   "loadingAllHistory": "正在加载全部历史",
-  "timelineProgress": "已载入 {loaded} / {total} 项",
-  "timelineTurns": "{count} 个 Turn",
-  "timelineActivities": "{count} 条活动",
-  "timelineFilterAll": "全部",
-  "timelineFilterMessages": "消息",
-  "timelineFilterActivities": "活动",
-  "timelineFilterEmpty": "当前视图没有内容",
-  "timelineBranches": "会话分支",
-  "timelineActiveBranch": "当前分支",
-  "timelineBranchLabel": "分支 {shortId}",
-  "timelineTurnLabel": "Turn {number}",
-  "timelineSubagent": "子代理",
-  "timelineResearch": "研究操作",
-  "timelineReview": "独立审查",
-  "timelineWorkspace": "工作区",
-  "timelineConfiguration": "会话配置",
-  "timelineModelChange": "模型切换",
-  "timelineThinkingLevelChange": "思考强度切换",
-  "timelineSessionInfo": "会话信息",
-  "timelineContext": "上下文",
-  "timelineSystem": "系统记录",
-  "timelineCompleted": "已完成",
-  "timelineFailed": "失败",
-  "timelineRecorded": "已记录",
-  "timelineStage": "阶段",
-  "timelineNodes": "研究节点",
-  "timelineReference": "引用",
-  "timelineRetrySafe": "可以安全重试",
-  "timelineRetryUnsafe": "不可自动重试",
-  "timelineDuration": "{seconds} 秒",
-  "timelineTokens": "{count} tokens",
-  "composerHistoricalBranch": "历史分支只读",
   "networkRetrying": "网络连接中断，正在重试",
   "imageAlt": "[图片：{alt}]",
   "blockedNonHttpsImage": "[已阻止非 HTTPS 图片]",
@@ -316,11 +285,23 @@
   "problemQueueRecovery": "前一请求的执行结果不明，请核验会话历史和输出后再继续。",
   "commandQueue": "接下来",
   "commandQueueCount": "接下来 · {count}",
-  "@commandQueueCount": {"placeholders": {"count": {"type": "int"}}},
+  "@commandQueueCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "commandQueuePending": "等待中的消息",
   "commandQueueEmpty": "没有等待中的消息",
   "commandQueued": "等待中 · 第 {position} 位",
-  "@commandQueued": {"placeholders": {"position": {"type": "int"}}},
+  "@commandQueued": {
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
   "commandStarting": "准备中",
   "commandRunning": "执行中",
   "commandCompleted": "已结束",
@@ -384,7 +365,6 @@
   "appServerDefaultModel": "使用 App Server 默认模型",
   "modelSelectionUnavailable": "同步和待处理消息结束后可切换模型。",
   "modelSelectionBusy": "助手正在处理消息，请在本轮回复结束后切换模型。",
-  "modelSelectionAppServerRequired": "此处仅支持切换 Pi App Server 会话的模型。",
   "modelSelectionStartRequired": "请先继续此对话，再切换模型。",
   "modelPreference": "下次启动此会话使用的模型",
   "viewFullOutput": "查看完整输出",
@@ -394,7 +374,6 @@
   "contentDisplayFailed": "此条内容显示失败。",
   "activityFailureCount": "{count} 项活动失败",
   "viewAllActivities": "查看全部 {count} 项活动",
-  "activeItems": "当前",
   "projectViews": "项目列表",
   "sessionViews": "会话列表",
   "archivedProjects": "已归档项目",
@@ -418,5 +397,6 @@
   "activityReview": "独立审查",
   "activityReply": "回应审查",
   "activityCalculation": "计算任务",
-  "activityRemote": "远程任务"
+  "activityRemote": "远程任务",
+  "toolCompleted": "已完成"
 }

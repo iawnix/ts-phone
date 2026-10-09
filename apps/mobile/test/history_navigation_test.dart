@@ -1,276 +1,234 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/features/chat/chat_controller.dart';
+import 'package:ts_phone/features/chat/chat_composer.dart';
 import 'package:ts_phone/features/chat/chat_page.dart';
-import 'package:ts_phone/features/chat/timeline_widgets.dart';
+import 'package:ts_phone/features/chat/chat_view_memory.dart';
+import 'package:ts_phone/features/sessions/session_tile.dart';
+import 'package:ts_phone/features/sessions/context_switcher.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/chat_message.dart';
-import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/models/workspace.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
-
+import 'package:ts_phone/widgets/markdown_message.dart';
+import 'package:ts_phone/widgets/text_detail_view.dart';
 import 'chat_controller_test.dart' as fixtures;
 import 'conversation_shell_test.dart' as shell;
 
-const revision = '11111111-1111-4111-8111-111111111111';
-const capabilities = {timelineCapability, 'history.seek'};
-
-TsPhoneTimelineSnapshot page(
-  int start, {
-  bool later = false,
-  bool details = false,
-}) => fixtures.timelineSnapshot(
-  items: [
-    TimelineMessageItem(
-      id: start.toRadixString(16).padLeft(8, '0'),
-      turnId: '00000000',
-      message: ChatMessage(role: ChatRole.user, text: 'message-$start'),
-    ),
-    if (details)
-      TimelineActivityItem(
-        id: '00000001',
-        turnId: '00000000',
-        activity: TimelineActivity(
-          category: TimelineActivityCategory.research,
-          status: TimelineActivityStatus.completed,
-          title: 'Generate',
-          detail: List.generate(2000, (i) => 'Output line $i').join('\n'),
-        ),
-      ),
-  ],
-  totalItems: 2108,
-  hasMore: start > 0,
-  nextBefore: start > 0 ? start.toRadixString(16).padLeft(8, '0') : null,
-  hasLater: later,
-  nextAfter: later ? '00000001' : null,
-  selectedBranchId: '0000083b',
-  activeBranchId: '0000083b',
-);
-
-ChatController controller(fixtures.FakeGateway api) => ChatController(
-  api: api,
-  workspaceId: 'ts_001',
+const session = SessionSummary(
   sessionId: 'session-test',
-  initialSessionRevision: revision,
-  initialRuntimeState: RuntimeState.idle,
-  accessMode: SessionAccessMode.observer,
-  initialCapabilities: capabilities,
+  sessionRevision: fixtures.revision,
+  sessionName: 'Review conversation',
+  runtimeState: RuntimeState.idle,
+  isStreaming: false,
+  historyAvailable: true,
+  canPrompt: true,
+  accessMode: SessionAccessMode.controller,
 );
-
-void main() {
-  test(
-    'latest supersedes a slow seek without letting its reply reset the list',
-    () async {
-      final first = Completer<TsPhoneTimelineSnapshot>();
-      final api = fixtures.FakeGateway()
-        ..timelineResponder = ({before, branch}) async => page(2107);
-      api.timelineWindowResponder =
-          ({after, required fromStart, branch, required limit}) => first.future;
-      final chat = controller(api);
-      addTearDown(chat.dispose);
-      await chat.initialize();
-      final seeking = chat.jumpToStart();
-      expect(chat.historyNavigationInProgress, isTrue);
-      expect(await chat.returnToLatest(), isTrue);
-      first.complete(page(0, later: true));
-      expect(await seeking, isFalse);
-      expect(chat.messages.single.text, 'message-2107');
-      expect(chat.viewingHistoryWindow, isFalse);
-      expect(chat.historyNavigationInProgress, isFalse);
-    },
-  );
-
-  test(
-    'latest ignores an earlier-page error arriving after navigation',
-    () async {
-      final earlier = Completer<TsPhoneTimelineSnapshot>();
-      final api = fixtures.FakeGateway()
-        ..timelineResponder = ({before, branch}) =>
-            before == null ? Future.value(page(2107)) : earlier.future;
-      final chat = controller(api);
-      addTearDown(chat.dispose);
-      await chat.initialize();
-      final loading = chat.loadEarlierMessages();
-      expect(await chat.returnToLatest(), isTrue);
-      earlier.completeError(const TsPhoneApiException('old failure'));
-      expect(await loading, isFalse);
-      expect(chat.problem, isNull);
-      expect(chat.messages.single.text, 'message-2107');
-    },
-  );
-
-  test(
-    'latest waits for background sync then performs an explicit tail reset',
-    () async {
-      final api = fixtures.FakeGateway()
-        ..timelineResponder = ({before, branch}) async => page(2107);
-      api.timelineWindowResponder =
-          ({after, required fromStart, branch, required limit}) async =>
-              page(0, later: true);
-      final chat = controller(api);
-      addTearDown(chat.dispose);
-      await chat.initialize();
-      await chat.jumpToStart();
-      final sync = Completer<TsPhoneTimelineSnapshot>();
-      var reads = 0;
-      api.timelineResponder = ({before, branch}) =>
-          ++reads == 1 ? sync.future : Future.value(page(2107));
-      final refreshing = chat.refreshMessages();
-      final latest = chat.returnToLatest();
-      sync.complete(page(2106));
-      await refreshing;
-      expect(await latest, isTrue);
-      expect(reads, 2);
-      expect(chat.messages.single.text, 'message-2107');
-    },
-  );
-
-  test('tail history is independent of old event transport cleanup', () async {
-    final cleanup = Completer<void>();
-    final api = SlowCancelGateway(cleanup.future)
-      ..timelineResponder = ({before, branch}) async => page(2107);
-    final chat = controller(api);
-    addTearDown(chat.dispose);
-    await chat.initialize();
-    expect(
-      await chat.returnToLatest().timeout(const Duration(seconds: 1)),
-      isTrue,
-    );
-    expect(chat.messages.single.text, 'message-2107');
-    expect(api.eventConnectionCount, 1);
-    cleanup.complete();
-    await Future<void>.delayed(Duration.zero);
-    expect(api.eventConnectionCount, 2);
-  });
-
-  for (final dark in [false, true]) {
-    testWidgets(
-      'start, expanded output, full view, and latest on a phone: dark=$dark',
-      (tester) async {
-        tester.view.physicalSize = const Size(390, 844);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        final api = fixtures.FakeGateway()
-          ..timelineResponder = ({before, branch}) async => page(2107);
-        api.timelineWindowResponder =
-            ({after, required fromStart, branch, required limit}) async =>
-                page(0, later: true, details: true);
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: dark ? TsPhoneTheme.dark() : TsPhoneTheme.light(),
-            locale: const Locale('en'),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: ChatPage(
-              settings: shell.settings,
-              workspace: shell.appServer,
-              gateway: api,
-              session: const SessionSummary(
-                sessionId: 'session-test',
-                sessionRevision: revision,
-                runtimeState: RuntimeState.idle,
-                isStreaming: false,
-                accessMode: SessionAccessMode.observer,
-                capabilities: capabilities,
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('chat-menu')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Jump to the start of the session'));
-        await tester.pumpAndSettle();
-        expect(find.text('message-0'), findsOneWidget);
-        final activity = find.byType(TimelineActivityView);
-        await tester.ensureVisible(activity);
-        await tester.tap(
-          find.descendant(of: activity, matching: find.byType(ExpansionTile)),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.getSize(activity).height, lessThan(500));
-        await tester.ensureVisible(find.byTooltip('View full output'));
-        await tester.tap(find.byTooltip('View full output'));
-        await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('full-output-list')), findsOneWidget);
-        await tester.binding.handlePopRoute();
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('jump-to-latest')));
-        for (var frame = 0; frame < 20; frame++) {
-          await tester.pump(const Duration(milliseconds: 100));
-        }
-        expect(find.byType(CircularProgressIndicator), findsNothing);
-        expect(find.text('message-2107'), findsOneWidget);
-        expect(find.text('message-0'), findsNothing);
-        expect(find.byKey(const ValueKey('load-later-messages')), findsNothing);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
-
-  testWidgets('keeps a failed sync in the app-bar status control', (
-    tester,
-  ) async {
-    final snapshot = Completer<TsPhoneMessageSnapshot>();
-    final api = fixtures.FakeGateway()..nextSnapshot = snapshot.future;
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: TsPhoneTheme.light(),
-        locale: const Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ChatPage(
-          settings: shell.settings,
-          workspace: shell.appServer,
-          gateway: api,
-          session: const SessionSummary(
-            sessionId: 'session-test',
-            sessionRevision: revision,
-            runtimeState: RuntimeState.idle,
-            isStreaming: false,
-          ),
-        ),
+Widget app(Widget child, {ThemeData? theme, double scale = 1}) => MaterialApp(
+  theme: theme ?? TsPhoneTheme.light(),
+  locale: const Locale('en'),
+  supportedLocales: AppLocalizations.supportedLocales,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+    child: child!,
+  ),
+  home: child,
+);
+Future<void> open(
+  WidgetTester tester,
+  fixtures.FakeGateway api, {
+  ChatViewMemory? memory,
+  ThemeData? theme,
+  double scale = 1,
+}) async {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    app(
+      ChatPage(
+        settings: shell.settings,
+        workspace: shell.appServer,
+        session: session,
+        gateway: api,
+        memory: memory,
       ),
-    );
-    snapshot.completeError(
-      const TsPhoneApiException('service unavailable', statusCode: 503),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('chat-session-status-button')),
-      findsOneWidget,
-    );
-    expect(find.text('Live synchronization interrupted'), findsNothing);
-    expect(find.text('Could not connect to the Pi App Server'), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('chat-session-status-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('Needs attention'), findsOneWidget);
-    expect(find.text('Reconnect'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      theme: theme,
+      scale: scale,
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
-class SlowCancelGateway extends fixtures.FakeGateway {
-  SlowCancelGateway(this.cleanup);
-  final Future<void> cleanup;
-
-  @override
-  Stream<TsPhoneEvent> events(
-    String workspaceId,
-    String sessionId, {
-    String? lastEventId,
-    void Function()? onConnected,
-  }) {
-    eventConnectionCount += 1;
-    return StreamController<TsPhoneEvent>(
-      onListen: onConnected,
-      onCancel: () => cleanup,
-    ).stream;
+void main() {
+  testWidgets('ready status does not claim offline or duplicate Ready', (
+    tester,
+  ) async {
+    await open(tester, fixtures.FakeGateway());
+    await tester.tap(find.byKey(const ValueKey('chat-session-status-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Ready'), findsOneWidget);
+    expect(find.textContaining('last synchronized'), findsNothing);
+    expect(find.textContaining('offline'), findsNothing);
+  });
+  testWidgets('disconnected drafts keep a visible explanation', (tester) async {
+    final api = fixtures.FakeGateway();
+    await open(tester, api);
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-input')),
+      'keep this draft',
+    );
+    api.failEventStream();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    final composer = tester.widget<ChatComposer>(find.byType(ChatComposer));
+    expect(composer.canEdit, isTrue);
+    expect(composer.canSend, isFalse);
+    expect(composer.hint, isNot('Message'));
+    expect(find.byKey(const ValueKey('composer-status')), findsOneWidget);
+    expect(composer.controller.text, 'keep this draft');
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('running uses the send slot for Stop until a draft exists', (
+    tester,
+  ) async {
+    final api = fixtures.FakeGateway();
+    await open(tester, api);
+    api.publish(running: true, turn: 'turn-1', stream: '**live**');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.byKey(const ValueKey('composer-send')), findsNothing);
+    expect(find.byKey(const ValueKey('composer-stop')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('composer-action-slot')),
+        matching: find.byKey(const ValueKey('composer-stop')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('streaming-message-text')),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget(find.byKey(const ValueKey('streaming-message-text'))),
+      isA<MarkdownMessage>(),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-input')),
+      'queue next',
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('composer-send')), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('composer-send')))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('session details can be opened from chat', (tester) async {
+    await open(tester, fixtures.FakeGateway());
+    await tester.tap(find.byKey(const ValueKey('chat-session-details')));
+    await tester.pumpAndSettle();
+    expect(find.text('session-test'), findsOneWidget);
+    expect(find.text('Copy session ID'), findsOneWidget);
+  });
+  testWidgets('the navigation base remains the home while chat is open', (
+    tester,
+  ) async {
+    final api = shell.ConversationGateway();
+    await tester.pumpWidget(shell.shellApp(api));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Session one'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(ContextSwitcherSheet, skipOffstage: false),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('chat-back')));
+    await tester.pumpAndSettle();
+    expect(find.byType(ContextSwitcherSheet), findsOneWidget);
+  });
+  testWidgets('session rows remain at least 48 dp with dates and large text', (
+    tester,
+  ) async {
+    for (final scale in [1.0, 2.0]) {
+      await tester.pumpWidget(
+        app(
+          Scaffold(
+            body: SessionTile(
+              session: SessionSummary(
+                sessionId: 'dated',
+                sessionRevision: 'r',
+                sessionName: 'Dated session',
+                runtimeState: RuntimeState.offline,
+                isStreaming: false,
+                updatedAt: DateTime(2026, 10, 9),
+              ),
+              onTap: () {},
+            ),
+          ),
+          scale: scale,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(find.byType(ListTile)).height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+  testWidgets('short output has direct copy but no redundant expand', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(
+        const Scaffold(
+          body: TextDetailPreview(text: 'short output', title: 'Output'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('View full output'), findsNothing);
+    expect(find.byTooltip('Copy full output'), findsOneWidget);
+  });
+  for (final dark in [false, true]) {
+    testWidgets('chat fits large text with keyboard, dark=$dark', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        fixtures.FakeGateway(),
+        theme: dark ? TsPhoneTheme.dark() : TsPhoneTheme.light(),
+        scale: 2,
+      );
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.enterText(
+        find.byKey(const ValueKey('chat-input')),
+        'draft\nsecond line\nthird line',
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
   }
+  test('input boundary has 3:1 contrast in all themes', () {
+    for (final theme in [
+      TsPhoneTheme.light(),
+      TsPhoneTheme.dark(),
+      TsPhoneTheme.highContrastLight(),
+      TsPhoneTheme.highContrastDark(),
+    ]) {
+      final a = theme.colorScheme.outline.computeLuminance();
+      final b = theme.colorScheme.surfaceContainerHigh.computeLuminance();
+      expect(
+        (a > b ? (a + .05) / (b + .05) : (b + .05) / (a + .05)),
+        greaterThanOrEqualTo(3),
+      );
+    }
+  });
 }

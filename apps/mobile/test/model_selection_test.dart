@@ -75,6 +75,16 @@ void main() {
   });
 
   test(
+    'invalid model responses are presented as model availability errors',
+    () {
+      final problem = describeTsPhoneProblem(
+        const TsPhoneApiException('unknown model', code: 'invalid_model'),
+      );
+      expect(problem.code, TsPhoneProblemCode.modelUnavailable);
+    },
+  );
+
+  test(
     'model selection requires the native command.model capability',
     () async {
       final gateway = ModelGateway();

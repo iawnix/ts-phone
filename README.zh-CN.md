@@ -8,7 +8,7 @@ Pi 负责执行和 JSONL 历史。手机展示同一会话，并提供任务监�
 ```text
 TS Phone -- 出站 WSS --> TSPi Relay <-- 出站 WSS -- TSPi Host
                                                     |
-                                              Pi 会话 bridge
+                                              Pi Harness worker
                                                     |
                                             工作区 / 本地终端
 ```
@@ -21,9 +21,12 @@ TS Phone -- 出站 WSS --> TSPi Relay <-- 出站 WSS -- TSPi Host
 
 在该安装中运行 `TSPi phone pair`，然后在 App 中输入输出的 TSPi Relay URL 和 8 位
 配对码。App 使用一次性配对码换取本设备独立、可撤销的授权。手机通过
-`tspi-link.v1` WebSocket 子协议承载 `tspi-host/1` UTF-8 NDJSON。
+`research-agent-link.v1` WebSocket 子协议承载 `research-agent-host/2` UTF-8 NDJSON。
 会话操作始终包含工作区和会话 ID。断线后重新 attach 获取完整快照；投递不确定的
 消息重试复用原消息 ID，避免新建一次输入。
+
+此客户端需要支持 `research-agent-host/2` 的 Host。升级 Host 后，使用 `research-agent-host/2`
+构建的旧版 App 必须重新构建并安装更新。
 
 ## 仓库结构
 
@@ -32,7 +35,8 @@ TS Phone -- 出站 WSS --> TSPi Relay <-- 出站 WSS -- TSPi Host
 - `apps/mobile/lib/data/host_rpc_client.dart`：通过 TSPi Link 使用 Host JSON RPC。
 - `apps/mobile/lib/data/host_gateway.dart`：会话、模型、监控接口适配。
 - `apps/mobile/lib/features/monitors/monitor_page.dart`：项目任务监控列表和启停。
-- 原 Pi v8/Chord adapter 保留用于兼容测试，应用默认使用 `HostGateway`。
+- 首页提供项目选择器、会话搜索和所选项目的任务监控入口。
+- 已移除旧 Pi v8/Chord 适配器、手机审批面板和结构化分支时间线；真实消息及工具输出继续由 `HostGateway` 提供。
 - `apps/mobile/tool/build_release_android.sh`：带源码证明的签名 APK/AAB 构建脚本。
 - `apps/mobile/tool/mobile-build-attestation.py`：可复现源码与构建产物证明工具。
 
@@ -63,7 +67,7 @@ flutter test
 ## 安全边界
 
 设备 token 只用于 TSPi Link WebSocket，由移动平台的安全存储保护，并且不会在连接
-界面显示。App Server 的会话状态保留在服务器工作区；手机只保存 UI 偏好和最近
+界面显示。Host 的会话状态保留在服务器工作区；手机只保存 UI 偏好和最近
 选择的会话。
 
 详见 [docs/architecture.md](docs/architecture.md) 和

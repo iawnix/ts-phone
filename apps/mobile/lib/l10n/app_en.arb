@@ -45,14 +45,30 @@
   "notConfigured": "Not configured",
   "about": "About",
   "clientDescription": "Client {version} · TSPi mobile companion",
-  "@clientDescription": {"placeholders": {"version": {"type": "String"}}},
+  "@clientDescription": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
   "clientVersionBuild": "Version {version} · Build {build}",
-  "@clientVersionBuild": {"placeholders": {"version": {"type": "String"}, "build": {"type": "String"}}},
+  "@clientVersionBuild": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
   "endpoint": "TSPi Relay",
   "hostId": "Host ID",
   "deviceId": "Device ID",
   "linkProtocol": "Link protocol",
   "appServerProtocol": "App Server protocol",
+  "appServerStatus": "App Server status",
   "copyServerAddress": "Copy server address",
   "serverAddressCopied": "Server address copied",
   "copyServerAddressFailed": "Could not copy server address",
@@ -90,7 +106,7 @@
   "noWorkspacesTitle": "No projects yet",
   "noWorkspacesMessage": "Create a project to start a separate TSPi research workspace.",
   "workspaces": "Projects",
-  "activeItems": "Active",
+  "activeItems": "Current",
   "archivedItems": "Archived",
   "recentlyDeleted": "Recently Deleted",
   "newProject": "New project",
@@ -113,10 +129,16 @@
   "projectDeleteTitle": "Delete project?",
   "projectDeleteMessage": "This hides the project in Recently Deleted until you restore or permanently delete it.",
   "sessionDeleteTitle": "Delete session?",
-  "sessionDeleteMessage": "Only this conversation history is moved to Recently Deleted. Scientific project data is not removed.",
+  "sessionDeleteMessage": "This permanently deletes the conversation and its history. This cannot be undone.",
   "permanentDeleteTitle": "Delete permanently?",
   "permanentDeleteMessage": "This action cannot be undone. Enter {resourceId} to continue.",
-  "@permanentDeleteMessage": {"placeholders": {"resourceId": {"type": "String"}}},
+  "@permanentDeleteMessage": {
+    "placeholders": {
+      "resourceId": {
+        "type": "String"
+      }
+    }
+  },
   "confirmationValue": "Confirmation",
   "deletionBlockedTitle": "Project cannot be deleted",
   "deletionBlockedMessage": "Resolve active workers, remote calculations, approvals, and remote effects first.",
@@ -128,14 +150,19 @@
   "appServerVersion": "App Server version",
   "problemManagementCapacity": "Project and session storage is full. Remove unneeded items before adding more.",
   "remoteCalculations": "Remote calculations",
-  "pendingApprovals": "Pending approvals",
   "unresolvedRemoteEffects": "Unresolved remote effects",
   "archiveEmptyTitle": "No archived items",
   "trashEmptyTitle": "Recently Deleted is empty",
   "archivedItemsMessage": "Archived items stay available here until restored or deleted.",
   "recentlyDeletedMessage": "Deleted items can be restored before permanent removal.",
   "liveSessionCount": "{count, plural, =1{1 live session} other{{count} live sessions}}",
-  "@liveSessionCount": {"placeholders": {"count": {"type": "int"}}},
+  "@liveSessionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "noLiveSessions": "No live sessions",
   "statusConnected": "CONNECTED",
   "statusReady": "READY",
@@ -145,9 +172,21 @@
   "statusRecovery": "RECOVER",
   "statusError": "ERROR",
   "statusLive": "{count} LIVE",
-  "@statusLive": {"placeholders": {"count": {"type": "int"}}},
+  "@statusLive": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "workspaceStateStale": "{problem}. Workspace status may be outdated.",
-  "@workspaceStateStale": {"placeholders": {"problem": {"type": "String"}}},
+  "@workspaceStateStale": {
+    "placeholders": {
+      "problem": {
+        "type": "String"
+      }
+    }
+  },
   "loadWorkspacesFailed": "Could not load research workspaces",
   "retry": "Retry",
   "startCommandCopied": "Start command copied",
@@ -156,12 +195,30 @@
   "noSessionHistoryMessage": "Create a session to begin or continue work in this project.",
   "copyStartCommand": "Copy start command",
   "sessionStateStale": "{problem}. Session status may be outdated.",
-  "@sessionStateStale": {"placeholders": {"problem": {"type": "String"}}},
+  "@sessionStateStale": {
+    "placeholders": {
+      "problem": {
+        "type": "String"
+      }
+    }
+  },
   "sessions": "Sessions",
   "sessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
-  "@sessionCount": {"placeholders": {"count": {"type": "int"}}},
+  "@sessionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "controllerSessionCount": "{count, plural, =1{1 controller} other{{count} controllers}}",
-  "@controllerSessionCount": {"placeholders": {"count": {"type": "int"}}},
+  "@controllerSessionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "loadSessionsFailed": "Could not load sessions",
   "runtimeOffline": "TSPi not running",
   "runtimeConnecting": "Connecting to TSPi",
@@ -178,12 +235,24 @@
   "historySession": "History session",
   "historyReadOnlyStatus": "History · Read-only",
   "sessionFallback": "Session {shortId}",
-  "@sessionFallback": {"placeholders": {"shortId": {"type": "String"}}},
+  "@sessionFallback": {
+    "placeholders": {
+      "shortId": {
+        "type": "String"
+      }
+    }
+  },
   "sessionToken": "session {shortId}",
-  "@sessionToken": {"placeholders": {"shortId": {"type": "String"}}},
+  "@sessionToken": {
+    "placeholders": {
+      "shortId": {
+        "type": "String"
+      }
+    }
+  },
   "sessionRuntimeTapHint": "View session details",
   "sessionRuntimeDetails": "Session details",
-  "sessionRuntimeLastKnown": "TSPi is offline. These are the last known runtime values.",
+  "sessionRuntimeLastKnown": "Showing the last synchronized content. It will update when the connection recovers.",
   "sessionRuntimeUnavailable": "No runtime snapshot was saved for this session.",
   "copySessionId": "Copy session ID",
   "sessionIdCopied": "Session ID copied",
@@ -199,21 +268,6 @@
   "messagesSynced": "Messages synchronized",
   "abortRequested": "Abort request sent",
   "abortTargetChanged": "The active generation changed. Nothing was stopped.",
-  "approvalTitle": "Confirmation required",
-  "approvalRequestDescription": "TSPi is requesting permission for this controlled action.",
-  "approvalWorkspace": "Workspace",
-  "approvalSession": "Session",
-  "approvalTool": "Tool",
-  "approvalDetails": "Action details",
-  "approvalExpiresIn": "Expires in {seconds}s",
-  "@approvalExpiresIn": {"placeholders": {"seconds": {"type": "int"}}},
-  "approvalQueueRemaining": "{count, plural, =1{1 more request is waiting} other{{count} more requests are waiting}}",
-  "@approvalQueueRemaining": {"placeholders": {"count": {"type": "int"}}},
-  "approvalApproving": "Approving",
-  "approvalRejecting": "Rejecting",
-  "approvalExpired": "This approval request has expired",
-  "approvalStale": "This approval belongs to an earlier session and is no longer valid",
-  "approvalMissing": "This approval was already handled or is no longer available",
   "reject": "Reject",
   "approveOnce": "Approve once",
   "syncing": "Synchronizing",
@@ -263,58 +317,30 @@
   "tspiGenerating": "TSPi · Generating",
   "toolResult": "Tool result",
   "toolRunning": "Running {name}",
-  "@toolRunning": {"placeholders": {"name": {"type": "String"}}},
+  "@toolRunning": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "toolRunningGeneric": "Running tool",
   "toolFailed": "Tool failed",
   "invalidMessage": "Received a message this client could not read",
-  "invalidApproval": "Received an approval request this client could not read",
   "invalidHistoryMessage": "A historical message could not be read by this client.",
   "loadEarlierMessages": "Load earlier messages",
   "loadingEarlierMessages": "Loading earlier messages",
   "loadAllHistory": "Load all history",
   "loadingAllHistory": "Loading all history",
-  "timelineProgress": "{loaded} / {total} items",
-  "@timelineProgress": {"placeholders": {"loaded": {"type": "int"}, "total": {"type": "int"}}},
-  "timelineTurns": "{count} turns",
-  "@timelineTurns": {"placeholders": {"count": {"type": "int"}}},
-  "timelineActivities": "{count} activities",
-  "@timelineActivities": {"placeholders": {"count": {"type": "int"}}},
-  "timelineFilterAll": "All",
-  "timelineFilterMessages": "Messages",
-  "timelineFilterActivities": "Activity",
-  "timelineFilterEmpty": "No items in this view",
-  "timelineBranches": "Session branches",
-  "timelineActiveBranch": "Active branch",
-  "timelineBranchLabel": "Branch {shortId}",
-  "@timelineBranchLabel": {"placeholders": {"shortId": {"type": "String"}}},
-  "timelineTurnLabel": "Turn {number}",
-  "@timelineTurnLabel": {"placeholders": {"number": {"type": "int"}}},
-  "timelineSubagent": "Subagent",
-  "timelineResearch": "Research",
-  "timelineReview": "Review",
-  "timelineWorkspace": "Workspace",
-  "timelineConfiguration": "Configuration",
-  "timelineModelChange": "Model changed",
-  "timelineThinkingLevelChange": "Thinking level changed",
-  "timelineSessionInfo": "Session information",
-  "timelineContext": "Context",
-  "timelineSystem": "System",
-  "timelineCompleted": "Completed",
-  "timelineFailed": "Failed",
-  "timelineRecorded": "Recorded",
-  "timelineStage": "Stage",
-  "timelineNodes": "Research nodes",
-  "timelineReference": "Reference",
-  "timelineRetrySafe": "Safe to retry",
-  "timelineRetryUnsafe": "Do not retry automatically",
-  "timelineDuration": "{seconds}s",
-  "@timelineDuration": {"placeholders": {"seconds": {"type": "String"}}},
-  "timelineTokens": "{count} tokens",
-  "@timelineTokens": {"placeholders": {"count": {"type": "int"}}},
-  "composerHistoricalBranch": "Read-only historical branch",
   "networkRetrying": "Network connection interrupted. Retrying",
   "imageAlt": "[Image: {alt}]",
-  "@imageAlt": {"placeholders": {"alt": {"type": "String"}}},
+  "@imageAlt": {
+    "placeholders": {
+      "alt": {
+        "type": "String"
+      }
+    }
+  },
   "blockedNonHttpsImage": "[Blocked a non-HTTPS image]",
   "previewImage": "Preview image",
   "loadingImage": "Loading image",
@@ -336,11 +362,23 @@
   "problemQueueRecovery": "A previous request has an uncertain outcome. Review its history and outputs before continuing.",
   "commandQueue": "Up next",
   "commandQueueCount": "Up next · {count}",
-  "@commandQueueCount": {"placeholders": {"count": {"type": "int"}}},
+  "@commandQueueCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "commandQueuePending": "Messages waiting",
   "commandQueueEmpty": "No messages waiting",
   "commandQueued": "Waiting · {position}",
-  "@commandQueued": {"placeholders": {"position": {"type": "int"}}},
+  "@commandQueued": {
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
   "commandStarting": "Preparing",
   "commandRunning": "In progress",
   "commandCompleted": "Finished",
@@ -366,7 +404,13 @@
   "workspaceReadOnly": "Workspace access: read-only",
   "workspaceReadWrite": "Workspace access: read and write",
   "switchAssistantMode": "Switch to {mode}?",
-  "@switchAssistantMode": {"placeholders": {"mode": {"type": "String"}}},
+  "@switchAssistantMode": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
   "switchAssistantModeBody": "The idle assistant will restart in this conversation. History and submitted calculations stay intact. If startup fails, you can start the conversation again.",
   "activationUpgradeRequired": "Update the Pi App Server to choose a session mode. History remains available.",
   "activationWriterActive": "Another process owns this workspace or conversation. Close it on the App Server before continuing. History and drafts are kept.",
@@ -375,7 +419,13 @@
   "activationExternalOwner": "This workspace is open in a terminal. Continue that conversation or close it before switching.",
   "activationSwitchTitle": "Continue research in this conversation?",
   "activationSwitchBody": "The idle runtime for {name} will stop. Its history and remote calculations are kept. A failed start will not restart it automatically.",
-  "@activationSwitchBody": {"placeholders": {"name": {"type": "String"}}},
+  "@activationSwitchBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "activationSwitchConfirm": "Switch",
   "activationOpenOwner": "Open conversation",
   "activationFailed": "The conversation did not become ready. Refresh and check the App Server configuration. A runtime stopped during switching will stay offline; history and drafts are kept.",
@@ -398,7 +448,13 @@
   "messageGenerationFailed": "Generation failed",
   "messageGenerationAborted": "Generation stopped",
   "activityRecords": "{count} activity records",
-  "@activityRecords": {"placeholders": {"count": {"type": "int"}}},
+  "@activityRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "aboutApp": "About",
   "chooseModel": "Choose model",
   "moreActions": "More actions",
@@ -407,7 +463,6 @@
   "appServerDefaultModel": "App Server default model",
   "modelSelectionUnavailable": "Wait for synchronization and pending messages to finish before switching models.",
   "modelSelectionBusy": "The assistant is busy. Switch models after this response finishes.",
-  "modelSelectionAppServerRequired": "Only Pi App Server conversations can switch models here.",
   "modelSelectionStartRequired": "Continue this conversation before changing its model.",
   "modelPreference": "Model for the next conversation start",
   "viewFullOutput": "View full output",
@@ -416,10 +471,21 @@
   "outputCopyFailed": "Could not copy output",
   "contentDisplayFailed": "This content could not be displayed.",
   "activityFailureCount": "{count, plural, =1{1 failed activity} other{{count} failed activities}}",
-  "@activityFailureCount": {"placeholders": {"count": {"type": "int"}}},
+  "@activityFailureCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "viewAllActivities": "View all {count} activities",
-  "@viewAllActivities": {"placeholders": {"count": {"type": "int"}}},
-  "activeItems": "Current",
+  "@viewAllActivities": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "projectViews": "Project lists",
   "sessionViews": "Conversation lists",
   "archivedProjects": "Archived projects",
@@ -443,5 +509,6 @@
   "activityReview": "Independent review",
   "activityReply": "Respond to review",
   "activityCalculation": "Calculation",
-  "activityRemote": "Remote task"
+  "activityRemote": "Remote task",
+  "toolCompleted": "Completed"
 }

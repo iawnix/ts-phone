@@ -1,23 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ts_phone/app.dart';
 import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/data/settings_store.dart';
-import 'package:ts_phone/features/chat/timeline_widgets.dart';
-import 'package:ts_phone/features/chat/chat_controller.dart';
-import 'package:ts_phone/features/chat/live_run_strip.dart';
 import 'package:ts_phone/features/connection/connection_page.dart';
 import 'package:ts_phone/features/settings/settings_page.dart';
 import 'package:ts_phone/l10n/app_localizations.dart';
 import 'package:ts_phone/models/app_theme_preference.dart';
 import 'package:ts_phone/models/app_locale_preference.dart';
 import 'package:ts_phone/models/connection_settings.dart';
-import 'package:ts_phone/models/session_timeline.dart';
 import 'package:ts_phone/platform/ts_accessibility_controller.dart';
 import 'package:ts_phone/theme/app_icons.dart';
 import 'package:ts_phone/theme/ts_phone_theme.dart';
@@ -29,7 +24,7 @@ import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
 
 const _hostId = '123e4567-e89b-42d3-a456-426614174000';
 const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
-const _deviceToken = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+const _deviceToken = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
 void main() {
   testWidgets('shows the connection screen without layout overflow', (
@@ -99,60 +94,6 @@ void main() {
     expect(find.byType(Image), findsNothing);
     expect(tester.takeException(), isNull);
   });
-
-  for (final locale in const <Locale>[Locale('en'), Locale('zh')]) {
-    testWidgets(
-      'timeline filter uses a large-text menu in ${locale.languageCode}',
-      (WidgetTester tester) async {
-        tester.view.physicalSize = const Size(320, 640);
-        tester.view.devicePixelRatio = 1;
-        tester.platformDispatcher.textScaleFactorTestValue = 2;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        var selected = TimelineViewFilter.all;
-        final activityLabel = locale.languageCode == 'zh' ? '活动' : 'Activity';
-
-        await tester.pumpWidget(
-          MaterialApp(
-            locale: locale,
-            supportedLocales: AppLocalizations.supportedLocales,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            theme: TsPhoneTheme.light(),
-            home: StatefulBuilder(
-              builder: (context, setState) => Scaffold(
-                body: TimelineFilterControl(
-                  selected: selected,
-                  onChanged: (value) => setState(() => selected = value),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        expect(
-          find.byKey(const ValueKey<String>('timeline-view-filter-menu')),
-          findsOneWidget,
-        );
-        expect(
-          find.byType(TsSegmentedControl<TimelineViewFilter>),
-          findsNothing,
-        );
-
-        await tester.tap(
-          find.byKey(const ValueKey<String>('timeline-view-filter-menu')),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(activityLabel).last);
-        await tester.pumpAndSettle();
-
-        expect(selected, TimelineViewFilter.activities);
-        expect(find.text(activityLabel), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
 
   testWidgets('renders inline code chips and terminal code blocks', (
     WidgetTester tester,
@@ -283,7 +224,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('narrative has no repeated logo and preserves tool disclosure', (
+  testWidgets('keeps a standalone tool message on a compact timeline row', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TsPhoneTheme.light(),
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: ChatMessageView(
+            message: ChatMessage(
+              role: ChatRole.assistant,
+              text: '',
+              timestamp: DateTime(2026, 9, 27, 15, 3),
+              tools: <ToolDetail>[
+                ToolDetail(title: 'research_read', body: '{}'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(const ValueKey<String>('tool-disclosure-row'));
+    expect(tester.getSize(row).height, lessThanOrEqualTo(48));
+    expect(find.text('15:03'), findsOneWidget);
+    expect(find.byIcon(AppIcons.check_circle_outline_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('narrative stays quiet and preserves tool disclosure', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -585,117 +558,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('live glass status preserves a long tool name at large text', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: TsPhoneTheme.light(),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: const TextScaler.linear(2)),
-          child: child!,
-        ),
-        home: Scaffold(
-          body: LiveRunStrip(
-            activity: const ChatActivity(
-              ChatActivityKind.runningTool,
-              toolName: 'ts_workspace_decision_draft',
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final label = find.textContaining('ts workspace decision draft');
-    expect(label, findsOneWidget);
-    expect(
-      tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
-      isTrue,
-    );
-    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('failed activity keeps its summary without duplicating stop', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: TsPhoneTheme.light(),
-        home: Scaffold(
-          body: LiveRunStrip(
-            activity: const ChatActivity(
-              ChatActivityKind.toolFailed,
-              toolName: 'ts_calc',
-            ),
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('Tool failed: Calculation'), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('live-run-stop')), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('failed activity rail fits dark mode with 2x text', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: TsPhoneTheme.dark(),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: const TextScaler.linear(2)),
-          child: child!,
-        ),
-        home: const Scaffold(
-          body: TimelineActivityView(
-            identity: 'activity-failed',
-            activity: TimelineActivity(
-              category: TimelineActivityCategory.review,
-              status: TimelineActivityStatus.failed,
-              title: 'review_run',
-              role: 'review',
-              operation: 'validate',
-              durationMs: 2400,
-              detail: 'Result contract validation failed.',
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Review · Validate'), findsOneWidget);
-    expect(find.text('Failed'), findsOneWidget);
-    expect(find.text('2.4s'), findsOneWidget);
-    expect(find.byIcon(AppIcons.fact_check_outlined), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('switches the full app to English and restores the preference', (
     WidgetTester tester,
   ) async {
@@ -847,7 +709,7 @@ void main() {
     await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
 
-    expect(find.byType(TsSettingsSection), findsNWidgets(3));
+    expect(find.byType(TsSettingsSection), findsNWidgets(2));
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.byType(TsContentSurface), findsNothing);
     expect(find.byType(TsGlassSurface), findsNothing);

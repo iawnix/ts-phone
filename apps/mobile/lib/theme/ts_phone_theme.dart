@@ -434,14 +434,6 @@ abstract final class TsPhoneTheme {
           onPrimaryContainer: isLight
               ? const Color(0xFF003A66)
               : const Color(0xFFDCEEFF),
-          secondary: statusTheme.connected,
-          onSecondary: statusTheme.onConnected,
-          secondaryContainer: statusTheme.connectedContainer,
-          onSecondaryContainer: statusTheme.onConnectedContainer,
-          tertiary: statusTheme.warning,
-          onTertiary: statusTheme.onWarning,
-          tertiaryContainer: statusTheme.warningContainer,
-          onTertiaryContainer: statusTheme.onWarningContainer,
           error: statusTheme.error,
           onError: statusTheme.onError,
           errorContainer: statusTheme.errorContainer,
@@ -478,7 +470,7 @@ abstract final class TsPhoneTheme {
               ? isLight
                     ? const Color(0xFF3A3A3C)
                     : const Color(0xFFC7C7CC)
-              : const Color(0xFF8E8E93),
+              : const Color(0xFF808085),
           outlineVariant: highContrast
               ? isLight
                     ? const Color(0xFF747477)

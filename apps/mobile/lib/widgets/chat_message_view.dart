@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/services.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import '../theme/ts_phone_theme.dart';
 import 'markdown_message.dart';
 import 'presentation.dart';
 import 'activity_label.dart';
+import 'conversation_time.dart';
 import 'ts_phone_brand_mark.dart';
 
 class ChatMessageView extends StatelessWidget {
@@ -41,18 +43,42 @@ class ChatMessageView extends StatelessWidget {
           : CrossAxisAlignment.stretch,
       children: <Widget>[
         if (hasNarrative) MarkdownMessage(data: message.text),
-        for (final tool in message.tools) _ToolDetailView(detail: tool),
+        for (var index = 0; index < message.tools.length; index++)
+          _ToolDetailView(
+            detail: message.tools[index],
+            timestamp: index == 0 ? message.timestamp : null,
+          ),
         if (message.hasInterruptedOutput)
           _OutputNotice(state: message.outputState!, failure: message.failure),
       ],
     );
-    final frame = RepaintBoundary(
+    final frame = GestureDetector(
+      onLongPress: message.text.isEmpty
+          ? null
+          : () async {
+              try {
+                await Clipboard.setData(ClipboardData(text: message.text));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(context.l10n.outputCopied)),
+                  );
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(context.l10n.outputCopyFailed)),
+                  );
+                }
+              }
+            },
       child: _MessageFrame(
         isUser: isUser,
+        compactAssistant: !isUser && !hasNarrative && message.tools.isNotEmpty,
         origin: message.origin,
         timestamp: message.timestamp,
         deliveryState: message.deliveryState,
         showAssistantAttribution: false,
+        showAssistantTimestamp: message.tools.isEmpty,
         child: content,
       ),
     );
@@ -244,10 +270,10 @@ class _StreamingChatMessageViewState extends State<StreamingChatMessageView> {
     return _MessageFrame(
       isUser: false,
       isStreaming: true,
-      child: Text(
-        key: const ValueKey<String>('streaming-message-text'),
-        value.isEmpty ? '…' : value,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+      showAssistantAttribution: false,
+      child: MarkdownMessage(
+        key: const ValueKey('streaming-message-text'),
+        data: value.isEmpty ? '…' : value,
       ),
     );
   }
@@ -262,6 +288,8 @@ class _MessageFrame extends StatelessWidget {
     this.timestamp,
     this.deliveryState,
     this.showAssistantAttribution = true,
+    this.showAssistantTimestamp = true,
+    this.compactAssistant = false,
   });
 
   final bool isUser;
@@ -271,6 +299,8 @@ class _MessageFrame extends StatelessWidget {
   final DateTime? timestamp;
   final ChatDeliveryState? deliveryState;
   final bool showAssistantAttribution;
+  final bool showAssistantTimestamp;
+  final bool compactAssistant;
 
   @override
   Widget build(BuildContext context) {
@@ -283,12 +313,14 @@ class _MessageFrame extends StatelessWidget {
       child: Container(
         width: isUser ? null : double.infinity,
         constraints: BoxConstraints(maxWidth: maxWidth),
-        margin: const EdgeInsets.symmetric(
+        margin: EdgeInsets.symmetric(
           horizontal: TsPhoneSpacing.large,
-          vertical: TsPhoneSpacing.xSmall,
+          vertical: compactAssistant ? 0 : TsPhoneSpacing.xSmall,
         ),
         padding: isUser
             ? const EdgeInsets.fromLTRB(14, 10, 14, 10)
+            : compactAssistant
+            ? EdgeInsets.zero
             : const EdgeInsets.symmetric(
                 horizontal: TsPhoneSpacing.xSmall,
                 vertical: TsPhoneSpacing.small,
@@ -318,7 +350,7 @@ class _MessageFrame extends StatelessWidget {
                 children: <Widget>[
                   if (isStreaming) ...<Widget>[
                     TsStatusDot(
-                      color: theme.colorScheme.tertiary,
+                      color: TsPhoneStatusTheme.resolve(context).connected,
                       pulsing: true,
                     ),
                     const SizedBox(width: TsPhoneSpacing.small),
@@ -341,6 +373,8 @@ class _MessageFrame extends StatelessWidget {
               const SizedBox(height: TsPhoneSpacing.xSmall),
             ],
             child,
+            if (!isUser && showAssistantTimestamp)
+              _AssistantMessageTimestamp(timestamp: timestamp),
           ],
         ),
       ),
@@ -364,7 +398,6 @@ class _UserMessageMetadata extends StatelessWidget {
     final theme = Theme.of(context);
     final color = theme.colorScheme.onSurfaceVariant;
     final originLabel = switch (origin) {
-      'phone' => context.l10n.messageOriginPhone,
       'local' || 'cli' || 'interactive' => context.l10n.messageOriginCli,
       _ => null,
     };
@@ -374,10 +407,7 @@ class _UserMessageMetadata extends StatelessWidget {
       ChatDeliveryState.uncertain => context.l10n.messageDeliveryUncertain,
       null => null,
     };
-    final localTime = timestamp?.toLocal();
-    final timeLabel = localTime == null
-        ? null
-        : '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+    final timeLabel = conversationTimeLabel(timestamp);
     final labelStyle = theme.textTheme.labelSmall?.copyWith(
       color: color,
       fontWeight: FontWeight.w600,
@@ -387,8 +417,7 @@ class _UserMessageMetadata extends StatelessWidget {
       runSpacing: 2,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
-        Text(context.l10n.you, style: labelStyle),
-        if (originLabel != null) Text('· $originLabel', style: labelStyle),
+        if (originLabel != null) Text(originLabel, style: labelStyle),
         if (deliveryLabel != null) ...<Widget>[
           if (deliveryState == ChatDeliveryState.sending)
             SizedBox.square(
@@ -398,17 +427,39 @@ class _UserMessageMetadata extends StatelessWidget {
           else
             Icon(AppIcons.cloud_upload_outlined, size: 13, color: color),
           Text(deliveryLabel, style: labelStyle),
-        ] else if (timeLabel != null)
-          Text('· $timeLabel', style: labelStyle),
+        ],
+        if (timeLabel != null) Text(timeLabel, style: labelStyle),
       ],
     );
   }
 }
 
+class _AssistantMessageTimestamp extends StatelessWidget {
+  const _AssistantMessageTimestamp({required this.timestamp});
+
+  final DateTime? timestamp;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = conversationTimeLabel(timestamp);
+    if (label == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: TsPhoneSpacing.xSmall),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
 class _ToolDetailView extends StatelessWidget {
-  const _ToolDetailView({required this.detail});
+  const _ToolDetailView({required this.detail, this.timestamp});
 
   final ToolDetail detail;
+  final DateTime? timestamp;
 
   @override
   Widget build(BuildContext context) {
@@ -418,14 +469,15 @@ class _ToolDetailView extends StatelessWidget {
     final title = detail.title.isEmpty ? context.l10n.toolResult : detail.title;
     final stateLabel = detail.isError
         ? context.l10n.statusError
-        : context.l10n.timelineCompleted;
+        : context.l10n.toolCompleted;
     return Padding(
-      padding: const EdgeInsets.only(top: TsPhoneSpacing.xSmall),
+      padding: const EdgeInsets.only(top: 2),
       child: Material(
         key: const ValueKey<String>('tool-disclosure-row'),
         color: Colors.transparent,
         child: ExpansionTile(
           dense: true,
+          minTileHeight: 48,
           visualDensity: VisualDensity.compact,
           shape: const Border(),
           collapsedShape: const Border(),
@@ -462,23 +514,42 @@ class _ToolDetailView extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: TsPhoneSpacing.small),
-              Text(
-                stateLabel,
-                maxLines: 1,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: detail.isError
-                      ? stateColor
-                      : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
+              if (detail.isError)
+                Text(
+                  stateLabel,
+                  maxLines: 1,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: stateColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              else
+                Tooltip(
+                  message: stateLabel,
+                  child: Icon(
+                    AppIcons.check_circle_outline_rounded,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
+              if (conversationTimeLabel(timestamp)
+                  case final time?) ...<Widget>[
+                const SizedBox(width: TsPhoneSpacing.small),
+                Text(
+                  time,
+                  maxLines: 1,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
           ),
           childrenPadding: const EdgeInsets.fromLTRB(
-            TsPhoneSpacing.small,
-            TsPhoneSpacing.xSmall,
-            TsPhoneSpacing.small,
-            TsPhoneSpacing.small,
+            TsPhoneSpacing.medium,
+            0,
+            TsPhoneSpacing.medium,
+            4,
           ),
           children: <Widget>[
             TsTerminalBlock(

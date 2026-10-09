@@ -7,9 +7,32 @@ import 'package:ts_phone/data/tspi_link_pairing.dart';
 
 const _hostId = '123e4567-e89b-42d3-a456-426614174000';
 const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
-const _deviceToken = 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+const _deviceToken = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
 void main() {
+  test('rejects the retired Link protocol', () async {
+    final client = TspiLinkPairingClient(
+      client: MockClient(
+        (_) async =>
+            http.Response(jsonEncode({'protocol': 'tspi-link.v1'}), 201),
+      ),
+    );
+    await expectLater(
+      client.redeem(
+        relayUrl: 'https://link.example.test',
+        pairingCode: 'ABCDEFGH',
+        deviceName: 'Phone',
+      ),
+      throwsA(
+        isA<TspiLinkPairingException>().having(
+          (e) => e.code,
+          'code',
+          'unsupported_protocol',
+        ),
+      ),
+    );
+  });
+
   test('redeems a normalized pairing code for device credentials', () async {
     late http.Request captured;
     final client = TspiLinkPairingClient(
@@ -17,7 +40,7 @@ void main() {
         captured = request;
         return http.Response(
           jsonEncode({
-            'protocol': 'tspi-link.v1',
+            'protocol': 'research-agent-link.v1',
             'relayUrl': 'https://link.example.test',
             'hostId': _hostId,
             'deviceId': _deviceId,
@@ -84,7 +107,7 @@ void main() {
       client: MockClient(
         (_) async => http.Response(
           jsonEncode({
-            'protocol': 'tspi-link.v1',
+            'protocol': 'research-agent-link.v1',
             'relayUrl': 'https://other.example.test',
             'hostId': _hostId,
             'deviceId': _deviceId,

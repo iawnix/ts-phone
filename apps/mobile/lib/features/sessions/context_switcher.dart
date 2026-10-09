@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ts_phone/theme/app_icons.dart';
-import 'package:intl/intl.dart';
 
 import '../../data/ts_phone_api.dart';
-import '../../l10n/app_localizations.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/workspace.dart';
 import '../../theme/ts_phone_theme.dart';
+import 'package:intl/intl.dart';
+import '../../l10n/app_localizations.dart';
 import '../../widgets/presentation.dart';
 
 typedef ContextSessionLoader =
@@ -57,6 +57,9 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
   late WorkspaceSummary _workspace;
   List<SessionSummary>? _sessions;
   Object? _error;
+  String _query = '';
+  bool _searching = false;
+  int _loadGeneration = 0;
   bool _loading = false;
   bool _creating = false;
   bool _creatingWorkspace = false;
@@ -91,6 +94,11 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
     final nextWorkspace = next;
     if (nextWorkspace.id == _workspace.id) {
       _workspace = nextWorkspace;
+      if (widget.initialSessions != null &&
+          widget.initialSessions != oldWidget.initialSessions &&
+          _workspace.id == widget.selectedWorkspace.id) {
+        _sessions = _prioritizeSessions(widget.initialSessions!);
+      }
       return;
     }
     _workspace = nextWorkspace;
@@ -104,6 +112,7 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
   }
 
   Future<void> _loadSessions(WorkspaceSummary workspace) async {
+    final generation = ++_loadGeneration;
     setState(() {
       _workspace = workspace;
       _sessions = null;
@@ -112,14 +121,14 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
     });
     try {
       final sessions = await widget.loadSessions(workspace);
-      if (!mounted || _workspace.id != workspace.id) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() => _sessions = _prioritizeSessions(sessions));
     } on Object catch (error) {
-      if (mounted && _workspace.id == workspace.id) {
+      if (mounted && generation == _loadGeneration) {
         setState(() => _error = error);
       }
     } finally {
-      if (mounted && _workspace.id == workspace.id) {
+      if (mounted && generation == _loadGeneration) {
         setState(() => _loading = false);
       }
     }
@@ -132,6 +141,10 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
     try {
       final session = await create(_workspace);
       if (!mounted || session == null) return;
+      _sessions = _prioritizeSessions([
+        session,
+        ...?_sessions?.where((s) => s.sessionId != session.sessionId),
+      ]);
       widget.onSessionSelected(_workspace, session);
       if (widget.dismissOnSessionSelected) Navigator.of(context).pop();
     } finally {
@@ -165,7 +178,18 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    final sessions = _sessions;
+    final query = _query.trim().toLowerCase();
+    final sessions = _sessions
+        ?.where(
+          (session) =>
+              query.isEmpty ||
+              session
+                  .localizedDisplayName(l10n)
+                  .toLowerCase()
+                  .contains(query) ||
+              session.sessionId.toLowerCase().contains(query),
+        )
+        .toList();
     final content = ListView(
       shrinkWrap: !widget.embedded,
       padding: const EdgeInsets.fromLTRB(
@@ -195,13 +219,12 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
         const SizedBox(height: TsPhoneSpacing.xSmall),
         for (final workspace in _workspaces)
           _ContextRow(
-            icon: switch (workspace.runtimeState) {
-              RuntimeState.running => AppIcons.motion_photos_on_outlined,
-              RuntimeState.connecting => AppIcons.sync_rounded,
-              RuntimeState.offline => AppIcons.cloud_off_outlined,
-              RuntimeState.recoveryRequired => AppIcons.error_outline_rounded,
-              RuntimeState.idle => AppIcons.folder_outlined,
-            },
+            leading: TsRuntimeStatusGlyph(
+              state: workspace.runtimeState,
+              label: workspace.runtimeState.localizedCompactLabel(l10n),
+              idleIcon: AppIcons.folder_outlined,
+              selected: workspace.id == _workspace.id,
+            ),
             title: workspace.name,
             selected: workspace.id == _workspace.id,
             onTap: workspace.id == _workspace.id
@@ -212,6 +235,15 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
         Row(
           children: <Widget>[
             Expanded(child: _SheetHeader(title: l10n.sessions)),
+            IconButton(
+              key: const ValueKey('context-toggle-search'),
+              onPressed: () => setState(() {
+                _searching = !_searching;
+                _query = '';
+              }),
+              tooltip: _searching ? l10n.cancel : l10n.searchConversations,
+              icon: Icon(_searching ? AppIcons.close_rounded : AppIcons.search),
+            ),
             if (widget.onCreateSession != null)
               IconButton(
                 key: const ValueKey('context-new-session'),
@@ -226,6 +258,19 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
               ),
           ],
         ),
+        if (_searching)
+          Padding(
+            padding: const EdgeInsets.only(bottom: TsPhoneSpacing.small),
+            child: TextField(
+              key: const ValueKey('context-search'),
+              autofocus: true,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: l10n.searchConversations,
+                prefixIcon: const Icon(AppIcons.search, size: 20),
+              ),
+            ),
+          ),
         if (_loading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 28),
@@ -250,15 +295,15 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
         else
           for (final session in sessions ?? const <SessionSummary>[])
             _ContextRow(
-              icon: switch (session.runtimeState) {
-                RuntimeState.running => AppIcons.motion_photos_on_outlined,
-                RuntimeState.connecting => AppIcons.sync_rounded,
-                RuntimeState.offline => AppIcons.cloud_off_outlined,
-                RuntimeState.recoveryRequired => AppIcons.error_outline_rounded,
-                RuntimeState.idle => AppIcons.chat_bubble_outline_rounded,
-              },
+              leading: TsRuntimeStatusGlyph(
+                state: session.runtimeState,
+                label: session.runtimeState.localizedCompactLabel(l10n),
+                idleIcon: AppIcons.chat_bubble_outline_rounded,
+                selected:
+                    session.sessionId == widget.selectedSession?.sessionId &&
+                    _workspace.id == widget.selectedWorkspace.id,
+              ),
               title: session.localizedDisplayName(l10n),
-              leadingLabel: session.runtimeState.localizedCompactLabel(l10n),
               subtitle: _sessionSubtitle(session, l10n),
               selected:
                   session.sessionId == widget.selectedSession?.sessionId &&
@@ -311,18 +356,16 @@ class _SheetHeader extends StatelessWidget {
 
 class _ContextRow extends StatelessWidget {
   const _ContextRow({
-    required this.icon,
+    required this.leading,
     required this.title,
     required this.selected,
     required this.onTap,
     this.subtitle,
-    this.leadingLabel,
   });
 
-  final IconData icon;
+  final Widget leading;
   final String title;
   final String? subtitle;
-  final String? leadingLabel;
   final bool selected;
   final VoidCallback? onTap;
 
@@ -335,22 +378,7 @@ class _ContextRow extends StatelessWidget {
       child: ListTile(
         dense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-        leading: leadingLabel == null
-            ? Icon(
-                icon,
-                color: selected ? colors.primary : colors.onSurfaceVariant,
-              )
-            : Semantics(
-                label: leadingLabel,
-                excludeSemantics: true,
-                child: Tooltip(
-                  message: leadingLabel!,
-                  child: Icon(
-                    icon,
-                    color: selected ? colors.primary : colors.onSurfaceVariant,
-                  ),
-                ),
-              ),
+        leading: leading,
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: subtitle == null
             ? null

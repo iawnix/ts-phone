@@ -11,6 +11,7 @@ import 'package:ts_phone/data/ts_phone_api.dart';
 import 'package:ts_phone/features/chat/chat_controller.dart';
 import 'package:ts_phone/models/chat_message.dart';
 import 'package:ts_phone/models/connection_settings.dart';
+import 'package:ts_phone/models/phone_model.dart';
 import 'package:ts_phone/models/workspace.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -19,7 +20,7 @@ final _settings = ConnectionSettings(
   serverUrl: 'https://link.example.test',
   serverId: _serverId,
   deviceId: '223e4567-e89b-42d3-a456-426614174000',
-  token: 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+  token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
 );
 
 Map<String, Object?> _session({bool online = true, bool readOnly = false}) => {
@@ -78,7 +79,11 @@ void main() {
       final server = _Server();
       final client = server.client();
       addTearDown(client.close);
-      expect((await client.connect())['protocol'], tspiHostProtocol);
+      expect((await client.connect())['protocol'], 'research-agent-host/2');
+      expect(
+        (server.requests.single['params']! as Map)['protocol'],
+        'research-agent-host/2',
+      );
       expect(server.uri, Uri.parse('wss://link.example.test/v1/link'));
       expect(server.headers, {'Authorization': 'Bearer ${_settings.token}'});
       expect(server.requests.single['method'], 'initialize');
@@ -371,6 +376,120 @@ void main() {
     expect((snapshot.messages[1]! as Map)['content'], 'flat message');
   });
 
+  test('uses the Native Host model field when selecting a model', () async {
+    final server = _Server();
+    final gateway = HostGateway(_settings, client: server.client());
+    addTearDown(gateway.close);
+    server.onRequest = (request) {
+      switch (request['method']) {
+        case 'model/select':
+          final params = request['params']! as Map;
+          expect(params.containsKey('provider'), isFalse);
+          expect(params['model'], {'provider': 'test', 'id': 'two'});
+          expect(params.containsKey('model_id'), isFalse);
+          server.respond(request, {'accepted': true});
+        case 'session/read':
+          server.respond(request, {
+            ..._read(),
+            'snapshot': {
+              ..._snapshot(),
+              'model': {'provider': 'test', 'id': 'two'},
+            },
+          });
+        default:
+          fail('Unexpected ${request['method']}');
+      }
+    };
+
+    final selected = await gateway.selectModel(
+      'ts_001',
+      'session-1',
+      'revision-1',
+      const PhoneModel(provider: 'test', id: 'two', name: 'Two'),
+    );
+    expect(selected.sessionId, 'session-1');
+  });
+
+  test('reads the flat Monitor view after a mutation receipt', () async {
+    final server = _Server();
+    final gateway = HostGateway(_settings, client: server.client());
+    addTearDown(gateway.close);
+    server.onRequest = (request) {
+      if (request['method'] == 'monitor/disable') {
+        server.respond(request, {'workspace_id': 'ts_001', 'updated': 1});
+      } else {
+        expect(request['method'], 'monitor/status');
+        expect((request['params']! as Map)['monitor_id'], 'm-1');
+        server.respond(request, {
+          'workspace_id': 'ts_001',
+          'monitors': [
+            {
+              'monitor_id': 'm-1',
+              'node_id': 'node_calculation',
+              'enabled': false,
+              'last_state': 'failed',
+              'pending_count': 2,
+              'last_observed_at': '2026-10-09T00:00:00Z',
+              'last_error': 'Host offline',
+            },
+          ],
+        });
+      }
+    };
+    final monitor = await gateway.setMonitorEnabled('ts_001', 'm-1', false);
+    expect(monitor.enabled, isFalse);
+    expect(monitor.state, 'failed');
+    expect(monitor.pendingCount, 2);
+    expect(monitor.lastObservedAt, DateTime.utc(2026, 10, 9));
+    expect(monitor.lastError, 'Host offline');
+  });
+
+  test(
+    'reports a missing Monitor instead of parsing an empty update receipt',
+    () async {
+      final server = _Server();
+      final gateway = HostGateway(_settings, client: server.client());
+      addTearDown(gateway.close);
+      server.onRequest = (request) =>
+          server.respond(request, {'workspace_id': 'ts_001', 'updated': 0});
+      await expectLater(
+        gateway.setMonitorEnabled('ts_001', 'missing', false),
+        throwsA(
+          isA<TsPhoneApiException>().having(
+            (e) => e.code,
+            'code',
+            'monitor_not_found',
+          ),
+        ),
+      );
+    },
+  );
+
+  test('sends the Host model object when selecting a model', () async {
+    final server = _Server();
+    final gateway = HostGateway(_settings, client: server.client());
+    addTearDown(gateway.close);
+    server.onRequest = (request) {
+      expect(request['method'], 'model/select');
+      final params = request['params']! as Map;
+      expect(params['model'], {'provider': 'test', 'id': 'two'});
+      expect(params.containsKey('model_id'), isFalse);
+      server.respond(request, {
+        'session': {
+          ..._session(),
+          'model': {'provider': 'test', 'id': 'two'},
+        },
+      });
+    };
+    final selected = await gateway.selectModel(
+      'ts_001',
+      'session-1',
+      'revision',
+      const PhoneModel(provider: 'test', id: 'two', name: 'Two'),
+    );
+    expect(selected.model, 'test/two');
+  });
+
   test('maps monitor management and structured Host failures', () async {
     final server = _Server();
     final gateway = HostGateway(_settings, client: server.client());
@@ -381,10 +500,10 @@ void main() {
           'monitors': [
             {
               'monitor_id': 'm-1',
-              'intent_id': 'calculation',
+              'node_id': 'node_calculation',
               'enabled': true,
-              'state': {'last_state': 'running'},
-              'delivery': {'pending_count': 2},
+              'last_state': 'running',
+              'pending_count': 2,
             },
           ],
         });

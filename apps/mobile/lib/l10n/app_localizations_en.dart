@@ -176,6 +176,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appServerProtocol => 'App Server protocol';
 
   @override
+  String get appServerStatus => 'App Server status';
+
+  @override
   String get copyServerAddress => 'Copy server address';
 
   @override
@@ -371,7 +374,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionDeleteMessage =>
-      'Only this conversation history is moved to Recently Deleted. Scientific project data is not removed.';
+      'This permanently deletes the conversation and its history. This cannot be undone.';
 
   @override
   String get permanentDeleteTitle => 'Delete permanently?';
@@ -419,9 +422,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get remoteCalculations => 'Remote calculations';
-
-  @override
-  String get pendingApprovals => 'Pending approvals';
 
   @override
   String get unresolvedRemoteEffects => 'Unresolved remote effects';
@@ -600,7 +600,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionRuntimeLastKnown =>
-      'TSPi is offline. These are the last known runtime values.';
+      'Showing the last synchronized content. It will update when the connection recovers.';
 
   @override
   String get sessionRuntimeUnavailable =>
@@ -648,58 +648,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get abortTargetChanged =>
       'The active generation changed. Nothing was stopped.';
-
-  @override
-  String get approvalTitle => 'Confirmation required';
-
-  @override
-  String get approvalRequestDescription =>
-      'TSPi is requesting permission for this controlled action.';
-
-  @override
-  String get approvalWorkspace => 'Workspace';
-
-  @override
-  String get approvalSession => 'Session';
-
-  @override
-  String get approvalTool => 'Tool';
-
-  @override
-  String get approvalDetails => 'Action details';
-
-  @override
-  String approvalExpiresIn(int seconds) {
-    return 'Expires in ${seconds}s';
-  }
-
-  @override
-  String approvalQueueRemaining(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count more requests are waiting',
-      one: '1 more request is waiting',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String get approvalApproving => 'Approving';
-
-  @override
-  String get approvalRejecting => 'Rejecting';
-
-  @override
-  String get approvalExpired => 'This approval request has expired';
-
-  @override
-  String get approvalStale =>
-      'This approval belongs to an earlier session and is no longer valid';
-
-  @override
-  String get approvalMissing =>
-      'This approval was already handled or is no longer available';
 
   @override
   String get reject => 'Reject';
@@ -867,10 +815,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get invalidMessage => 'Received a message this client could not read';
 
   @override
-  String get invalidApproval =>
-      'Received an approval request this client could not read';
-
-  @override
   String get invalidHistoryMessage =>
       'A historical message could not be read by this client.';
 
@@ -885,116 +829,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loadingAllHistory => 'Loading all history';
-
-  @override
-  String timelineProgress(int loaded, int total) {
-    return '$loaded / $total items';
-  }
-
-  @override
-  String timelineTurns(int count) {
-    return '$count turns';
-  }
-
-  @override
-  String timelineActivities(int count) {
-    return '$count activities';
-  }
-
-  @override
-  String get timelineFilterAll => 'All';
-
-  @override
-  String get timelineFilterMessages => 'Messages';
-
-  @override
-  String get timelineFilterActivities => 'Activity';
-
-  @override
-  String get timelineFilterEmpty => 'No items in this view';
-
-  @override
-  String get timelineBranches => 'Session branches';
-
-  @override
-  String get timelineActiveBranch => 'Active branch';
-
-  @override
-  String timelineBranchLabel(String shortId) {
-    return 'Branch $shortId';
-  }
-
-  @override
-  String timelineTurnLabel(int number) {
-    return 'Turn $number';
-  }
-
-  @override
-  String get timelineSubagent => 'Subagent';
-
-  @override
-  String get timelineResearch => 'Research';
-
-  @override
-  String get timelineReview => 'Review';
-
-  @override
-  String get timelineWorkspace => 'Workspace';
-
-  @override
-  String get timelineConfiguration => 'Configuration';
-
-  @override
-  String get timelineModelChange => 'Model changed';
-
-  @override
-  String get timelineThinkingLevelChange => 'Thinking level changed';
-
-  @override
-  String get timelineSessionInfo => 'Session information';
-
-  @override
-  String get timelineContext => 'Context';
-
-  @override
-  String get timelineSystem => 'System';
-
-  @override
-  String get timelineCompleted => 'Completed';
-
-  @override
-  String get timelineFailed => 'Failed';
-
-  @override
-  String get timelineRecorded => 'Recorded';
-
-  @override
-  String get timelineStage => 'Stage';
-
-  @override
-  String get timelineNodes => 'Research nodes';
-
-  @override
-  String get timelineReference => 'Reference';
-
-  @override
-  String get timelineRetrySafe => 'Safe to retry';
-
-  @override
-  String get timelineRetryUnsafe => 'Do not retry automatically';
-
-  @override
-  String timelineDuration(String seconds) {
-    return '${seconds}s';
-  }
-
-  @override
-  String timelineTokens(int count) {
-    return '$count tokens';
-  }
-
-  @override
-  String get composerHistoricalBranch => 'Read-only historical branch';
 
   @override
   String get networkRetrying => 'Network connection interrupted. Retrying';
@@ -1301,10 +1135,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The assistant is busy. Switch models after this response finishes.';
 
   @override
-  String get modelSelectionAppServerRequired =>
-      'Only Pi App Server conversations can switch models here.';
-
-  @override
   String get modelSelectionStartRequired =>
       'Continue this conversation before changing its model.';
 
@@ -1413,4 +1243,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityRemote => 'Remote task';
+
+  @override
+  String get toolCompleted => 'Completed';
 }

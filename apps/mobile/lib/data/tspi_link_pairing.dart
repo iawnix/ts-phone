@@ -104,7 +104,7 @@ class TspiLinkPairingClient {
         message is String ? message : 'TSPi Relay rejected pairing',
       );
     }
-    if (value['protocol'] != 'tspi-link.v1') {
+    if (value['protocol'] != 'research-agent-link.v1') {
       throw const TspiLinkPairingException(
         'unsupported_protocol',
         'TSPi Relay uses an unsupported Link protocol',

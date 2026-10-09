@@ -180,6 +180,7 @@ class _MonitorCard extends StatelessWidget {
 
     return Card(
       key: ValueKey('monitor-${monitor.id}'),
+      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           TsPhoneSpacing.large,
@@ -233,7 +234,9 @@ class _MonitorCard extends StatelessWidget {
                               Text(
                                 l10n.hostMonitorPending(monitor.pendingCount),
                                 style: theme.textTheme.labelMedium?.copyWith(
-                                  color: colors.tertiary,
+                                  color: TsPhoneStatusTheme.resolve(
+                                    context,
+                                  ).warning,
                                 ),
                               ),
                             if (error?.isNotEmpty == true)

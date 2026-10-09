@@ -18,7 +18,7 @@ set is content-addressed and switched into place atomically.
 
 The artifact contains only the Flutter client. It does not bundle a TS Phone
 server, protocol package, Node runtime, systemd unit, reverse proxy, or Pi
-credentials. App Server releases are produced independently by TSPi and are
+credentials. Host releases are produced independently by TSPi and are
 selected by the TSPi installation's package pointer.
 
 To inspect a source attestation:

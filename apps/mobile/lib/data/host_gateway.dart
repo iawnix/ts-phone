@@ -4,7 +4,7 @@ import '../models/connection_settings.dart';
 import '../models/host_monitor.dart';
 import '../models/phone_model.dart';
 import '../models/workspace.dart';
-import 'app_server_gateway.dart';
+import 'session_gateway.dart';
 import 'host_rpc_client.dart';
 import 'ts_phone_api.dart';
 
@@ -25,8 +25,8 @@ class HostGateway
     implements
         TsPhoneGateway,
         TsPhoneModelGateway,
-        AppServerSessionGateway,
-        AppServerWorkspaceGateway,
+        SessionManagementGateway,
+        WorkspaceManagementGateway,
         WorkspaceSessionGateway,
         SessionResumeGateway,
         HostMonitorGateway {
@@ -211,16 +211,8 @@ class HostGateway
   @override
   Future<TsPhoneMessageSnapshot> getMessages(
     String workspaceId,
-    String sessionId, {
-    String? before,
-    int? limit,
-  }) => _guard(() async {
-    if (before != null) {
-      throw const TsPhoneApiException(
-        'Host returns a complete session snapshot',
-        code: 'history_window_unsupported',
-      );
-    }
+    String sessionId,
+  ) => _guard(() async {
     final result = _object(
       await _client.request('session/read', _target(workspaceId, sessionId)),
     );
@@ -234,20 +226,6 @@ class HostGateway
       activeAgentRunId: snapshot['turn_id'] as String?,
     );
   });
-
-  @override
-  Future<TsPhoneTimelineSnapshot> getTimeline(
-    String workspaceId,
-    String sessionId, {
-    String? before,
-    int? limit,
-    String? branch,
-  }) async {
-    throw const TsPhoneApiException(
-      'Host exposes Pi session messages',
-      code: 'timeline_unsupported',
-    );
-  }
 
   @override
   Future<void> sendMessage(
@@ -293,21 +271,6 @@ class HostGateway
       'turn_id': agentRunId,
     });
   });
-
-  @override
-  Future<void> respondToApproval(
-    String workspaceId,
-    String sessionId,
-    String approvalId, {
-    required String sessionRevision,
-    required bool approved,
-  }) async {
-    throw const TsPhoneApiException(
-      'This request must be answered in Pi',
-      code: 'approval_missing',
-      statusCode: 404,
-    );
-  }
 
   @override
   Stream<TsPhoneEvent> events(
@@ -448,6 +411,9 @@ class HostGateway
         provider: _string(model['provider']),
         id: id,
         name: model['name'] as String? ?? id,
+        contextWindow: _optionalPositiveInt(
+          model['contextWindow'] ?? model['context_window'],
+        ),
       );
     }).toList();
   });
@@ -463,8 +429,7 @@ class HostGateway
       await _client.request('model/select', {
         ..._target(workspaceId, sessionId),
         'request_id': createTsPhoneClientMessageId(),
-        'provider': model.provider,
-        'model_id': model.id,
+        'model': {'provider': model.provider, 'id': model.id},
       }),
     );
     if (result['session'] is Map) {
@@ -507,7 +472,19 @@ class HostGateway
         'request_id': createTsPhoneClientMessageId(),
       }),
     );
-    return HostMonitor.fromJson(_object(result['monitor'] ?? result));
+    if (result['updated'] != 1) {
+      throw const TsPhoneApiException(
+        'Monitor no longer exists',
+        code: 'monitor_not_found',
+      );
+    }
+    final status = _object(
+      await _client.request('monitor/status', {
+        'workspace_id': workspaceId,
+        'monitor_id': monitorId,
+      }),
+    );
+    return HostMonitor.fromJson(_object(_list(status['monitors']).single));
   });
 
   Map<String, Object?> get _activeTarget {
@@ -582,6 +559,7 @@ class HostGateway
     final payload = <String, Object?>{
       'messages': messages,
       'isStreaming': snapshot['is_streaming'] == true,
+      'model': _model(snapshot['model']),
       'runtimeState': online != true
           ? 'offline'
           : snapshot['is_streaming'] == true
@@ -779,6 +757,9 @@ String _string(Object? value) {
   }
   return value;
 }
+
+int? _optionalPositiveInt(Object? value) =>
+    value is int && value > 0 ? value : null;
 
 Object _translate(Object error) {
   if (error is HostRpcException) {

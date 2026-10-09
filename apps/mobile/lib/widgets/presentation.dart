@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:ts_phone/theme/app_icons.dart';
 
+import '../models/workspace.dart';
 import '../theme/ts_phone_theme.dart';
 import '../theme/ts_visual_accessibility.dart';
 import '../l10n/app_localizations_extensions.dart';
@@ -775,6 +776,7 @@ class TsSettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         TsPhoneSpacing.large,
@@ -797,10 +799,22 @@ class TsSettingsSection extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
+                letterSpacing: 0.1,
               ),
             ),
           ),
-          Material(color: Colors.transparent, child: child),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLowest,
+              border: Border.symmetric(
+                horizontal: BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: 0.55),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: Material(color: Colors.transparent, child: child),
+          ),
           if (footer case final value?)
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -901,36 +915,220 @@ class TsStatusDot extends StatelessWidget {
   final double size;
   final bool pulsing;
 
+  // Ambient dots remain steady; status labels carry the changing state.
   @override
-  Widget build(BuildContext context) {
-    if (!pulsing || MediaQuery.disableAnimationsOf(context)) {
-      return _buildDot(0);
-    }
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 1, end: 0),
-      duration: TsPhoneMotion.statusPulse,
-      curve: Curves.easeOutCubic,
-      builder: (context, pulse, _) => _buildDot(pulse),
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
+}
+
+enum TsStatusGlyphKind { dot, ring, hollow, icon }
+
+/// A quiet status mark for connection and runtime state.
+///
+/// Dots and rings keep ambient state from looking like an action button. The
+/// optional pulse is intentionally limited to active or transitional states.
+class TsStatusGlyph extends StatefulWidget {
+  const TsStatusGlyph({
+    super.key,
+    required this.kind,
+    required this.color,
+    this.icon,
+    this.size = 20,
+    this.pulsing = false,
+    this.semanticLabel,
+  });
+
+  final TsStatusGlyphKind kind;
+  final Color color;
+  final IconData? icon;
+  final double size;
+  final bool pulsing;
+  final String? semanticLabel;
+
+  @override
+  State<TsStatusGlyph> createState() => _TsStatusGlyphState();
+}
+
+class _TsStatusGlyphState extends State<TsStatusGlyph>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+      value: 0,
     );
   }
 
-  Widget _buildDot(double pulse) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: color,
-      shape: BoxShape.circle,
-      boxShadow: pulse > 0
-          ? <BoxShadow>[
-              BoxShadow(
-                color: color.withValues(alpha: 0.18 * pulse),
-                blurRadius: 5 * pulse,
-                spreadRadius: 2 * pulse,
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAnimation(restart: _pulse.value == 0);
+  }
+
+  @override
+  void didUpdateWidget(covariant TsStatusGlyph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimation(
+      restart:
+          oldWidget.kind != widget.kind || oldWidget.pulsing != widget.pulsing,
+    );
+  }
+
+  void _syncAnimation({bool restart = false}) {
+    final shouldPulse =
+        widget.pulsing && !MediaQuery.disableAnimationsOf(context);
+    if (shouldPulse) {
+      if (restart || _pulse.value == 0) _pulse.forward(from: 0);
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final glyph = AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) => _buildGlyph(_pulse.value),
+    );
+    if (widget.semanticLabel == null) return glyph;
+    return Semantics(
+      label: widget.semanticLabel,
+      excludeSemantics: true,
+      child: Tooltip(message: widget.semanticLabel!, child: glyph),
+    );
+  }
+
+  Widget _buildGlyph(double pulse) {
+    final size = widget.size;
+    if (widget.kind == TsStatusGlyphKind.icon) {
+      return SizedBox.square(
+        dimension: size,
+        child: Icon(widget.icon, color: widget.color, size: size * 0.9),
+      );
+    }
+
+    final breathing = widget.pulsing ? pulse : 0;
+    final halo = widget.color.withValues(alpha: 0.18 * (1 - breathing));
+    final core = size * 0.34;
+    final stroke = size * 0.09;
+    final isRing = widget.kind == TsStatusGlyphKind.ring;
+    final isHollow = widget.kind == TsStatusGlyphKind.hollow;
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          if (widget.pulsing)
+            Transform.scale(
+              scale: 1.12 + (0.16 * breathing),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: halo, width: stroke),
+                ),
+                child: SizedBox.square(dimension: core * 1.35),
               ),
-            ]
-          : null,
-    ),
-  );
+            ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isHollow || isRing ? Colors.transparent : widget.color,
+              border: isHollow || isRing
+                  ? Border.all(color: widget.color, width: stroke)
+                  : null,
+            ),
+            child: SizedBox.square(dimension: isRing ? size * 0.62 : core),
+          ),
+          if (isRing)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.color,
+              ),
+              child: SizedBox.square(dimension: size * 0.18),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Runtime state mark used in project and session lists.
+class TsRuntimeStatusGlyph extends StatelessWidget {
+  const TsRuntimeStatusGlyph({
+    super.key,
+    required this.state,
+    required this.label,
+    this.idleIcon = AppIcons.circle_outlined,
+    this.selected = false,
+    this.size = 20,
+  });
+
+  final RuntimeState state;
+  final String label;
+  final IconData idleIcon;
+  final bool selected;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final status = TsPhoneStatusTheme.resolve(context);
+    final (kind, color, icon, pulsing) = switch (state) {
+      RuntimeState.running => (
+        TsStatusGlyphKind.dot,
+        status.connected,
+        null,
+        true,
+      ),
+      RuntimeState.connecting => (
+        TsStatusGlyphKind.ring,
+        status.warning,
+        null,
+        true,
+      ),
+      RuntimeState.offline => (
+        TsStatusGlyphKind.hollow,
+        colors.outline,
+        null,
+        false,
+      ),
+      RuntimeState.recoveryRequired => (
+        TsStatusGlyphKind.icon,
+        status.error,
+        AppIcons.error_outline_rounded,
+        false,
+      ),
+      RuntimeState.idle => (
+        TsStatusGlyphKind.icon,
+        selected ? colors.primary : colors.onSurfaceVariant,
+        idleIcon,
+        false,
+      ),
+    };
+    return TsStatusGlyph(
+      kind: kind,
+      color: color,
+      icon: icon,
+      size: size,
+      pulsing: pulsing,
+      semanticLabel: label,
+    );
+  }
 }
 
 class TsMonoText extends StatelessWidget {
@@ -1206,6 +1404,7 @@ class TsTerminalBlock extends StatelessWidget {
             padding: const EdgeInsets.all(TsPhoneSpacing.medium),
             child: TextDetailPreview(
               text: body,
+              horizontal: true,
               title: title ?? context.l10n.toolResult,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: terminal.terminalForeground,

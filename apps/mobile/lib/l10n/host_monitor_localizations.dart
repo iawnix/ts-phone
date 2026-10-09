@@ -15,6 +15,9 @@ extension HostMonitorLocalizations on AppLocalizations {
   String hostMonitorObserved(String time) =>
       _monitorChinese ? '上次检查：$time' : 'Last checked: $time';
   String hostMonitorState(String state) => switch (state) {
+    'healthy' => _monitorChinese ? '正常' : 'Healthy',
+    'degraded' => _monitorChinese ? '需要关注' : 'Needs attention',
+    'disabled' => _monitorChinese ? '已暂停' : 'Paused',
     'running' => _monitorChinese ? '运行中' : 'Running',
     'queued' || 'pending' => _monitorChinese ? '排队中' : 'Queued',
     'completed' ||

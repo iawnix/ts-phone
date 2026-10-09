@@ -404,6 +404,12 @@ abstract class AppLocalizations {
   /// **'App Server protocol'**
   String get appServerProtocol;
 
+  /// No description provided for @appServerStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'App Server status'**
+  String get appServerStatus;
+
   /// No description provided for @copyServerAddress.
   ///
   /// In en, this message translates to:
@@ -767,7 +773,7 @@ abstract class AppLocalizations {
   /// No description provided for @sessionDeleteMessage.
   ///
   /// In en, this message translates to:
-  /// **'Only this conversation history is moved to Recently Deleted. Scientific project data is not removed.'**
+  /// **'This permanently deletes the conversation and its history. This cannot be undone.'**
   String get sessionDeleteMessage;
 
   /// No description provided for @permanentDeleteTitle.
@@ -847,12 +853,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remote calculations'**
   String get remoteCalculations;
-
-  /// No description provided for @pendingApprovals.
-  ///
-  /// In en, this message translates to:
-  /// **'Pending approvals'**
-  String get pendingApprovals;
 
   /// No description provided for @unresolvedRemoteEffects.
   ///
@@ -1133,7 +1133,7 @@ abstract class AppLocalizations {
   /// No description provided for @sessionRuntimeLastKnown.
   ///
   /// In en, this message translates to:
-  /// **'TSPi is offline. These are the last known runtime values.'**
+  /// **'Showing the last synchronized content. It will update when the connection recovers.'**
   String get sessionRuntimeLastKnown;
 
   /// No description provided for @sessionRuntimeUnavailable.
@@ -1225,84 +1225,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The active generation changed. Nothing was stopped.'**
   String get abortTargetChanged;
-
-  /// No description provided for @approvalTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Confirmation required'**
-  String get approvalTitle;
-
-  /// No description provided for @approvalRequestDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'TSPi is requesting permission for this controlled action.'**
-  String get approvalRequestDescription;
-
-  /// No description provided for @approvalWorkspace.
-  ///
-  /// In en, this message translates to:
-  /// **'Workspace'**
-  String get approvalWorkspace;
-
-  /// No description provided for @approvalSession.
-  ///
-  /// In en, this message translates to:
-  /// **'Session'**
-  String get approvalSession;
-
-  /// No description provided for @approvalTool.
-  ///
-  /// In en, this message translates to:
-  /// **'Tool'**
-  String get approvalTool;
-
-  /// No description provided for @approvalDetails.
-  ///
-  /// In en, this message translates to:
-  /// **'Action details'**
-  String get approvalDetails;
-
-  /// No description provided for @approvalExpiresIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Expires in {seconds}s'**
-  String approvalExpiresIn(int seconds);
-
-  /// No description provided for @approvalQueueRemaining.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 more request is waiting} other{{count} more requests are waiting}}'**
-  String approvalQueueRemaining(int count);
-
-  /// No description provided for @approvalApproving.
-  ///
-  /// In en, this message translates to:
-  /// **'Approving'**
-  String get approvalApproving;
-
-  /// No description provided for @approvalRejecting.
-  ///
-  /// In en, this message translates to:
-  /// **'Rejecting'**
-  String get approvalRejecting;
-
-  /// No description provided for @approvalExpired.
-  ///
-  /// In en, this message translates to:
-  /// **'This approval request has expired'**
-  String get approvalExpired;
-
-  /// No description provided for @approvalStale.
-  ///
-  /// In en, this message translates to:
-  /// **'This approval belongs to an earlier session and is no longer valid'**
-  String get approvalStale;
-
-  /// No description provided for @approvalMissing.
-  ///
-  /// In en, this message translates to:
-  /// **'This approval was already handled or is no longer available'**
-  String get approvalMissing;
 
   /// No description provided for @reject.
   ///
@@ -1616,12 +1538,6 @@ abstract class AppLocalizations {
   /// **'Received a message this client could not read'**
   String get invalidMessage;
 
-  /// No description provided for @invalidApproval.
-  ///
-  /// In en, this message translates to:
-  /// **'Received an approval request this client could not read'**
-  String get invalidApproval;
-
   /// No description provided for @invalidHistoryMessage.
   ///
   /// In en, this message translates to:
@@ -1651,198 +1567,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Loading all history'**
   String get loadingAllHistory;
-
-  /// No description provided for @timelineProgress.
-  ///
-  /// In en, this message translates to:
-  /// **'{loaded} / {total} items'**
-  String timelineProgress(int loaded, int total);
-
-  /// No description provided for @timelineTurns.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} turns'**
-  String timelineTurns(int count);
-
-  /// No description provided for @timelineActivities.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} activities'**
-  String timelineActivities(int count);
-
-  /// No description provided for @timelineFilterAll.
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get timelineFilterAll;
-
-  /// No description provided for @timelineFilterMessages.
-  ///
-  /// In en, this message translates to:
-  /// **'Messages'**
-  String get timelineFilterMessages;
-
-  /// No description provided for @timelineFilterActivities.
-  ///
-  /// In en, this message translates to:
-  /// **'Activity'**
-  String get timelineFilterActivities;
-
-  /// No description provided for @timelineFilterEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No items in this view'**
-  String get timelineFilterEmpty;
-
-  /// No description provided for @timelineBranches.
-  ///
-  /// In en, this message translates to:
-  /// **'Session branches'**
-  String get timelineBranches;
-
-  /// No description provided for @timelineActiveBranch.
-  ///
-  /// In en, this message translates to:
-  /// **'Active branch'**
-  String get timelineActiveBranch;
-
-  /// No description provided for @timelineBranchLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Branch {shortId}'**
-  String timelineBranchLabel(String shortId);
-
-  /// No description provided for @timelineTurnLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Turn {number}'**
-  String timelineTurnLabel(int number);
-
-  /// No description provided for @timelineSubagent.
-  ///
-  /// In en, this message translates to:
-  /// **'Subagent'**
-  String get timelineSubagent;
-
-  /// No description provided for @timelineResearch.
-  ///
-  /// In en, this message translates to:
-  /// **'Research'**
-  String get timelineResearch;
-
-  /// No description provided for @timelineReview.
-  ///
-  /// In en, this message translates to:
-  /// **'Review'**
-  String get timelineReview;
-
-  /// No description provided for @timelineWorkspace.
-  ///
-  /// In en, this message translates to:
-  /// **'Workspace'**
-  String get timelineWorkspace;
-
-  /// No description provided for @timelineConfiguration.
-  ///
-  /// In en, this message translates to:
-  /// **'Configuration'**
-  String get timelineConfiguration;
-
-  /// No description provided for @timelineModelChange.
-  ///
-  /// In en, this message translates to:
-  /// **'Model changed'**
-  String get timelineModelChange;
-
-  /// No description provided for @timelineThinkingLevelChange.
-  ///
-  /// In en, this message translates to:
-  /// **'Thinking level changed'**
-  String get timelineThinkingLevelChange;
-
-  /// No description provided for @timelineSessionInfo.
-  ///
-  /// In en, this message translates to:
-  /// **'Session information'**
-  String get timelineSessionInfo;
-
-  /// No description provided for @timelineContext.
-  ///
-  /// In en, this message translates to:
-  /// **'Context'**
-  String get timelineContext;
-
-  /// No description provided for @timelineSystem.
-  ///
-  /// In en, this message translates to:
-  /// **'System'**
-  String get timelineSystem;
-
-  /// No description provided for @timelineCompleted.
-  ///
-  /// In en, this message translates to:
-  /// **'Completed'**
-  String get timelineCompleted;
-
-  /// No description provided for @timelineFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed'**
-  String get timelineFailed;
-
-  /// No description provided for @timelineRecorded.
-  ///
-  /// In en, this message translates to:
-  /// **'Recorded'**
-  String get timelineRecorded;
-
-  /// No description provided for @timelineStage.
-  ///
-  /// In en, this message translates to:
-  /// **'Stage'**
-  String get timelineStage;
-
-  /// No description provided for @timelineNodes.
-  ///
-  /// In en, this message translates to:
-  /// **'Research nodes'**
-  String get timelineNodes;
-
-  /// No description provided for @timelineReference.
-  ///
-  /// In en, this message translates to:
-  /// **'Reference'**
-  String get timelineReference;
-
-  /// No description provided for @timelineRetrySafe.
-  ///
-  /// In en, this message translates to:
-  /// **'Safe to retry'**
-  String get timelineRetrySafe;
-
-  /// No description provided for @timelineRetryUnsafe.
-  ///
-  /// In en, this message translates to:
-  /// **'Do not retry automatically'**
-  String get timelineRetryUnsafe;
-
-  /// No description provided for @timelineDuration.
-  ///
-  /// In en, this message translates to:
-  /// **'{seconds}s'**
-  String timelineDuration(String seconds);
-
-  /// No description provided for @timelineTokens.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} tokens'**
-  String timelineTokens(int count);
-
-  /// No description provided for @composerHistoricalBranch.
-  ///
-  /// In en, this message translates to:
-  /// **'Read-only historical branch'**
-  String get composerHistoricalBranch;
 
   /// No description provided for @networkRetrying.
   ///
@@ -2378,12 +2102,6 @@ abstract class AppLocalizations {
   /// **'The assistant is busy. Switch models after this response finishes.'**
   String get modelSelectionBusy;
 
-  /// No description provided for @modelSelectionAppServerRequired.
-  ///
-  /// In en, this message translates to:
-  /// **'Only Pi App Server conversations can switch models here.'**
-  String get modelSelectionAppServerRequired;
-
   /// No description provided for @modelSelectionStartRequired.
   ///
   /// In en, this message translates to:
@@ -2581,6 +2299,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remote task'**
   String get activityRemote;
+
+  /// No description provided for @toolCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get toolCompleted;
 }
 
 class _AppLocalizationsDelegate

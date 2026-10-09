@@ -166,6 +166,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appServerProtocol => 'App Server 协议';
 
   @override
+  String get appServerStatus => 'App Server 状态';
+
+  @override
   String get copyServerAddress => '复制服务地址';
 
   @override
@@ -355,7 +358,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionDeleteTitle => '删除会话？';
 
   @override
-  String get sessionDeleteMessage => '只会移除此对话历史，不会删除项目中的科学状态。';
+  String get sessionDeleteMessage => '将永久删除此会话及其记录，无法撤销。';
 
   @override
   String get permanentDeleteTitle => '永久删除？';
@@ -399,9 +402,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get remoteCalculations => '远程计算';
-
-  @override
-  String get pendingApprovals => '待确认操作';
 
   @override
   String get unresolvedRemoteEffects => '未决远程效果';
@@ -558,7 +558,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionRuntimeDetails => '会话详情';
 
   @override
-  String get sessionRuntimeLastKnown => 'TSPi 当前离线，以下为最后一次运行时快照。';
+  String get sessionRuntimeLastKnown => '当前显示的是上次同步的内容。连接恢复后会更新。';
 
   @override
   String get sessionRuntimeUnavailable => '此会话未保存运行时快照。';
@@ -604,49 +604,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get abortTargetChanged => '当前生成已切换，未中止任何任务。';
-
-  @override
-  String get approvalTitle => '需要你的确认';
-
-  @override
-  String get approvalRequestDescription => 'TSPi 请求执行以下受控操作。';
-
-  @override
-  String get approvalWorkspace => '工作区';
-
-  @override
-  String get approvalSession => '会话';
-
-  @override
-  String get approvalTool => '工具';
-
-  @override
-  String get approvalDetails => '操作详情';
-
-  @override
-  String approvalExpiresIn(int seconds) {
-    return '$seconds 秒后过期';
-  }
-
-  @override
-  String approvalQueueRemaining(int count) {
-    return '还有 $count 个请求等待处理';
-  }
-
-  @override
-  String get approvalApproving => '正在批准';
-
-  @override
-  String get approvalRejecting => '正在拒绝';
-
-  @override
-  String get approvalExpired => '该授权请求已过期';
-
-  @override
-  String get approvalStale => '该授权属于旧会话，已失效';
-
-  @override
-  String get approvalMissing => '该授权已处理或不再可用';
 
   @override
   String get reject => '拒绝';
@@ -809,9 +766,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get invalidMessage => '收到一个无法解析的消息';
 
   @override
-  String get invalidApproval => '收到一个无法解析的权限请求';
-
-  @override
   String get invalidHistoryMessage => '收到一个当前客户端无法解析的历史消息。';
 
   @override
@@ -825,116 +779,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get loadingAllHistory => '正在加载全部历史';
-
-  @override
-  String timelineProgress(int loaded, int total) {
-    return '已载入 $loaded / $total 项';
-  }
-
-  @override
-  String timelineTurns(int count) {
-    return '$count 个 Turn';
-  }
-
-  @override
-  String timelineActivities(int count) {
-    return '$count 条活动';
-  }
-
-  @override
-  String get timelineFilterAll => '全部';
-
-  @override
-  String get timelineFilterMessages => '消息';
-
-  @override
-  String get timelineFilterActivities => '活动';
-
-  @override
-  String get timelineFilterEmpty => '当前视图没有内容';
-
-  @override
-  String get timelineBranches => '会话分支';
-
-  @override
-  String get timelineActiveBranch => '当前分支';
-
-  @override
-  String timelineBranchLabel(String shortId) {
-    return '分支 $shortId';
-  }
-
-  @override
-  String timelineTurnLabel(int number) {
-    return 'Turn $number';
-  }
-
-  @override
-  String get timelineSubagent => '子代理';
-
-  @override
-  String get timelineResearch => '研究操作';
-
-  @override
-  String get timelineReview => '独立审查';
-
-  @override
-  String get timelineWorkspace => '工作区';
-
-  @override
-  String get timelineConfiguration => '会话配置';
-
-  @override
-  String get timelineModelChange => '模型切换';
-
-  @override
-  String get timelineThinkingLevelChange => '思考强度切换';
-
-  @override
-  String get timelineSessionInfo => '会话信息';
-
-  @override
-  String get timelineContext => '上下文';
-
-  @override
-  String get timelineSystem => '系统记录';
-
-  @override
-  String get timelineCompleted => '已完成';
-
-  @override
-  String get timelineFailed => '失败';
-
-  @override
-  String get timelineRecorded => '已记录';
-
-  @override
-  String get timelineStage => '阶段';
-
-  @override
-  String get timelineNodes => '研究节点';
-
-  @override
-  String get timelineReference => '引用';
-
-  @override
-  String get timelineRetrySafe => '可以安全重试';
-
-  @override
-  String get timelineRetryUnsafe => '不可自动重试';
-
-  @override
-  String timelineDuration(String seconds) {
-    return '$seconds 秒';
-  }
-
-  @override
-  String timelineTokens(int count) {
-    return '$count tokens';
-  }
-
-  @override
-  String get composerHistoricalBranch => '历史分支只读';
 
   @override
   String get networkRetrying => '网络连接中断，正在重试';
@@ -1226,9 +1070,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelSelectionBusy => '助手正在处理消息，请在本轮回复结束后切换模型。';
 
   @override
-  String get modelSelectionAppServerRequired => '此处仅支持切换 Pi App Server 会话的模型。';
-
-  @override
   String get modelSelectionStartRequired => '请先继续此对话，再切换模型。';
 
   @override
@@ -1330,4 +1171,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activityRemote => '远程任务';
+
+  @override
+  String get toolCompleted => '已完成';
 }

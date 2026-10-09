@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ts_phone/theme/app_icons.dart';
 
-import '../../data/app_server_gateway.dart';
+import '../../data/session_gateway.dart';
 import '../../data/host_gateway.dart';
 import '../../data/settings_store.dart';
 import '../../data/ts_phone_api.dart';
@@ -49,8 +49,8 @@ class _ConversationShellState extends State<ConversationShell>
   SessionSummary? _session;
   List<SessionSummary>? _sessions;
   bool _creating = false;
+  bool _openingContext = false;
   bool _initializing = true;
-  bool _showInitialContext = false;
   bool _refreshingWorkspaces = false;
   Timer? _workspaceRefreshTimer;
   int _generation = 0;
@@ -60,12 +60,13 @@ class _ConversationShellState extends State<ConversationShell>
   LocalKey get _chatKey =>
       ValueKey(('chat', _workspace?.id, _session?.sessionId, _generation));
 
-  AppServerSessionGateway? get _management =>
-      _api is AppServerSessionGateway ? _api as AppServerSessionGateway : null;
+  SessionManagementGateway? get _management => _api is SessionManagementGateway
+      ? _api as SessionManagementGateway
+      : null;
 
-  AppServerWorkspaceGateway? get _workspaceManagement =>
-      _api is AppServerWorkspaceGateway
-      ? _api as AppServerWorkspaceGateway
+  WorkspaceManagementGateway? get _workspaceManagement =>
+      _api is WorkspaceManagementGateway
+      ? _api as WorkspaceManagementGateway
       : null;
 
   @override
@@ -75,7 +76,9 @@ class _ConversationShellState extends State<ConversationShell>
     _api =
         widget.gatewayBuilder?.call(widget.settings) ??
         HostGateway(widget.settings);
-    unawaited(_loadWorkspaces(restoreRecent: true));
+    // Cold start opens the project directory. A saved conversation remains
+    // available from that page, but never takes over the first screen.
+    unawaited(_loadWorkspaces());
     _workspaceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_session == null && mounted) {
         unawaited(_loadWorkspaces());
@@ -104,15 +107,13 @@ class _ConversationShellState extends State<ConversationShell>
     setState(() {
       _generation += 1;
       _session = null;
-      _showInitialContext = _workspaces?.isNotEmpty == true;
     });
   }
 
-  Future<void> _loadWorkspaces({bool restoreRecent = false}) async {
+  Future<void> _loadWorkspaces() async {
     if (_refreshingWorkspaces) return;
     _refreshingWorkspaces = true;
     final hadWorkspaces = _workspaces != null;
-    final selectionEpoch = _selectionEpoch;
     try {
       final workspaces = await _api.listWorkspaces();
       if (!mounted) return;
@@ -129,15 +130,6 @@ class _ConversationShellState extends State<ConversationShell>
         _workspace = selectedWorkspace;
         _workspaceProblem = null;
       });
-      if (restoreRecent) {
-        final restored = await _restoreRecentConversation(
-          workspaces,
-          selectionEpoch,
-        );
-        if (!restored && mounted && workspaces.isNotEmpty) {
-          _scheduleInitialContext(selectionEpoch);
-        }
-      }
       if (mounted) setState(() => _initializing = false);
     } on Object catch (error) {
       if (!mounted) return;
@@ -156,117 +148,6 @@ class _ConversationShellState extends State<ConversationShell>
     }
   }
 
-  Future<bool> _restoreRecentConversation(
-    List<WorkspaceSummary> workspaces,
-    int selectionEpoch,
-  ) async {
-    final store = widget.selectionStore;
-    (String, String)? recent;
-    if (store != null) {
-      try {
-        recent = await store.loadConversation(widget.settings.serverUrl);
-      } on Object {
-        recent = null;
-      }
-    }
-    if (!mounted || selectionEpoch != _selectionEpoch) {
-      return false;
-    }
-    if (recent != null) {
-      WorkspaceSummary? workspace;
-      for (final candidate in workspaces) {
-        if (candidate.id == recent.$1) {
-          workspace = candidate;
-          break;
-        }
-      }
-      // Versions before the workspace-aware preference stored serverId here.
-      // A single workspace lets us recover that preference without guessing
-      // when several projects are available.
-      if (workspace == null &&
-          workspaces.length == 1 &&
-          recent.$1 == widget.settings.serverId) {
-        workspace = workspaces.single;
-      }
-      if (workspace != null) {
-        try {
-          final sessions = await _api.listSessions(workspace.id);
-          if (!mounted || selectionEpoch != _selectionEpoch) return false;
-          final session = sessions
-              .where((candidate) => candidate.sessionId == recent!.$2)
-              .firstOrNull;
-          if (session != null) {
-            setState(() {
-              _workspace = workspace;
-              _sessions = sessions;
-              _session = session;
-              _generation += 1;
-              _sidebarRevision += 1;
-              _selectionEpoch += 1;
-            });
-            return true;
-          }
-        } on Object {
-          // A missing saved session should fall through to the latest one.
-        }
-      }
-    }
-    return _restoreLatestConversation(workspaces, selectionEpoch);
-  }
-
-  Future<bool> _restoreLatestConversation(
-    List<WorkspaceSummary> workspaces,
-    int selectionEpoch,
-  ) async {
-    if (!mounted || selectionEpoch != _selectionEpoch) return false;
-    final candidates = <(WorkspaceSummary, List<SessionSummary>)>[];
-    for (final workspace in workspaces) {
-      try {
-        final sessions = await _api.listSessions(workspace.id);
-        if (sessions.isNotEmpty) candidates.add((workspace, sessions));
-      } on Object {
-        // One unavailable project should not hide sessions from the others.
-      }
-      if (!mounted || selectionEpoch != _selectionEpoch) return false;
-    }
-    if (candidates.isEmpty) return false;
-    (WorkspaceSummary, SessionSummary)? latest;
-    for (final (workspace, sessions) in candidates) {
-      for (final session in sessions) {
-        final current = latest?.$2;
-        final currentUpdated = current?.updatedAt;
-        final sessionUpdated = session.updatedAt;
-        if (latest == null ||
-            (sessionUpdated != null &&
-                (currentUpdated == null ||
-                    sessionUpdated.isAfter(currentUpdated)))) {
-          latest = (workspace, session);
-        }
-      }
-    }
-    if (latest == null || !mounted || selectionEpoch != _selectionEpoch) {
-      return false;
-    }
-    final (workspace, session) = latest;
-    final sessions = candidates
-        .firstWhere((candidate) => candidate.$1.id == workspace.id)
-        .$2;
-    setState(() {
-      _workspace = workspace;
-      _sessions = sessions;
-      _session = session;
-      _generation += 1;
-      _sidebarRevision += 1;
-      _selectionEpoch += 1;
-    });
-    return true;
-  }
-
-  void _scheduleInitialContext(int selectionEpoch) {
-    if (selectionEpoch != _selectionEpoch || _session != null) return;
-    setState(() => _showInitialContext = true);
-  }
-
   void _selectWorkspace(WorkspaceSummary workspace) {
     _scaffold.currentState?.closeDrawer();
     _selectionEpoch += 1;
@@ -275,7 +156,6 @@ class _ConversationShellState extends State<ConversationShell>
       _session = null;
       _sessions = null;
       _generation += 1;
-      _showInitialContext = true;
     });
   }
 
@@ -285,10 +165,37 @@ class _ConversationShellState extends State<ConversationShell>
     _selectContextSession(workspace, session);
   }
 
-  void _selectContextSession(
+  Future<void> _selectContextSession(
     WorkspaceSummary workspace,
     SessionSummary session,
-  ) {
+  ) async {
+    if (_openingContext) return;
+    if (!session.runtimeState.isAvailable &&
+        session.accessMode == SessionAccessMode.controller &&
+        _api is SessionResumeGateway) {
+      _openingContext = true;
+      final epoch = _selectionEpoch;
+      try {
+        session = await (_api as SessionResumeGateway).resumeWorkspaceSession(
+          workspace.id,
+          session.sessionId,
+        );
+        if (!mounted || epoch != _selectionEpoch) return;
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                describeTsPhoneProblem(error).localizedMessage(context.l10n),
+              ),
+            ),
+          );
+        }
+        return;
+      } finally {
+        _openingContext = false;
+      }
+    }
     _scaffold.currentState?.closeDrawer();
     _selectionEpoch += 1;
     final workspaceChanged = _workspace?.id != workspace.id;
@@ -297,7 +204,6 @@ class _ConversationShellState extends State<ConversationShell>
       if (workspaceChanged) _sessions = null;
       _generation += 1;
       _session = session;
-      _showInitialContext = false;
     });
     unawaited(_remember(workspace.id, session.sessionId));
   }
@@ -387,33 +293,6 @@ class _ConversationShellState extends State<ConversationShell>
     } finally {
       if (mounted) setState(() => _creating = false);
     }
-  }
-
-  Future<void> _showContextSwitcher() async {
-    if (_workspaces == null) await _loadWorkspaces();
-    if (!mounted) return;
-    final workspaces = _workspaces;
-    final workspace = _workspace ?? workspaces?.firstOrNull;
-    if (workspaces == null || workspace == null || workspaces.isEmpty) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      showDragHandle: true,
-      sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
-      builder: (context) => ContextSwitcherSheet(
-        workspaces: workspaces,
-        selectedWorkspace: workspace,
-        selectedSession: _session,
-        initialSessions: _sessions,
-        loadSessions: _loadSessionsForContext,
-        onSessionSelected: _selectContextSession,
-        onCreateSession: managementAvailable ? _createSessionForContext : null,
-        onCreateWorkspace: _workspaceManagement == null
-            ? null
-            : () => _newWorkspace(select: false),
-      ),
-    );
   }
 
   Future<WorkspaceSummary?> _newWorkspace({bool select = true}) async {
@@ -520,27 +399,13 @@ class _ConversationShellState extends State<ConversationShell>
     }
     return Scaffold(
       appBar: TsGlassAppBar(
-        title: Text(context.l10n.workspaces),
+        title: Text(context.l10n.sessions),
         actions: [
-          PopupMenuButton<String>(
-            key: const ValueKey('initial-context-menu'),
-            tooltip: context.l10n.moreActions,
-            icon: const Icon(AppIcons.more_horiz_rounded),
-            onSelected: (value) {
-              if (value == 'settings') widget.onOpenSettings();
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem<String>(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    const Icon(AppIcons.settings_outlined, size: 20),
-                    const SizedBox(width: 12),
-                    Flexible(child: Text(context.l10n.settings)),
-                  ],
-                ),
-              ),
-            ],
+          IconButton(
+            key: const ValueKey('initial-context-settings'),
+            tooltip: context.l10n.settings,
+            icon: const Icon(AppIcons.settings_outlined),
+            onPressed: widget.onOpenSettings,
           ),
         ],
       ),
@@ -577,25 +442,11 @@ class _ConversationShellState extends State<ConversationShell>
                     tooltip: context.l10n.newProject,
                     icon: const Icon(AppIcons.create_new_folder_outlined),
                   ),
-                PopupMenuButton<String>(
-                  key: const ValueKey('workspace-menu'),
-                  tooltip: context.l10n.moreActions,
-                  icon: const Icon(AppIcons.more_horiz_rounded),
-                  onSelected: (value) {
-                    if (value == 'settings') widget.onOpenSettings();
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem<String>(
-                      value: 'settings',
-                      child: Row(
-                        children: [
-                          const Icon(AppIcons.settings_outlined, size: 20),
-                          const SizedBox(width: 12),
-                          Flexible(child: Text(context.l10n.settings)),
-                        ],
-                      ),
-                    ),
-                  ],
+                IconButton(
+                  key: const ValueKey('workspace-settings'),
+                  tooltip: context.l10n.settings,
+                  icon: const Icon(AppIcons.settings_outlined),
+                  onPressed: widget.onOpenSettings,
                 ),
               ],
             ),
@@ -699,9 +550,9 @@ class _ConversationShellState extends State<ConversationShell>
         pages: [
           TsAdaptivePage<void>(
             key: const ValueKey('sessions'),
-            child: _showInitialContext
+            child: (_workspaces?.isNotEmpty == true)
                 ? _initialContext()
-                : _sessionList(sidebar: false),
+                : _workspaceDirectory(sidebar: false),
           ),
           if (_session != null)
             TsAdaptivePage<void>(key: _chatKey, child: _chat()),
@@ -723,12 +574,10 @@ class _ConversationShellState extends State<ConversationShell>
       settings: widget.settings,
       workspace: _workspace!,
       session: session,
-      onOpenSession: _selectSession,
       gatewayFactory: widget.gatewayBuilder == null
           ? null
           : () => widget.gatewayBuilder!(widget.settings),
       memory: _memory.view(_workspace!.id, session.sessionId),
-      onOpenContext: wide ? null : () => unawaited(_showContextSwitcher()),
       embedded: true,
     );
     return Scaffold(

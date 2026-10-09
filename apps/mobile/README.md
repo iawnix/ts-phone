@@ -2,13 +2,13 @@
 
 Flutter client for Android and iOS. The app stores its Bearer token in Android
 Keystore-backed secure storage or the iOS Keychain. It connects to a TSPi
-Relay with `tspi-link.v1`; the Relay forwards the `tspi-host/1` NDJSON byte
+Relay with `research-agent-link.v1`; the Relay forwards the `research-agent-host/2` NDJSON byte
 stream to the outbound-connected Host. The app rejects remote plain HTTP and
 never starts or embeds a TS Phone server.
 
 ## Conversations
 
-Cold start opens the configured Host's project directory. Pi owns durable
+Cold start opens a searchable conversation list with a project picker. Pi owns durable
 sessions, transcripts and execution; Host routes session operations by workspace
 and session ID. The phone keeps connection settings, UI state, and the last
 selected session. `HostGateway` maps the public JSON RPC to existing chat views.
@@ -18,13 +18,14 @@ live session is attached, while older read-only history remains read-only.
 Draft text stays local until input is accepted. A lost response remains
 uncertain; manual retry uses the same `client_message_id` for Host deduplication.
 
-The chat header contains Back, a bounded session title, App Server status and
-More. Running activity stays in the transcript, not above the keyboard.
+The chat header contains Back, a bounded session title, session details, status
+and local transcript navigation. Tool output remains in the transcript.
+Status and composer notices explain disconnection without hiding the draft.
 
 The composer shows the current model and a picker above the system keyboard.
 The picker calls `models/list` and `model/select` for the selected session.
 Provider credentials stay on the Host. Input and interrupt requests are handed
-to Pi through its session bridge.
+to Pi through its native Harness worker.
 
 The Host returns complete snapshots through `session/read` and `session/attach`,
 then publishes `session/event` notifications. Reconnection always reattaches;
@@ -38,9 +39,10 @@ to the selected Session.
 Unnamed sessions use their first user question when available, otherwise a date
 or untitled label. Technical IDs remain in details. Transcript entries are
 rendered as published by Pi; failed and stopped generations remain distinct.
-Removing an offline session asks Host to move it to recoverable storage.
+Deleting a session permanently removes it and its history; confirmation explicitly
+states that it cannot be undone.
 
-The project session screen and sidebar include task monitors. The monitor page
+The home project selector and session sidebar include task monitors. The monitor page
 shows calculation status and pending delivery count, refreshes on app resume,
 and uses `monitor/enable` / `monitor/disable` to control existing registrations.
 
@@ -53,13 +55,7 @@ and uses `monitor/enable` / `monitor/disable` to control existing registrations.
 ```
 
 The conversation UI tests cover English/Chinese, light/dark, phone/tablet,
-2x text, keyboard insets, home navigation, creation and retained drafts. To
-capture their rendered fixtures, set `TS_PHONE_CAPTURE_UI=1`,
-`TS_PHONE_PREVIEW_FONT` to a CJK font file and `TS_PHONE_PREVIEW_ICONS` to the
-Flutter SDK's `MaterialIcons-Regular.otf`, then run
-`flutter test test/conversation_shell_test.dart`. PNGs are written under
-`build/conversation-previews/`. These are fixture screenshots, not a claim of
-verification on a physical phone.
+2x text, keyboard insets, home navigation, creation and retained drafts. These tests render fixtures; they do not replace verification on a physical phone.
 
 ## Build Android
 

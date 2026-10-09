@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../../models/chat_message.dart';
-import '../../models/session_timeline.dart';
 import 'chat_outbox.dart';
 
 /// App-scoped drafts, receipts and bounded previews. These never grant authority.
@@ -57,38 +56,18 @@ class ChatHistoryPreview {
     required this.revision,
     required this.messages,
     required this.messageIds,
-    required this.items,
-    required this.history,
-    required this.hasMore,
-    required this.before,
-    this.hasLater = false,
-    this.after,
-    this.viewingHistoryWindow = false,
   });
-
   final String revision;
   final List<ChatMessage> messages;
   final List<String?> messageIds;
-  final List<SessionTimelineItem> items;
-  final TimelineHistorySummary? history;
-  final bool hasMore;
-  final String? before;
-  final bool hasLater;
-  final String? after;
-  final bool viewingHistoryWindow;
-
-  bool get isBounded {
-    if (messages.length + items.length > 1000) return false;
-    var characters = 0;
-    for (final message in messages) {
-      characters += message.text.length;
-      for (final tool in message.tools) {
-        characters += tool.body.length;
-      }
-    }
-    for (final item in items.whereType<TimelineActivityItem>()) {
-      characters += item.activity.detail?.length ?? 0;
-    }
-    return characters <= 512 * 1024;
-  }
+  bool get isBounded =>
+      messages.length <= 1000 &&
+      messages.fold<int>(
+            0,
+            (n, m) =>
+                n +
+                m.text.length +
+                m.tools.fold<int>(0, (n, t) => n + t.body.length),
+          ) <=
+          512 * 1024;
 }

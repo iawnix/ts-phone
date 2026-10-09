@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ts_phone/theme/app_icons.dart';
 import 'package:intl/intl.dart';
 
-import '../../data/app_server_gateway.dart';
+import '../../data/session_gateway.dart';
 import '../../data/host_gateway.dart';
 import '../../data/ts_phone_api.dart';
 import '../../l10n/app_localizations.dart';
@@ -75,9 +75,9 @@ class _SessionListPageState extends State<SessionListPage>
   int _refreshGeneration = 0;
   String _query = '';
 
-  AppServerSessionGateway? get _sessionsGateway =>
-      _gateway is AppServerSessionGateway
-      ? _gateway as AppServerSessionGateway
+  SessionManagementGateway? get _sessionsGateway =>
+      _gateway is SessionManagementGateway
+      ? _gateway as SessionManagementGateway
       : null;
 
   bool get _busy =>
@@ -224,13 +224,19 @@ class _SessionListPageState extends State<SessionListPage>
       animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
       builder: (context) => AlertDialog(
         title: Text(context.l10n.deletePermanently),
-        content: Text(session.localizedDisplayName(context.l10n)),
+        content: Text(
+          '${session.localizedDisplayName(context.l10n)}\n\n${context.l10n.sessionDeleteMessage}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(context.l10n.cancel),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(context.l10n.deletePermanently),
           ),
@@ -284,62 +290,57 @@ class _SessionListPageState extends State<SessionListPage>
               tooltip: l10n.newSession,
               icon: _createIcon,
             ),
-          PopupMenuButton<String>(
-            key: const ValueKey('session-menu'),
-            tooltip: l10n.moreActions,
-            icon: const Icon(AppIcons.more_horiz_rounded),
-            onSelected: (action) {
-              switch (action) {
-                case 'refresh':
-                  unawaited(_refresh(announce: true));
-                case 'monitors':
-                  unawaited(_openMonitors());
-                case 'settings':
-                  widget.onOpenSettings?.call();
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem<String>(
-                key: const ValueKey('refresh-sessions'),
-                value: 'refresh',
-                enabled: !_refreshing,
-                child: Row(
-                  children: [
-                    const Icon(AppIcons.refresh_rounded, size: 20),
-                    const SizedBox(width: TsPhoneSpacing.medium),
-                    Text(l10n.refreshSessions),
-                  ],
-                ),
-              ),
-              if (_gateway is HostMonitorGateway)
-                PopupMenuItem<String>(
-                  key: const ValueKey('open-monitors'),
-                  value: 'monitors',
-                  child: Row(
-                    children: [
-                      const Icon(
-                        AppIcons.notifications_active_outlined,
-                        size: 20,
-                      ),
-                      const SizedBox(width: TsPhoneSpacing.medium),
-                      Text(l10n.hostMonitors),
-                    ],
+          if (widget.onOpenSettings != null)
+            IconButton(
+              key: const ValueKey('open-settings'),
+              tooltip: l10n.settings,
+              icon: const Icon(AppIcons.settings_outlined),
+              onPressed: widget.onOpenSettings,
+            ),
+          if (_sessionsGateway != null || _gateway is HostMonitorGateway)
+            PopupMenuButton<String>(
+              key: const ValueKey('session-menu'),
+              tooltip: l10n.moreActions,
+              icon: const Icon(AppIcons.more_horiz_rounded),
+              onSelected: (action) {
+                switch (action) {
+                  case 'refresh':
+                    unawaited(_refresh(announce: true));
+                  case 'monitors':
+                    unawaited(_openMonitors());
+                }
+              },
+              itemBuilder: (context) => [
+                if (_sessionsGateway != null)
+                  PopupMenuItem<String>(
+                    key: const ValueKey('refresh-sessions'),
+                    value: 'refresh',
+                    enabled: !_refreshing,
+                    child: Row(
+                      children: [
+                        const Icon(AppIcons.refresh_rounded, size: 20),
+                        const SizedBox(width: TsPhoneSpacing.medium),
+                        Text(l10n.refreshSessions),
+                      ],
+                    ),
                   ),
-                ),
-              if (widget.onOpenSettings != null)
-                PopupMenuItem<String>(
-                  key: const ValueKey('open-settings'),
-                  value: 'settings',
-                  child: Row(
-                    children: [
-                      const Icon(AppIcons.settings_outlined, size: 20),
-                      const SizedBox(width: TsPhoneSpacing.medium),
-                      Text(l10n.settings),
-                    ],
+                if (_gateway is HostMonitorGateway)
+                  PopupMenuItem<String>(
+                    key: const ValueKey('open-monitors'),
+                    value: 'monitors',
+                    child: Row(
+                      children: [
+                        const Icon(
+                          AppIcons.notifications_active_outlined,
+                          size: 20,
+                        ),
+                        const SizedBox(width: TsPhoneSpacing.medium),
+                        Text(l10n.hostMonitors),
+                      ],
+                    ),
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
       body: TsPageBackdrop(
@@ -412,7 +413,7 @@ class _SessionListPageState extends State<SessionListPage>
                           if (sessions.isEmpty)
                             Padding(
                               padding: const EdgeInsets.all(24),
-                              child: Text(l10n.noMessages),
+                              child: Text(l10n.noSessionHistoryTitle),
                             ),
                           for (final session in sessions)
                             Material(
@@ -420,6 +421,7 @@ class _SessionListPageState extends State<SessionListPage>
                               child: TsPressable(
                                 onTap: _busy ? null : () => _open(session),
                                 child: ListTile(
+                                  minTileHeight: 56,
                                   key: ValueKey(
                                     'sidebar-session-${session.sessionId}',
                                   ),
@@ -525,6 +527,7 @@ class _SessionListPageState extends State<SessionListPage>
                   child: TsPressable(
                     onTap: _busy ? null : () => _open(session),
                     child: ListTile(
+                      minTileHeight: 56,
                       key: ValueKey('session-${session.sessionId}'),
                       leading: _sessionLeading(session),
                       title: Text(
@@ -571,17 +574,10 @@ class _SessionListPageState extends State<SessionListPage>
     }
     final l10n = context.l10n;
     final label = session.runtimeState.localizedCompactLabel(l10n);
-    final icon = switch (session.runtimeState) {
-      RuntimeState.running => AppIcons.motion_photos_on_outlined,
-      RuntimeState.connecting => AppIcons.sync_rounded,
-      RuntimeState.offline => AppIcons.cloud_off_outlined,
-      RuntimeState.recoveryRequired => AppIcons.error_outline_rounded,
-      RuntimeState.idle => AppIcons.chat_bubble_outline,
-    };
-    return Semantics(
+    return TsRuntimeStatusGlyph(
+      state: session.runtimeState,
       label: label,
-      excludeSemantics: true,
-      child: Tooltip(message: label, child: Icon(icon)),
+      idleIcon: AppIcons.chat_bubble_outline,
     );
   }
 
@@ -598,7 +594,7 @@ class _SessionListPageState extends State<SessionListPage>
             children: <Widget>[
               const Icon(AppIcons.delete_outline, size: 20),
               const SizedBox(width: TsPhoneSpacing.medium),
-              Text(context.l10n.deletePermanently),
+              Flexible(child: Text(context.l10n.deletePermanently)),
             ],
           ),
         ),

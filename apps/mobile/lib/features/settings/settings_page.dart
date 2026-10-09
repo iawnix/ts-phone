@@ -46,7 +46,8 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage>
+    with WidgetsBindingObserver {
   bool _savingTheme = false;
   bool _savingLocale = false;
   bool _diagnosing = false;
@@ -54,6 +55,19 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _showTechnicalDetails = false;
   _ConnectionDiagnostics? _diagnostics;
   int _diagnosticsGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleDiagnostics();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(SettingsPage oldWidget) {
@@ -68,7 +82,21 @@ class _SettingsPageState extends State<SettingsPage> {
       _diagnostics = null;
       _diagnosing = false;
       _showTechnicalDetails = false;
+      _scheduleDiagnostics();
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _scheduleDiagnostics();
+  }
+
+  void _scheduleDiagnostics() {
+    if (widget.connectionSettings == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.connectionSettings == null) return;
+      unawaited(_runDiagnostics());
+    });
   }
 
   Future<void> _changeTheme(AppThemePreference? preference) async {
@@ -105,10 +133,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _runDiagnostics() async {
+  Future<void> _runDiagnostics({bool announce = false}) async {
     final connection = widget.connectionSettings;
     if (_diagnosing || connection == null) return;
-    ActionFeedback.tap();
+    if (announce) ActionFeedback.tap();
     final generation = ++_diagnosticsGeneration;
     setState(() {
       _diagnosing = true;
@@ -126,7 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
           serviceVersion: version['serviceVersion'] as String?,
         );
       });
-      ActionFeedback.selection();
+      if (announce) ActionFeedback.selection();
     } on Object catch (error) {
       if (!mounted || generation != _diagnosticsGeneration) return;
       setState(() {
@@ -134,7 +162,7 @@ class _SettingsPageState extends State<SettingsPage> {
           problem: describeTsPhoneProblem(error),
         );
       });
-      ActionFeedback.error();
+      if (announce) ActionFeedback.error();
     } finally {
       try {
         gateway?.close();
@@ -243,7 +271,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               diagnosing: _diagnosing,
                               diagnostics: diagnostics,
                               icon: AppIcons.monitor_heart_outlined,
-                              onTap: _runDiagnostics,
+                              onTap: () => _runDiagnostics(announce: true),
                             ),
                             if (diagnostics?.problem
                                 case final problem?) ...<Widget>[
@@ -459,10 +487,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ],
                         ),
                       ),
-                      TsSettingsSection(
-                        title: l10n.aboutApp,
-                        child: const _AppIdentityFooter(),
-                      ),
+                      const _AppIdentityFooter(),
                     ],
                   ),
                 ),
@@ -1043,17 +1068,18 @@ class _DiagnosticsActionRow extends StatelessWidget {
         : diagnostics != null
         ? (l10n.diagnosticVerified, status.connected)
         : (l10n.diagnosticNotChecked, theme.colorScheme.onSurfaceVariant);
+    final canRetry = enabled && !diagnosing && problem != null;
     final motionDuration = TsPhoneMotion.resolveFade(
       context,
       TsPhoneMotion.standard,
     );
     return Semantics(
-      button: true,
-      enabled: enabled && !diagnosing,
-      label: '${l10n.runDiagnostics}, $label',
+      button: false,
+      enabled: enabled,
+      label: '${l10n.appServerStatus}, $label',
       child: TsPressable(
         key: const ValueKey<String>('run-connection-diagnostics'),
-        onTap: enabled && !diagnosing ? onTap : null,
+        onTap: null,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 50),
           child: Padding(
@@ -1064,7 +1090,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 Tooltip(
-                  message: l10n.runDiagnostics,
+                  message: l10n.appServerStatus,
                   child: Icon(
                     icon,
                     size: 22,
@@ -1079,7 +1105,7 @@ class _DiagnosticsActionRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        l10n.runDiagnostics,
+                        l10n.appServerStatus,
                         style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 2),
@@ -1101,28 +1127,54 @@ class _DiagnosticsActionRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: TsPhoneSpacing.small),
-                AnimatedSwitcher(
-                  duration: motionDuration,
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeOutCubic,
-                  child: diagnosing
-                      ? SizedBox.square(
-                          key: const ValueKey<String>('diagnostics-spinner'),
-                          dimension: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: color,
+                if (canRetry)
+                  IconButton(
+                    key: const ValueKey<String>('retry-connection-diagnostics'),
+                    tooltip: l10n.checkAgain,
+                    onPressed: onTap,
+                    icon: Icon(
+                      AppIcons.refresh_rounded,
+                      size: 20,
+                      color: status.error,
+                    ),
+                  )
+                else
+                  AnimatedSwitcher(
+                    duration: motionDuration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeOutCubic,
+                    child: diagnosing
+                        ? SizedBox.square(
+                            key: const ValueKey<String>('diagnostics-spinner'),
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: color,
+                            ),
+                          )
+                        : Icon(
+                            diagnostics == null
+                                ? AppIcons.schedule_rounded
+                                : problem == null
+                                ? AppIcons.check_circle_outline_rounded
+                                : AppIcons.error_outline_rounded,
+                            key: ValueKey<String>(
+                              diagnostics == null
+                                  ? 'diagnostics-idle'
+                                  : problem == null
+                                  ? 'diagnostics-success'
+                                  : 'diagnostics-error',
+                            ),
+                            size: 20,
+                            color: !enabled
+                                ? theme.colorScheme.outline
+                                : problem != null
+                                ? status.error
+                                : diagnostics != null
+                                ? status.connected
+                                : theme.colorScheme.outline,
                           ),
-                        )
-                      : Icon(
-                          AppIcons.refresh_rounded,
-                          key: const ValueKey<String>('diagnostics-refresh'),
-                          size: 20,
-                          color: enabled
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.outline,
-                        ),
-                ),
+                  ),
               ],
             ),
           ),

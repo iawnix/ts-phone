@@ -12,37 +12,90 @@ class TextDetailPreview extends StatelessWidget {
     required this.text,
     required this.title,
     this.style,
+    this.horizontal = false,
   });
 
   final String text;
   final String title;
   final TextStyle? style;
+  final bool horizontal;
 
   @override
   Widget build(BuildContext context) {
     final preview = text.characters.take(1600).toString();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter =
+            TextPainter(
+              text: TextSpan(
+                text: preview,
+                style: style ?? DefaultTextStyle.of(context).style,
+              ),
+              maxLines: 10,
+              textDirection: Directionality.of(context),
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout(
+              maxWidth: horizontal ? double.infinity : constraints.maxWidth,
+            );
+        final truncated =
+            preview.length < text.length || painter.didExceedMaxLines;
+        painter.dispose();
+        final content = Text(
           preview,
           maxLines: 10,
           overflow: TextOverflow.ellipsis,
           style: style,
-        ),
-        Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: IconButton(
-            tooltip: context.l10n.viewFullOutput,
-            icon: const Icon(AppIcons.open_in_full_rounded, size: 18),
-            onPressed: () => pushTsPhonePage<void>(
-              context: context,
-              builder: (_) => _TextDetailPage(text: text, title: title),
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (horizontal)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: content,
+              )
+            else
+              content,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: context.l10n.copyOutput,
+                  icon: const Icon(AppIcons.copy_rounded, size: 18),
+                  onPressed: () async {
+                    try {
+                      await Clipboard.setData(ClipboardData(text: text));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(context.l10n.outputCopied)),
+                        );
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(context.l10n.outputCopyFailed),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+                if (truncated)
+                  IconButton(
+                    tooltip: context.l10n.viewFullOutput,
+                    icon: const Icon(AppIcons.open_in_full_rounded, size: 18),
+                    onPressed: () => pushTsPhonePage<void>(
+                      context: context,
+                      builder: (_) => _TextDetailPage(text: text, title: title),
+                    ),
+                  ),
+              ],
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

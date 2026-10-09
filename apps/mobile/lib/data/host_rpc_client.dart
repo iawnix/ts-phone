@@ -5,8 +5,8 @@ import 'dart:typed_data';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-const tspiHostProtocol = 'tspi-host/1';
-const tspiHostLinkProtocol = 'tspi-link.v1';
+const tspiHostProtocol = 'research-agent-host/2';
+const tspiHostLinkProtocol = 'research-agent-link.v1';
 const _maxLineBytes = 16 * 1024 * 1024;
 
 class HostRpcException implements Exception {
