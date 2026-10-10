@@ -4,12 +4,11 @@
 
 [English](README.md) · [下载 Android](https://github.com/iawnix/corhub/releases/latest) · [更新记录](CHANGELOG.md)
 
-CoRHub 是 [CoRAgent](https://github.com/iawnix/TSPi) 的 Android/iOS
+CoRHub 是 [CoRAgent](https://github.com/iawnix/coragent) 的 Android/iOS
 Flutter 客户端。在手机上访问与终端相同的研究工作区和会话、发送消息、切换模型、
 查看工具输出和管理任务监控。任务执行与持久化会话历史保留在 CoRAgent 服务端。
 
-产品名称统一为：客户端 **CoRHub**，科研智能体 **CoRAgent**。服务端改名完成前，
-仓库链接、`research-agent` 命令和协议标识仍使用当前实际值。
+产品名称统一为：客户端 **CoRHub**，科研智能体 **CoRAgent**。本源码配套 CoRAgent 0.19 的不兼容身份切换，服务端和客户端需要一起更新，所有设备重新配对。
 
 ## 安装和连接
 
@@ -19,15 +18,15 @@ Flutter 客户端。在手机上访问与终端相同的研究工作区和会话
 2. 安装 CoRAgent，通过可信 HTTPS Link Relay 启用 Phone access。在服务端运行：
 
    ```bash
-   research-agent --workspace reaction-a
-   research-agent phone pair
+   coragent --workspace reaction-a
+   coragent phone pair
    ```
 
 3. 在 App 中输入 Relay URL、8 位配对码和设备名。配对码五分钟内有效，只能使用一次。
 
-当前客户端面向 CoRAgent **0.18.0**，使用 `research-agent-host/2` 和
-`research-agent-link.v1`。从旧版协议升级时，必须更新 App 并**重新配对**；旧
-`tspd_` 凭据不能复用。兼容性由接口合同决定，不要求手机与服务端版本号相同。
+当前客户端面向 CoRAgent **0.19.0**，使用 `coragent-host/2` 和
+`coragent-link.v1`。从旧版协议升级时，必须更新 App 并**重新配对**；旧
+`rad_` 凭据不能复用。兼容性由接口合同决定，不要求手机与服务端版本号相同。
 每个 Release 的说明会标注对应的服务端要求。
 
 目前发布 Android 安装包。iOS 保留源码，需要在 macOS 上使用 Apple 签名团队和

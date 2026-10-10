@@ -1,6 +1,6 @@
 # Architecture
 
-CoRHub is a presentation client of `research-agent-host/2`. Pi sessions own their execution, conversation and durable history. Host owns workspace routing,
+CoRHub is a presentation client of `coragent-host/2`. Pi sessions own their execution, conversation and durable history. Host owns workspace routing,
 session discovery and routing to the native Pi Harness worker. Task monitoring
 belongs to the server and continues independently of the phone screen.
 
@@ -13,13 +13,13 @@ CoRHub -> Relay -> Host -> Pi Harness worker -> durable Pi session
 
 The existing pairing flow provides a revocable device token. The phone connects
 to `wss://<relay>/v1/link` with `Authorization: Bearer <device-token>` and the
-`research-agent-link.v1` subprotocol. WebSocket binary messages carry UTF-8 NDJSON, without
+`coragent-link.v1` subprotocol. WebSocket binary messages carry UTF-8 NDJSON, without
 CBOR, length prefixes, Chord service patches or Pi protocol-v8 handshakes.
 The decoder handles split UTF-8 characters and multiple lines per frame.
 
 ```json
-{"id":"phone-1","method":"initialize","params":{"protocol":"research-agent-host/2"}}
-{"id":"phone-1","result":{"protocol":"research-agent-host/2","epoch":"host-epoch","capabilities":[]}}
+{"id":"phone-1","method":"initialize","params":{"protocol":"coragent-host/2"}}
+{"id":"phone-1","result":{"protocol":"coragent-host/2","epoch":"host-epoch","capabilities":[]}}
 {"id":"phone-2","method":"session/attach","params":{"workspace_id":"ts_001","session_id":"session-1"}}
 ```
 

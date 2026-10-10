@@ -15,7 +15,7 @@ final settings = ConnectionSettings(
   serverUrl: 'https://link.example.test',
   serverId: '123e4567-e89b-42d3-a456-426614174000',
   deviceId: '223e4567-e89b-42d3-a456-426614174000',
-  token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+  token: 'cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
 );
 
 final appServer = WorkspaceSummary(
@@ -46,7 +46,7 @@ class ConversationGateway implements CorHubGateway, SessionManagementGateway {
 
   @override
   Future<Map<String, Object?>> version() async => const {
-    'apiVersion': 'research-agent-host/2',
+    'apiVersion': 'coragent-host/2',
     'serviceVersion': 'Pi App Server',
   };
 

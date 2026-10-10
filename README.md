@@ -5,14 +5,14 @@
 [简体中文](README.zh-CN.md) · [Download Android](https://github.com/iawnix/corhub/releases/latest) · [Changelog](CHANGELOG.md)
 
 CoRHub is the Android/iOS Flutter client for
-[CoRAgent](https://github.com/iawnix/TSPi). Use the same research workspaces
+[CoRAgent](https://github.com/iawnix/coragent). Use the same research workspaces
 and sessions as your terminal, send messages, select models, inspect tool
 output, and manage task monitors. Execution and durable session history stay
 on the CoRAgent server.
 
 The product names are **CoRHub** for the client and **CoRAgent** for the research
-agent. The server repository, `research-agent` command and protocol identifiers
-retain their current technical names until the server migration is complete.
+agent. This source targets the breaking CoRAgent 0.19 identity cutover; both server
+and client must be updated and every device must pair again.
 
 ## Install and connect
 
@@ -23,16 +23,16 @@ retain their current technical names until the server migration is complete.
    Relay. On the server, run:
 
    ```bash
-   research-agent --workspace reaction-a
-   research-agent phone pair
+   coragent --workspace reaction-a
+   coragent phone pair
    ```
 
 3. Enter the Relay URL, eight-character pairing code and device name in the app.
    The code expires after five minutes and works once.
 
-The current client targets CoRAgent **0.18.0** and the
-`research-agent-host/2` / `research-agent-link.v1` contracts. Upgrading from the
-legacy protocol requires a new app and **re-pairing**; old `tspd_` credentials
+The current client targets CoRAgent **0.19.0** and the
+`coragent-host/2` / `coragent-link.v1` contracts. Upgrading from the
+legacy protocol requires a new app and **re-pairing**; old `rad_` credentials
 cannot be reused. Compatibility follows these contracts, not matching app and
 server version numbers. See each release's notes for its supported server.
 

@@ -3,6 +3,19 @@
 Release versions follow `MAJOR.MINOR.PATCH+BUILD`. Unreleased source is not an
 installable GitHub release. See [versioning](docs/versioning.md).
 
+## Unreleased — 0.20.0+64
+
+- **Breaking:** targets CoRAgent 0.19 with `coragent-host/2`,
+  `coragent-link.v1` and `cad_` device credentials. Update Host, Relay and
+  client together, then run `coragent phone pair` and pair again.
+- Reject old protocols and `rad_` credentials; no fallback or token-prefix
+  conversion. Invalid saved connections return to pairing while theme and
+  language preferences remain available.
+- Update server links, commands and deterministic Host/Pi interop fixtures.
+  Android/iOS installation identifiers and signing identity remain unchanged.
+- 本次是配套 CoRAgent 更名的不兼容协议切换，旧客户端无法连接新服务；
+  所有设备需要重新配对。本条目为未发布源码，不代表 APK 已发布或完成实机验收。
+
 ## 0.19.1+63
 
 ### CoRHub rebrand / 品牌更新

@@ -6,10 +6,10 @@ transport is an authenticated CoRAgent Link WebSocket to a trusted Relay.
 - Device credentials are kept in platform secure storage and never entered or
   displayed as long-lived text in the app.
 - Every connection sends `Authorization: Bearer <token>` and the
-  `research-agent-link.v1` subprotocol.
+  `coragent-link.v1` subprotocol.
 - Pairing codes expire after five minutes and work once. A revoked device is
   disconnected immediately.
-- The Host validates `research-agent-host/2` initialization and routes requests by explicit
+- The Host validates `coragent-host/2` initialization and routes requests by explicit
   workspace/session identity.
 - The phone validates JSON RPC responses, UTF-8 framing, event cursors and
   session identities before presenting updates.

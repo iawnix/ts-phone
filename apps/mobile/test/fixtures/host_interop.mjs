@@ -7,17 +7,17 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const execute = promisify(execFile);
 
-const source = process.env.RESEARCH_AGENT_SOURCE;
+const source = process.env.CORAGENT_SOURCE;
 const root = resolve(process.argv[2]);
-const testRoot = process.env.RESEARCH_AGENT_TEST_ROOT;
-const piRoot = process.env.RESEARCH_AGENT_TEST_PI_RUNTIME_ROOT;
-const socketRoot = join(process.env.RESEARCH_AGENT_TEST_SOCKET_ROOT, 'p');
-if (!source || !testRoot || relative(testRoot, root).startsWith('..') || !piRoot || !process.env.RESEARCH_AGENT_PYTHON) {
-  throw new Error('Set RESEARCH_AGENT_SOURCE, RESEARCH_AGENT_TEST_ROOT, RESEARCH_AGENT_TEST_PI_RUNTIME_ROOT and RESEARCH_AGENT_PYTHON');
+const testRoot = process.env.CORAGENT_TEST_ROOT;
+const piRoot = process.env.CORAGENT_TEST_PI_RUNTIME_ROOT;
+const socketRoot = join(process.env.CORAGENT_TEST_SOCKET_ROOT, 'p');
+if (!source || !testRoot || relative(testRoot, root).startsWith('..') || !piRoot || !process.env.CORAGENT_PYTHON) {
+  throw new Error('Set CORAGENT_SOURCE, CORAGENT_TEST_ROOT, CORAGENT_TEST_PI_RUNTIME_ROOT and CORAGENT_PYTHON');
 }
 const load = path => import(pathToFileURL(join(source, path)));
-const { startResearchAgentHost } = await load('apps/agent/host/server.mjs');
-const { createResearchAgentHarnessBackend } = await load('apps/agent/pi/backend.mjs');
+const { startCoRAgentHost } = await load('apps/agent/host/server.mjs');
+const { createCoRAgentHarnessBackend } = await load('apps/agent/pi/backend.mjs');
 const { create_workspace_initializer } = await load('apps/agent/host/workspace.mjs');
 const workspaceRoot = join(root, 'projects');
 const socketPath = join(socketRoot, 'host.sock');
@@ -69,13 +69,13 @@ path.write_text(json.dumps(row))
 events=path.parent/'events';events.mkdir()
 (events/'event_fixture.json').write_text(json.dumps({'sequence':1,'observed_at':'2026-10-09T00:00:00Z','error':'fixture execution failed'}))
 deliveries=path.parent/'deliveries';deliveries.mkdir()
-(deliveries/'event_fixture.json').write_text(json.dumps({'schema_version':'research-agent-job-monitor-delivery/2','event_id':'event_fixture','session_id':'fixture_session','request_id':'fixture-wake','delivered':False,'error':'fixture delivery paused'}))`;
-  await execute(process.env.RESEARCH_AGENT_PYTHON, ['-c', program, join(workspaceRoot, 'ts_001')]);
-  backend = await createResearchAgentHarnessBackend({ sourceRoot: piRoot, packageRoot: source, workspaceRoot,
+(deliveries/'event_fixture.json').write_text(json.dumps({'schema_version':'coragent-job-monitor-delivery/2','event_id':'event_fixture','session_id':'fixture_session','request_id':'fixture-wake','delivered':False,'error':'fixture delivery paused'}))`;
+  await execute(process.env.CORAGENT_PYTHON, ['-c', program, join(workspaceRoot, 'ts_001')]);
+  backend = await createCoRAgentHarnessBackend({ sourceRoot: piRoot, packageRoot: source, workspaceRoot,
     serverDirectory: socketRoot, sessionDir: join(root, 'sessions'), stateRoot: join(root, 'state'),
     model: { provider: 'test', id: 'one' } });
   await backend.createSession({ workspace_id: 'ts_001', model: { provider: 'test', id: 'one' } });
-  host = await startResearchAgentHost({ socketPath, workspaceRoot, stateRoot: join(root, 'state'),
+  host = await startCoRAgentHost({ socketPath, workspaceRoot, stateRoot: join(root, 'state'),
     serverId: '123e4567-e89b-42d3-a456-426614174000', sessionBackend: backend, monitorPollMs: 0 });
   console.log(JSON.stringify({ socketPath }));
   process.stdin.once('data', async () => {

@@ -1,14 +1,14 @@
 # Android release operations
 
 CoRHub is a signed Flutter application. Install and enable Phone access on
-[CoRAgent](https://github.com/iawnix/TSPi), then run on the server:
+[CoRAgent](https://github.com/iawnix/coragent), then run on the server:
 
 ```bash
-research-agent --workspace reaction-a
-research-agent phone pair
-research-agent phone devices
+coragent --workspace reaction-a
+coragent phone pair
+coragent phone devices
 # Revoke a lost or replaced device:
-research-agent phone revoke <device-id>
+coragent phone revoke <device-id>
 ```
 
 Host connects outbound to CoRAgent Link Relay; no public Host port is
