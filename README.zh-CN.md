@@ -32,6 +32,26 @@ Flutter 客户端。在手机上访问与终端相同的研究工作区和会话
 目前发布 Android 安装包。iOS 保留源码，需要在 macOS 上使用 Apple 签名团队和
 provisioning profile 构建，暂不提供签名 iOS 下载。
 
+## Monitor 与文件
+
+从聊天标题栏打开 Monitor。任务与 Jobs 分别控制：暂停/恢复 Task Controller；
+结束任务时明确选择保留 Jobs 或请求取消；也可单独请求取消一个 Job。
+详情页收纳研究摘要和执行记录，Job 成功不代表研究任务完成。
+需要服务端提供按会话限定的 `monitor/overview`、`monitor/task/*`、
+`monitor/job/*` 等接口，以及 UserTask v2 / Research Snapshot v3；
+不再使用旧的监控启用/禁用接口。
+
+输入框 **+** 打开材料目录。支持文本、CSV/TSV、PNG/JPEG，以及原生基础
+XYZ、MOL/SDF V2000、PDB、笛卡尔坐标 mmCIF 预览。结构查看保留文件原始坐标，
+支持旋转、缩放和两原子测距，只展示首个模型/记录（备选位置 A）。每个文件
+上限 8 MiB，结构上限 5,000 原子；推断连线不代表键级。目前不渲染分数坐标 CIF、
+MOL V3000 或 PDF。文本/表格预览限 200,000 字符 / 200 行、30 列。
+
+加入草稿时，Host 会校验文件版本并固定内容快照；输入框只显示可查看详情、
+可移除的文件标签。发送仍走已有文本消息与 outbox，提交文件引用，不传文件字节。
+需要配套 Host 的 `files/list`、`files/stat`、`files/read`、`files/pin` 能力；
+旧 Host 会显示不可用。查看与测量不会调用模型。本次不包含上传或 Web 界面。
+
 ## 架构
 
 ```text

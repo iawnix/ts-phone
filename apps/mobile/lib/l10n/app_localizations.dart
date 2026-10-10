@@ -2311,6 +2311,552 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Completed'**
   String get toolCompleted;
+
+  /// No description provided for @monitorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor'**
+  String get monitorTitle;
+
+  /// No description provided for @monitorTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get monitorTasks;
+
+  /// No description provided for @monitorJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'Jobs'**
+  String get monitorJobs;
+
+  /// No description provided for @monitorFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get monitorFiles;
+
+  /// No description provided for @monitorDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get monitorDetails;
+
+  /// No description provided for @monitorRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Records'**
+  String get monitorRuns;
+
+  /// No description provided for @monitorHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get monitorHistory;
+
+  /// No description provided for @monitorEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No current task'**
+  String get monitorEmpty;
+
+  /// No description provided for @monitorJobsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No jobs'**
+  String get monitorJobsEmpty;
+
+  /// No description provided for @monitorRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No records'**
+  String get monitorRecordsEmpty;
+
+  /// No description provided for @monitorPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause task'**
+  String get monitorPause;
+
+  /// No description provided for @monitorResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume task'**
+  String get monitorResume;
+
+  /// No description provided for @monitorCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel task'**
+  String get monitorCancel;
+
+  /// No description provided for @monitorCancelJob.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel job'**
+  String get monitorCancelJob;
+
+  /// No description provided for @monitorPauseHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic progress pauses. Current replies may finish; jobs keep running.'**
+  String get monitorPauseHint;
+
+  /// No description provided for @monitorKeepJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep jobs'**
+  String get monitorKeepJobs;
+
+  /// No description provided for @monitorCancelJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'Request job cancellation'**
+  String get monitorCancelJobs;
+
+  /// No description provided for @monitorCancelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'End this task. What should happen to its jobs?'**
+  String get monitorCancelHint;
+
+  /// No description provided for @monitorJobCancelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Request cancellation of this job only. Its status confirms whether it stopped.'**
+  String get monitorJobCancelHint;
+
+  /// No description provided for @monitorMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get monitorMore;
+
+  /// No description provided for @monitorRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get monitorRefresh;
+
+  /// No description provided for @monitorRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Check / retry'**
+  String get monitorRetry;
+
+  /// No description provided for @monitorStale.
+  ///
+  /// In en, this message translates to:
+  /// **'Update failed · showing last snapshot'**
+  String get monitorStale;
+
+  /// No description provided for @monitorUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'Result unconfirmed. Retry the same request.'**
+  String get monitorUncertain;
+
+  /// No description provided for @monitorConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Task changed. Review the latest state.'**
+  String get monitorConflict;
+
+  /// No description provided for @monitorLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get monitorLoadMore;
+
+  /// No description provided for @monitorGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Goal'**
+  String get monitorGoal;
+
+  /// No description provided for @monitorCriteria.
+  ///
+  /// In en, this message translates to:
+  /// **'Completion criteria'**
+  String get monitorCriteria;
+
+  /// No description provided for @monitorProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get monitorProgress;
+
+  /// No description provided for @monitorReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get monitorReason;
+
+  /// No description provided for @monitorResearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Research'**
+  String get monitorResearch;
+
+  /// No description provided for @monitorEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get monitorEvidence;
+
+  /// No description provided for @monitorHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get monitorHealth;
+
+  /// No description provided for @monitorCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'Output collection'**
+  String get monitorCollection;
+
+  /// No description provided for @monitorAnalysis.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis not recorded'**
+  String get monitorAnalysis;
+
+  /// No description provided for @monitorOutsideSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside this conversation'**
+  String get monitorOutsideSession;
+
+  /// No description provided for @monitorReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Read only'**
+  String get monitorReadOnly;
+
+  /// No description provided for @monitorPausedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Jobs keep running'**
+  String get monitorPausedHint;
+
+  /// No description provided for @monitorExecution.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution'**
+  String get monitorExecution;
+
+  /// No description provided for @monitorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get monitorUnknown;
+
+  /// No description provided for @monitorActive.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get monitorActive;
+
+  /// No description provided for @monitorWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for jobs'**
+  String get monitorWaiting;
+
+  /// No description provided for @monitorPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get monitorPaused;
+
+  /// No description provided for @monitorBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get monitorBlocked;
+
+  /// No description provided for @monitorCompleting.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivering'**
+  String get monitorCompleting;
+
+  /// No description provided for @monitorCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get monitorCompleted;
+
+  /// No description provided for @monitorCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get monitorCancelled;
+
+  /// No description provided for @monitorRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get monitorRunning;
+
+  /// No description provided for @monitorQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get monitorQueued;
+
+  /// No description provided for @monitorFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get monitorFailed;
+
+  /// No description provided for @monitorSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Succeeded'**
+  String get monitorSucceeded;
+
+  /// No description provided for @monitorCancelPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation pending'**
+  String get monitorCancelPending;
+
+  /// No description provided for @monitorEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Ended'**
+  String get monitorEnded;
+
+  /// No description provided for @monitorUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Update CoRAgent to use this feature.'**
+  String get monitorUnavailable;
+
+  /// No description provided for @filesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get filesTitle;
+
+  /// No description provided for @filesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No files'**
+  String get filesEmpty;
+
+  /// No description provided for @filesOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open files'**
+  String get filesOpen;
+
+  /// No description provided for @filesPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get filesPreview;
+
+  /// No description provided for @filesTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'File exceeds the preview limit.'**
+  String get filesTooLarge;
+
+  /// No description provided for @filesUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable for this format.'**
+  String get filesUnsupported;
+
+  /// No description provided for @filesChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'File changed. Open its latest version.'**
+  String get filesChanged;
+
+  /// No description provided for @filesRaw.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get filesRaw;
+
+  /// No description provided for @filesStructure.
+  ///
+  /// In en, this message translates to:
+  /// **'Structure'**
+  String get filesStructure;
+
+  /// No description provided for @filesReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset view'**
+  String get filesReset;
+
+  /// No description provided for @filesSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select atoms'**
+  String get filesSelect;
+
+  /// No description provided for @filesMeasure.
+  ///
+  /// In en, this message translates to:
+  /// **'Measure distance'**
+  String get filesMeasure;
+
+  /// No description provided for @filesRotateLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate left'**
+  String get filesRotateLeft;
+
+  /// No description provided for @filesRotateRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate right'**
+  String get filesRotateRight;
+
+  /// No description provided for @filesZoomIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom in'**
+  String get filesZoomIn;
+
+  /// No description provided for @filesZoomOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom out'**
+  String get filesZoomOut;
+
+  /// No description provided for @filesNoSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'No atoms selected'**
+  String get filesNoSelection;
+
+  /// No description provided for @filesSelectTwo.
+  ///
+  /// In en, this message translates to:
+  /// **'Select two atoms to measure.'**
+  String get filesSelectTwo;
+
+  /// No description provided for @filesAtomLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Structure exceeds the viewer limit.'**
+  String get filesAtomLimit;
+
+  /// No description provided for @filesAttach.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to draft'**
+  String get filesAttach;
+
+  /// No description provided for @filesReference.
+  ///
+  /// In en, this message translates to:
+  /// **'File reference'**
+  String get filesReference;
+
+  /// No description provided for @filesSelectSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a conversation'**
+  String get filesSelectSession;
+
+  /// No description provided for @filesInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot parse this file. View the source instead.'**
+  String get filesInvalid;
+
+  /// No description provided for @filesDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Save a copy'**
+  String get filesDownload;
+
+  /// No description provided for @filesSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy saved'**
+  String get filesSaved;
+
+  /// No description provided for @filesLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading file…'**
+  String get filesLoading;
+
+  /// No description provided for @filesInferredBonds.
+  ///
+  /// In en, this message translates to:
+  /// **'Connectivity is inferred; bond orders are not assigned.'**
+  String get filesInferredBonds;
+
+  /// No description provided for @filesFirstModel.
+  ///
+  /// In en, this message translates to:
+  /// **'First model / record · alternate positions: A'**
+  String get filesFirstModel;
+
+  /// No description provided for @filesRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove file'**
+  String get filesRemove;
+
+  /// No description provided for @monitorResearchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No linked research'**
+  String get monitorResearchEmpty;
+
+  /// No description provided for @monitorFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Current focus'**
+  String get monitorFocus;
+
+  /// No description provided for @monitorPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get monitorPlan;
+
+  /// No description provided for @monitorExcerpt.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial snapshot. Read the linked research in the conversation for more.'**
+  String get monitorExcerpt;
+
+  /// No description provided for @monitorPartOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Part of'**
+  String get monitorPartOf;
+
+  /// No description provided for @monitorRequires.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires'**
+  String get monitorRequires;
+
+  /// No description provided for @monitorAlternative.
+  ///
+  /// In en, this message translates to:
+  /// **'Alternative to'**
+  String get monitorAlternative;
+
+  /// No description provided for @monitorOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get monitorOpen;
 }
 
 class _AppLocalizationsDelegate

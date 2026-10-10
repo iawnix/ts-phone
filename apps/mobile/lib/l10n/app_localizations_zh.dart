@@ -1177,4 +1177,277 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get toolCompleted => '已完成';
+
+  @override
+  String get monitorTitle => '监控';
+
+  @override
+  String get monitorTasks => '任务';
+
+  @override
+  String get monitorJobs => '作业';
+
+  @override
+  String get monitorFiles => '文件';
+
+  @override
+  String get monitorDetails => '详情';
+
+  @override
+  String get monitorRuns => '记录';
+
+  @override
+  String get monitorHistory => '历史任务';
+
+  @override
+  String get monitorEmpty => '无当前任务';
+
+  @override
+  String get monitorJobsEmpty => '暂无作业';
+
+  @override
+  String get monitorRecordsEmpty => '暂无记录';
+
+  @override
+  String get monitorPause => '暂停任务';
+
+  @override
+  String get monitorResume => '恢复任务';
+
+  @override
+  String get monitorCancel => '取消任务';
+
+  @override
+  String get monitorCancelJob => '取消作业';
+
+  @override
+  String get monitorPauseHint => '暂停自动推进；当前回复可收尾，作业继续运行。';
+
+  @override
+  String get monitorKeepJobs => '保留作业';
+
+  @override
+  String get monitorCancelJobs => '请求取消作业';
+
+  @override
+  String get monitorCancelHint => '结束当前任务。如何处理已有作业？';
+
+  @override
+  String get monitorJobCancelHint => '仅请求取消此作业，是否停止以实际状态为准。';
+
+  @override
+  String get monitorMore => '更多';
+
+  @override
+  String get monitorRefresh => '刷新';
+
+  @override
+  String get monitorRetry => '核对／重试';
+
+  @override
+  String get monitorStale => '更新失败 · 当前为上次快照';
+
+  @override
+  String get monitorUncertain => '操作结果未确认，请核对或重试。';
+
+  @override
+  String get monitorConflict => '任务已变化，请核对最新状态。';
+
+  @override
+  String get monitorLoadMore => '加载更多';
+
+  @override
+  String get monitorGoal => '目标';
+
+  @override
+  String get monitorCriteria => '完成条件';
+
+  @override
+  String get monitorProgress => '进展';
+
+  @override
+  String get monitorReason => '原因';
+
+  @override
+  String get monitorResearch => '研究问题';
+
+  @override
+  String get monitorEvidence => '依据';
+
+  @override
+  String get monitorHealth => '诊断';
+
+  @override
+  String get monitorCollection => '输出收集';
+
+  @override
+  String get monitorAnalysis => '未记录科学分析';
+
+  @override
+  String get monitorOutsideSession => '来自其他会话';
+
+  @override
+  String get monitorReadOnly => '只读';
+
+  @override
+  String get monitorPausedHint => '作业继续运行';
+
+  @override
+  String get monitorExecution => '执行记录';
+
+  @override
+  String get monitorUnknown => '未知';
+
+  @override
+  String get monitorActive => '推进中';
+
+  @override
+  String get monitorWaiting => '等待计算';
+
+  @override
+  String get monitorPaused => '已暂停';
+
+  @override
+  String get monitorBlocked => '需要处理';
+
+  @override
+  String get monitorCompleting => '交付中';
+
+  @override
+  String get monitorCompleted => '已完成';
+
+  @override
+  String get monitorCancelled => '已取消';
+
+  @override
+  String get monitorRunning => '运行中';
+
+  @override
+  String get monitorQueued => '排队中';
+
+  @override
+  String get monitorFailed => '失败';
+
+  @override
+  String get monitorSucceeded => '成功';
+
+  @override
+  String get monitorCancelPending => '取消待确认';
+
+  @override
+  String get monitorEnded => '已结束';
+
+  @override
+  String get monitorUnavailable => '更新 CoRAgent 后可使用此功能。';
+
+  @override
+  String get filesTitle => '文件';
+
+  @override
+  String get filesEmpty => '暂无文件';
+
+  @override
+  String get filesOpen => '打开文件';
+
+  @override
+  String get filesPreview => '预览';
+
+  @override
+  String get filesTooLarge => '文件超过预览大小限制。';
+
+  @override
+  String get filesUnsupported => '此格式暂不支持预览。';
+
+  @override
+  String get filesChanged => '文件已变化，请重新打开。';
+
+  @override
+  String get filesRaw => '原文';
+
+  @override
+  String get filesStructure => '结构';
+
+  @override
+  String get filesReset => '重置视角';
+
+  @override
+  String get filesSelect => '选择原子';
+
+  @override
+  String get filesMeasure => '测量距离';
+
+  @override
+  String get filesRotateLeft => '向左旋转';
+
+  @override
+  String get filesRotateRight => '向右旋转';
+
+  @override
+  String get filesZoomIn => '放大';
+
+  @override
+  String get filesZoomOut => '缩小';
+
+  @override
+  String get filesNoSelection => '未选择原子';
+
+  @override
+  String get filesSelectTwo => '选择两个原子测距。';
+
+  @override
+  String get filesAtomLimit => '结构超过查看器容量限制。';
+
+  @override
+  String get filesAttach => '加入草稿';
+
+  @override
+  String get filesReference => '文件引用';
+
+  @override
+  String get filesSelectSession => '选择会话';
+
+  @override
+  String get filesInvalid => '无法解析此文件，可查看原文。';
+
+  @override
+  String get filesDownload => '保存副本';
+
+  @override
+  String get filesSaved => '副本已保存';
+
+  @override
+  String get filesLoading => '正在读取文件…';
+
+  @override
+  String get filesInferredBonds => '连线为推断连接，不代表键级。';
+
+  @override
+  String get filesFirstModel => '首个模型／记录 · 替代位置 A';
+
+  @override
+  String get filesRemove => '移除文件';
+
+  @override
+  String get monitorResearchEmpty => '暂无关联研究';
+
+  @override
+  String get monitorFocus => '当前关注';
+
+  @override
+  String get monitorPlan => '研究计划';
+
+  @override
+  String get monitorExcerpt => '此处为摘要，可在对话中查看关联研究的完整内容。';
+
+  @override
+  String get monitorPartOf => '属于';
+
+  @override
+  String get monitorRequires => '依赖';
+
+  @override
+  String get monitorAlternative => '备选';
+
+  @override
+  String get monitorOpen => '进行中';
 }

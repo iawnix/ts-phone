@@ -207,11 +207,31 @@ class _SessionListPageState extends State<SessionListPage>
   Future<void> _openMonitors() async {
     final gateway = _gateway;
     if (gateway is! HostMonitorGateway) return;
+    final sessions = _sessions ?? <SessionSummary>[];
+    if (sessions.isEmpty) return;
+    final selected = await showDialog<SessionSummary>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: Text(c.l10n.filesSelectSession),
+        children: sessions
+            .map(
+              (s) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, s),
+                child: Text(s.localizedDisplayName(c.l10n)),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (selected == null || !mounted) return;
     await pushCorHubPage<void>(
       context: context,
       builder: (context) => MonitorPage(
         workspace: widget.workspace,
         gateway: gateway as HostMonitorGateway,
+        sessionId: selected.sessionId,
+        sessionTitle: selected.localizedDisplayName(context.l10n),
+        readOnly: selected.accessMode == SessionAccessMode.observer,
       ),
     );
   }

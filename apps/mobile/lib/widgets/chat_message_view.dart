@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:corhub/theme/app_icons.dart';
 
 import '../models/chat_message.dart';
+import '../models/file_reference.dart';
+import 'file_reference_chip.dart';
 import '../l10n/app_localizations_extensions.dart';
 import '../theme/corhub_theme.dart';
 import 'markdown_message.dart';
@@ -27,6 +29,9 @@ class ChatMessageView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == ChatRole.user;
+    final draft = isUser
+        ? ReferencedDraft.parse(message.text)
+        : ReferencedDraft(message.text, []);
     final hasNarrative = message.text.trim().isNotEmpty;
     if (!isUser && !hasNarrative && message.tools.isEmpty) {
       return RepaintBoundary(
@@ -42,7 +47,15 @@ class ChatMessageView extends StatelessWidget {
           ? CrossAxisAlignment.start
           : CrossAxisAlignment.stretch,
       children: <Widget>[
-        if (hasNarrative) MarkdownMessage(data: message.text),
+        if (draft.text.trim().isNotEmpty) MarkdownMessage(data: draft.text),
+        if (draft.files.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final file in draft.files)
+                FileReferenceChip(reference: file),
+            ],
+          ),
         for (var index = 0; index < message.tools.length; index++)
           _ToolDetailView(
             detail: message.tools[index],

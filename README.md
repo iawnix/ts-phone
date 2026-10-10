@@ -39,6 +39,31 @@ server version numbers. See each release's notes for its supported server.
 Android is the published binary target. iOS source is maintained, but requires
 macOS, an Apple signing team and provisioning; no signed iOS download is provided.
 
+## Monitor and files
+
+Open Monitor from the conversation header. Tasks and Jobs use separate controls:
+pause/resume the Task Controller, cancel a task with an explicit choice about
+its Jobs, or request cancellation of an individual Job. Details contain research
+summaries and execution records; a successful Job alone does not mean the research
+is complete. This requires the canonical session-scoped `monitor/overview`,
+`monitor/task/*`, `monitor/job/*` and related capabilities, UserTask v2 and Research
+Snapshot v3. Removed monitor enable/disable methods are not used.
+
+The composer **+** opens material folders. Text, CSV/TSV, PNG/JPEG and basic native
+XYZ, MOL/SDF V2000, PDB and Cartesian mmCIF previews are supported. Structure
+previews keep supplied coordinates, offer rotation/zoom and two-atom distance,
+and show the first model/record (alternate location A). They are limited to
+5,000 atoms and 8 MiB per file; inferred connections are not bond orders.
+Fractional-coordinate CIF, MOL V3000 and PDF rendering are not supported.
+Text/table previews are bounded to 200,000 characters / 200 rows and 30 columns.
+
+Adding a file to the draft captures a version-checked content snapshot on Host.
+A compact file chip can show the reference details or be removed. Sending uses
+the existing text-message/outbox protocol; it sends a file reference, not bytes.
+Requires the new `files/list`, `files/stat`, `files/read`, `files/pin` capabilities
+from the accompanying Host implementation. Older Hosts show an unavailable state.
+Viewing and measuring do not call a model. This does not add uploads or a Web UI.
+
 ## Architecture
 
 ```text

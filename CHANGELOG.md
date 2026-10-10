@@ -3,18 +3,29 @@
 Release versions follow `MAJOR.MINOR.PATCH+BUILD`. Unreleased source is not an
 installable GitHub release. See [versioning](docs/versioning.md).
 
-## Unreleased — 0.20.0+64
+## 0.20.0+64
 
-- **Breaking:** targets CoRAgent 0.19 with `coragent-host/2`,
-  `coragent-link.v1` and `cad_` device credentials. Update Host, Relay and
-  client together, then run `coragent phone pair` and pair again.
-- Reject old protocols and `rad_` credentials; no fallback or token-prefix
-  conversion. Invalid saved connections return to pairing while theme and
-  language preferences remain available.
-- Update server links, commands and deterministic Host/Pi interop fixtures.
-  Android/iOS installation identifiers and signing identity remain unchanged.
-- 本次是配套 CoRAgent 更名的不兼容协议切换，旧客户端无法连接新服务；
-  所有设备需要重新配对。本条目为未发布源码，不代表 APK 已发布或完成实机验收。
+- **简约任务监控**：在原聊天界面打开 Monitor，支持 Task Controller 暂停、恢复、
+  取消；Jobs 独立控制。研究详情与执行记录收进二级页面。
+- **文件与结构预览**：浏览工作区材料，查看文本、CSV/TSV、PNG/JPEG，以及基础
+  XYZ、MOL/SDF V2000、PDB、笛卡尔坐标 mmCIF。支持旋转、缩放、选原子和测距。
+  文件以可展开的紧凑标签加入草稿，发送和重试沿用原有 outbox。
+- **服务端要求**：更新 CoRAgent main 到本次 `files/*` 接口合入后的版本。
+  需要 UserTask v2、Research Snapshot v3 与新的 Monitor、files 能力；
+  仅版本号为 0.19.0 的旧安装不保证包含这些接口。
+- **升级提示**：本版使用 `coragent-host/2`、`coragent-link.v1` 和 `cad_` 凭据。
+  从 CoRHub 0.19.1+63 或更早版本升级时，同步更新 Host/Relay，并通过
+  `coragent phone pair` 重新配对。保留原 Android 包名与生产签名，支持覆盖安装。
+- **范围与限制**：预览限 8 MiB / 5,000 原子，展示首个模型/记录（备选位置 A）；
+  推断连线不代表键级。暂不渲染 PDF、MOL V3000 或分数坐标 CIF，不包含上传。
+  文本和表格预览限 200,000 字符、200 行 / 30 列。
+- **验证**：客户端版本、格式、静态分析与 23 个 Flutter 测试文件通过；
+  本地确定性真实 Host/Pi 联调及服务端专项测试通过，测试服务已清理。
+  APK/AAB 由 GitHub Actions 从标签构建、签名并校验。未进行 Android/iOS 实机验收。
+- Compact Monitor uses canonical session-scoped task and Job controls, preserves
+  uncertain request identities and does not equate Job success with task completion.
+  The new Host material APIs provide versioned file snapshots; no file bytes are
+  embedded in chat. Legacy monitor enable/disable methods are removed.
 
 ## 0.19.1+63
 

@@ -87,24 +87,27 @@ void main() {
         );
         final projects = await gateway.listWorkspaces();
         expect(projects.single.id, 'ts_001');
-        final monitor = (await gateway.listMonitors('ts_001')).single;
-        expect(monitor.state, 'failed');
-        expect(monitor.pendingCount, 1);
-        expect(monitor.lastError, 'fixture delivery paused');
-        expect(monitor.lastObservedAt, DateTime.utc(2026, 10, 9));
-        expect(
-          (await gateway.setMonitorEnabled(
-            'ts_001',
-            monitor.id,
-            false,
-          )).enabled,
-          isFalse,
-        );
-        expect(
-          (await gateway.setMonitorEnabled('ts_001', monitor.id, true)).enabled,
-          isTrue,
-        );
         final session = (await gateway.listSessions('ts_001')).single;
+        final overview = await gateway.monitorRequest(
+          'ts_001',
+          session.sessionId,
+          'monitor/overview',
+        );
+        expect(overview['schema_version'], 'coragent-monitor/1');
+        expect(overview['task'], isNull);
+        expect((overview['jobs'] as Map)['items'], isA<List>());
+        expect(await gateway.supportsFiles(), isTrue);
+        final files = await gateway.listFiles('ts_001', 'inputs');
+        expect(files.files.single.name, 'fixture.xyz');
+        final bytes = await gateway.readFile(
+          'ts_001',
+          files.files.single,
+          cancelled: () => false,
+        );
+        expect(utf8.decode(bytes), contains('O 1.2 0 0'));
+        final ref = await gateway.pinFile('ts_001', files.files.single);
+        expect(ref['path'], startsWith('inputs/phone-references/'));
+
         expect(session.canPrompt, isTrue);
         final events = StreamQueue(gateway.events('ts_001', session.sessionId));
         await events.next;

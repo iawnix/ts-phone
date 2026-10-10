@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import '../models/workspace_file.dart';
 
 import '../models/connection_settings.dart';
 import '../models/host_monitor.dart';
@@ -29,7 +32,8 @@ class HostGateway
         WorkspaceManagementGateway,
         WorkspaceSessionGateway,
         SessionResumeGateway,
-        HostMonitorGateway {
+        HostMonitorGateway,
+        WorkspaceFileGateway {
   HostGateway(this.settings, {HostRpcClient? client})
     : _client =
           client ??
@@ -449,42 +453,153 @@ class HostGateway
   });
 
   @override
-  Future<List<HostMonitor>> listMonitors(String workspaceId) =>
-      _guard(() async {
-        final result = _object(
-          await _client.request('monitor/list', {'workspace_id': workspaceId}),
-        );
-        return _list(
-          result['monitors'],
-        ).map((raw) => HostMonitor.fromJson(_object(raw))).toList();
-      });
+  Future<Set<String>> monitorCapabilities() => _guard(() async {
+    final metadata = await _client.connect();
+    return Set<String>.from(metadata['capabilities'] as List? ?? const []);
+  });
 
   @override
-  Future<HostMonitor> setMonitorEnabled(
+  Stream<void> monitorChanges(String workspaceId, String sessionId) => _client
+      .notifications
+      .where((event) {
+        final p = event['params'];
+        return p is Map &&
+            p['workspace_id'] == workspaceId &&
+            (event['method'] == 'monitor/event' ||
+                (event['method'] == 'session/event' &&
+                    p['session_id'] == sessionId));
+      })
+      .map((_) {});
+
+  @override
+  Future<Map<String, Object?>> monitorRequest(
     String workspaceId,
-    String monitorId,
-    bool enabled,
-  ) => _guard(() async {
+    String sessionId,
+    String method, {
+    Map<String, Object?> params = const {},
+  }) => _guard(() async {
+    const methods = {
+      'monitor/overview',
+      'monitor/tasks',
+      'monitor/task/read',
+      'monitor/task/pause',
+      'monitor/task/resume',
+      'monitor/task/cancel',
+      'monitor/jobs',
+      'monitor/job/read',
+      'monitor/job/cancel',
+      'monitor/runs',
+      'monitor/run/read',
+      'monitor/health',
+    };
+    if (!methods.contains(method)) throw ArgumentError.value(method);
+    return _object(
+      await _client.request(method, {
+        ...params,
+        ..._target(workspaceId, sessionId),
+      }),
+    );
+  });
+
+  @override
+  Future<bool> supportsFiles() async {
+    final capabilities = await monitorCapabilities();
+    return capabilities.containsAll({'files/list', 'files/stat', 'files/read'});
+  }
+
+  @override
+  Future<bool> supportsFileReferences() async =>
+      (await monitorCapabilities()).contains('files/pin');
+
+  @override
+  Future<Map<String, Object?>> pinFile(
+    String workspaceId,
+    WorkspaceFile file,
+  ) => _guard(
+    () async => _object(
+      await _client.request('files/pin', {
+        'workspace_id': workspaceId,
+        'path': file.path,
+        'expected_version': file.version,
+      }),
+    ),
+  );
+
+  @override
+  Future<WorkspaceFilePage> listFiles(
+    String workspaceId,
+    String path, {
+    String? cursor,
+  }) => _guard(() async {
     final result = _object(
-      await _client.request(enabled ? 'monitor/enable' : 'monitor/disable', {
+      await _client.request('files/list', {
         'workspace_id': workspaceId,
-        'monitor_id': monitorId,
-        'request_id': createCorHubClientMessageId(),
+        'path': path,
+        'limit': 50,
+        'cursor': ?cursor,
       }),
     );
-    if (result['updated'] != 1) {
-      throw const CorHubApiException(
-        'Monitor no longer exists',
-        code: 'monitor_not_found',
-      );
+    if (result['schema_version'] != 'coragent-files/1') {
+      throw const FormatException('Unsupported file list');
     }
-    final status = _object(
-      await _client.request('monitor/status', {
-        'workspace_id': workspaceId,
-        'monitor_id': monitorId,
-      }),
+    return WorkspaceFilePage(
+      _list(
+        result['items'],
+      ).map((v) => WorkspaceFile.fromJson(_object(v))).toList(),
+      result['next_cursor'] as String?,
     );
-    return HostMonitor.fromJson(_object(_list(status['monitors']).single));
+  });
+
+  @override
+  Future<Uint8List> readFile(
+    String workspaceId,
+    WorkspaceFile file, {
+    required bool Function() cancelled,
+  }) => _guard(() async {
+    const maximum = 8 * 1024 * 1024;
+    if (file.size > maximum) {
+      throw const CorHubApiException('File too large', code: 'file_too_large');
+    }
+    final bytes = BytesBuilder(copy: false);
+    var offset = 0;
+    while (true) {
+      if (cancelled()) {
+        throw const CorHubApiException(
+          'Read cancelled',
+          code: 'file_read_cancelled',
+        );
+      }
+      final part = _object(
+        await _client.request('files/read', {
+          'workspace_id': workspaceId,
+          'path': file.path,
+          'expected_version': file.version,
+          'offset': offset,
+          'length': 65536,
+        }),
+      );
+      if (cancelled()) {
+        throw const CorHubApiException(
+          'Read cancelled',
+          code: 'file_read_cancelled',
+        );
+      }
+      final data = base64Decode(_string(part['data_base64']));
+      if (part['offset'] != offset ||
+          part['next_offset'] != offset + data.length ||
+          _object(part['file'])['version'] != file.version ||
+          bytes.length + data.length > maximum ||
+          (data.isEmpty && part['eof'] != true)) {
+        throw const FormatException('Invalid file range');
+      }
+      bytes.add(data);
+      offset += data.length;
+      if (part['eof'] == true) {
+        if (offset != file.size) throw const FormatException('Incomplete file');
+        return bytes.takeBytes();
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
   });
 
   Map<String, Object?> get _activeTarget {
