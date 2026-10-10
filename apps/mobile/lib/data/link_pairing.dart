@@ -104,7 +104,7 @@ class LinkPairingClient {
         message is String ? message : 'CoRAgent Relay rejected pairing',
       );
     }
-    if (value['protocol'] != 'research-agent-link.v1') {
+    if (value['protocol'] != 'coragent-link.v1') {
       throw const LinkPairingException(
         'unsupported_protocol',
         'CoRAgent Relay uses an unsupported Link protocol',

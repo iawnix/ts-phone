@@ -66,7 +66,7 @@ class ConnectionSettings {
 
   static String validateToken(String value) {
     final trimmed = value.trim();
-    if (!RegExp(r'^rad_[A-Za-z0-9_-]{40,80}$').hasMatch(trimmed)) {
+    if (!RegExp(r'^cad_[A-Za-z0-9_-]{40,80}$').hasMatch(trimmed)) {
       throw const ConnectionValidationException(
         ConnectionValidationReason.invalidToken,
       );

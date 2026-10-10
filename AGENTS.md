@@ -2,8 +2,8 @@
 
 ## 项目边界
 
-- 本仓库只维护 Flutter 手机客户端、客户端测试和移动发布工具。CoRAgent Host、Link Relay、Pi runtime 属于 `iawnix/TSPi`，不要重新引入 Node 服务端或另一套会话数据库。
-- 当前接口是 `research-agent-host/2`、`research-agent-link.v1` 和 `rad_` 设备令牌。协议变更必须核对两端合同；旧令牌不能通过替换前缀迁移。
+- 本仓库只维护 Flutter 手机客户端、客户端测试和移动发布工具。CoRAgent Host、Link Relay、Pi runtime 属于 `iawnix/coragent`，不要重新引入 Node 服务端或另一套会话数据库。
+- 当前接口是 `coragent-host/2`、`coragent-link.v1` 和 `cad_` 设备令牌。协议变更必须核对两端合同；旧令牌不能通过替换前缀迁移。
 - CoRAgent/Pi 拥有会话、执行、模型凭据和监控状态。手机只保存连接身份、界面偏好及有限的展示状态。
 - 发送失败后的手动重试必须保留消息身份，不能自动重复提交变更请求。
 
@@ -32,8 +32,8 @@
 ## 文档与界面
 
 - 产品文案统一使用 CoRHub（客户端）和 CoRAgent（科研智能体）；配对、聊天作者、生成状态、错误提示和诊断页面都适用。保留真实协议、包标识、签名、安全存储、历史标签、命令及路径的准确值，不对这些技术标识做品牌替换。
-- `README.md` / `README.zh-CN.md` 同步维护，文档命令使用 `research-agent`，正文统一使用 CoRAgent，服务端实际仓库链接和命令按当前实现保留。
+- `README.md` / `README.zh-CN.md` 同步维护，文档命令使用 `coragent`，正文统一使用 CoRAgent，服务端实际仓库链接和命令按当前实现保留。
 - 界面文案同时维护英文、中文 ARB 并生成本地化文件；保持可访问性、键盘、窄屏/宽屏与大字号行为。
 - 不把开发路径、协议调试细节或凭据放进面向普通用户的界面。修改文档中的服务/存储说明时核对当前服务端实现。
 
-- CoRHub 更名保留 `TS_PHONE_*` 环境变量/GitHub secrets、签名文件和别名、Android/iOS 包标识、安全存储命名空间及服务端协议，避免破坏升级与配对。品牌 SVG 及生成方式见 `apps/mobile/assets/branding/README.md`。
+- CoRHub 安装身份保留 `TS_PHONE_*` 环境变量/GitHub secrets、签名文件和别名、Android/iOS 包标识和安全存储命名空间。CoRAgent 0.19 切换为 `coragent-host/2`、`coragent-link.v1` 和 `cad_`；不保留旧协议，升级后重新配对。品牌 SVG 及生成方式见 `apps/mobile/assets/branding/README.md`。

@@ -417,7 +417,7 @@ class FakeGateway implements CorHubGateway {
   Future<List<SessionSummary>> listSessions(String workspaceId) async => [];
   @override
   Future<Map<String, Object?>> version() async => {
-    'apiVersion': 'research-agent-host/2',
+    'apiVersion': 'coragent-host/2',
   };
   @override
   void close() {

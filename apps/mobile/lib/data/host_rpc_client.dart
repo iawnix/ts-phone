@@ -5,8 +5,8 @@ import 'dart:typed_data';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-const hostProtocol = 'research-agent-host/2';
-const hostLinkProtocol = 'research-agent-link.v1';
+const hostProtocol = 'coragent-host/2';
+const hostLinkProtocol = 'coragent-link.v1';
 const _maxLineBytes = 16 * 1024 * 1024;
 
 class HostRpcException implements Exception {

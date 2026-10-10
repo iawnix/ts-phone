@@ -20,7 +20,7 @@ final _settings = ConnectionSettings(
   serverUrl: 'https://link.example.test',
   serverId: _serverId,
   deviceId: '223e4567-e89b-42d3-a456-426614174000',
-  token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+  token: 'cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
 );
 
 Map<String, Object?> _session({bool online = true, bool readOnly = false}) => {
@@ -79,10 +79,10 @@ void main() {
       final server = _Server();
       final client = server.client();
       addTearDown(client.close);
-      expect((await client.connect())['protocol'], 'research-agent-host/2');
+      expect((await client.connect())['protocol'], 'coragent-host/2');
       expect(
         (server.requests.single['params']! as Map)['protocol'],
-        'research-agent-host/2',
+        'coragent-host/2',
       );
       expect(server.uri, Uri.parse('wss://link.example.test/v1/link'));
       expect(server.headers, {'Authorization': 'Bearer ${_settings.token}'});

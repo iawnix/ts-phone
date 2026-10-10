@@ -24,7 +24,7 @@ import 'package:corhub/widgets/corhub_brand_mark.dart';
 
 const _hostId = '123e4567-e89b-42d3-a456-426614174000';
 const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
-const _deviceToken = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+const _deviceToken = 'cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
 void main() {
   testWidgets('shows the connection screen without layout overflow', (

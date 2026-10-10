@@ -18,7 +18,7 @@ void main() {
         serverUrl: 'https://phone.test',
         serverId: hostId,
         deviceId: deviceId,
-        token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        token: 'cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
       await store.save(connection);
       await store.saveConversation(connection.serverUrl, 'ts_001', 'session_2');
@@ -37,7 +37,7 @@ void main() {
           serverUrl: connection.serverUrl,
           serverId: hostId,
           deviceId: '323e4567-e89b-42d3-a456-426614174000',
-          token: 'rad_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq',
+          token: 'cad_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq',
         ),
       );
       expect(await store.loadConversation(connection.serverUrl), isNull);
@@ -54,7 +54,7 @@ void main() {
         serverUrl: 'https://tsphone.iawnix.xyz',
         serverId: hostId,
         deviceId: deviceId,
-        token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        token: 'cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       );
 
       await store.save(connection);
@@ -82,4 +82,25 @@ void main() {
     expect(await storage.read(key: 'app_server_id'), isNull);
     expect(await storage.read(key: 'auth_token'), isNull);
   });
+
+  test(
+    'retired device credentials require pairing and preserve preferences',
+    () async {
+      FlutterSecureStorage.setMockInitialValues(<String, String>{
+        'link_relay_url': 'https://link.example.test',
+        'link_host_id': hostId,
+        'link_device_id': deviceId,
+        'link_device_token': 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        'theme_mode': 'dark',
+        'locale_mode': 'en',
+      });
+      const storage = FlutterSecureStorage();
+      final store = SecureSettingsStore(storage: storage);
+
+      expect(await store.load(), isNull);
+      expect(await storage.read(key: 'link_device_token'), isNull);
+      expect(await store.loadThemePreference(), AppThemePreference.dark);
+      expect(await store.loadLocalePreference(), AppLocalePreference.en);
+    },
+  );
 }

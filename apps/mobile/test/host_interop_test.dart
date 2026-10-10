@@ -17,21 +17,21 @@ void main() {
       final identity =
           jsonDecode(
                 await File(
-                  '${Platform.environment['RESEARCH_AGENT_SOURCE']}/config/identity.json',
+                  '${Platform.environment['CORAGENT_SOURCE']}/config/identity.json',
                 ).readAsString(),
               )
               as Map;
       expect(hostProtocol, identity['host_protocol']);
       expect(hostLinkProtocol, identity['link_protocol']);
-      expect(identity['device_token_prefix'], 'rad_');
+      expect(identity['device_token_prefix'], 'cad_');
       final directory = await Directory(
-        Platform.environment['RESEARCH_AGENT_TEST_ROOT']!,
+        Platform.environment['CORAGENT_TEST_ROOT']!,
       ).createTemp('p-');
       final process = await Process.start(
         Platform.environment['NODE_BIN'] ?? 'node',
         [
           '--import',
-          '${Platform.environment['RESEARCH_AGENT_TEST_PI_RUNTIME_ROOT']!}/packages/coding-agent/src/experimental/source-resolver.ts',
+          '${Platform.environment['CORAGENT_TEST_PI_RUNTIME_ROOT']!}/packages/coding-agent/src/experimental/source-resolver.ts',
           'test/fixtures/host_interop.mjs',
           directory.path,
         ],
@@ -41,7 +41,7 @@ void main() {
       );
       final errors = process.stderr.transform(utf8.decoder).map((chunk) {
         File(
-          '${Platform.environment['RESEARCH_AGENT_TEST_RUN_ROOT']}/logs/phone-fixture.log',
+          '${Platform.environment['CORAGENT_TEST_RUN_ROOT']}/logs/phone-fixture.log',
         ).writeAsStringSync(chunk, mode: FileMode.append);
         return chunk;
       }).join();
@@ -59,11 +59,11 @@ void main() {
           expect(request.uri.path, '/v1/link');
           expect(
             request.headers.value('authorization'),
-            'Bearer rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+            'Bearer cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
           );
           final ws = await WebSocketTransformer.upgrade(
             request,
-            protocolSelector: (protocols) => 'research-agent-link.v1',
+            protocolSelector: (protocols) => 'coragent-link.v1',
           );
           websockets.add(ws);
           final socket = await Socket.connect(
@@ -82,7 +82,7 @@ void main() {
             serverUrl: 'http://127.0.0.1:${server.port}',
             serverId: '123e4567-e89b-42d3-a456-426614174000',
             deviceId: '223e4567-e89b-42d3-a456-426614174000',
-            token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+            token: 'cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
           ),
         );
         final projects = await gateway.listWorkspaces();
@@ -209,14 +209,13 @@ void main() {
       }
     },
     skip:
-        Platform.environment['RESEARCH_AGENT_SOURCE'] == null ||
-            Platform.environment['RESEARCH_AGENT_TEST_ROOT'] == null ||
-            Platform.environment['RESEARCH_AGENT_TEST_PI_RUNTIME_ROOT'] ==
-                null ||
-            Platform.environment['RESEARCH_AGENT_PYTHON'] == null ||
-            Platform.environment['RESEARCH_AGENT_TEST_SOCKET_ROOT'] == null ||
-            Platform.environment['RESEARCH_AGENT_TEST_RUN_ROOT'] == null
-        ? 'Set RESEARCH_AGENT_SOURCE, RESEARCH_AGENT_TEST_ROOT, RESEARCH_AGENT_TEST_PI_RUNTIME_ROOT and RESEARCH_AGENT_PYTHON for cross-repository verification'
+        Platform.environment['CORAGENT_SOURCE'] == null ||
+            Platform.environment['CORAGENT_TEST_ROOT'] == null ||
+            Platform.environment['CORAGENT_TEST_PI_RUNTIME_ROOT'] == null ||
+            Platform.environment['CORAGENT_PYTHON'] == null ||
+            Platform.environment['CORAGENT_TEST_SOCKET_ROOT'] == null ||
+            Platform.environment['CORAGENT_TEST_RUN_ROOT'] == null
+        ? 'Set CORAGENT_SOURCE, CORAGENT_TEST_ROOT, CORAGENT_TEST_PI_RUNTIME_ROOT and CORAGENT_PYTHON for cross-repository verification'
         : false,
   );
 }

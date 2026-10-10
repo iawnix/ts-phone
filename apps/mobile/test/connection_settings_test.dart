@@ -4,7 +4,7 @@ import 'package:corhub/models/connection_settings.dart';
 void main() {
   const hostId = '123e4567-e89b-42d3-a456-426614174000';
   const deviceId = '223e4567-e89b-42d3-a456-426614174000';
-  const token = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+  const token = 'cad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
   test('rejects retired device token prefixes', () {
     expect(
@@ -12,7 +12,7 @@ void main() {
         serverUrl: 'https://link.example.test',
         serverId: hostId,
         deviceId: deviceId,
-        token: 'tspd_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        token: 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       ),
       throwsFormatException,
     );
