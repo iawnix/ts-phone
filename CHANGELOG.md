@@ -3,7 +3,7 @@
 Release versions follow `MAJOR.MINOR.PATCH+BUILD`. Unreleased source is not an
 installable GitHub release. See [versioning](docs/versioning.md).
 
-## Unreleased
+## 0.19.1+63
 
 ### CoRHub rebrand / 品牌更新
 
@@ -22,7 +22,21 @@ installable GitHub release. See [versioning](docs/versioning.md).
   saved pairing and Host/Link contracts. Existing installations can upgrade
   without a brand-related re-pairing or data migration.
 - 应用与仓库更名为 CoRHub，采用优化后的螃蟹图标；保留现有安装身份和配对数据。
-  本次源码更新尚未发布安装包，latest 下载仍可能采用旧品牌。
+  从 0.19.0+62 升级无需因本次品牌更新重新配对。
+
+### Installation and validation / 安装与验证
+
+- Most Android phones should install the **arm64-v8a APK**. The release also
+  includes armeabi-v7a / x86_64 APKs, an AAB, source attestations and SHA256SUMS.
+- Continues to use `research-agent-host/2`, `research-agent-link.v1` and `rad_`
+  device credentials with server version 0.18.0. Upgrading from the legacy
+  protocol still requires re-pairing as described in the previous release.
+- Independent client and release-tool checks cover this update. Official
+  binaries are built and verified from the release tag by GitHub Actions using
+  the existing production signer. Physical-device acceptance and a new Host/Pi
+  interoperability run are not claimed for this branding release.
+- 大多数 Android 手机请选择 arm64-v8a APK。保留原有签名，可覆盖安装升级；
+  本次未进行 Android/iOS 实机验收，不提供签名 iOS 下载。
 
 ## 0.19.0+62
 
