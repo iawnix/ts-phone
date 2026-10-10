@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/phone_model.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import 'model_presentation.dart';
 import 'model_provider_mark.dart';
 
 Future<PhoneModel?> showModelPicker(
   BuildContext context, {
-  required TsPhoneModelGateway gateway,
+  required CorHubModelGateway gateway,
   String? selected,
   Future<void> Function(PhoneModel)? onSelect,
   bool Function()? canSelect,
@@ -20,7 +20,7 @@ Future<PhoneModel?> showModelPicker(
   isScrollControlled: true,
   useSafeArea: true,
   showDragHandle: true,
-  sheetAnimationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+  sheetAnimationStyle: CorHubMotion.resolveAnimationStyle(context),
   builder: (_) => _ModelPicker(
     gateway: gateway,
     selected: selected,
@@ -38,7 +38,7 @@ class _ModelPicker extends StatefulWidget {
     this.canSelect,
     this.state,
   });
-  final TsPhoneModelGateway gateway;
+  final CorHubModelGateway gateway;
   final String? selected;
   final Future<void> Function(PhoneModel)? onSelect;
   final bool Function()? canSelect;
@@ -50,7 +50,7 @@ class _ModelPicker extends StatefulWidget {
 class _ModelPickerState extends State<_ModelPicker> {
   List<PhoneModel> _models = [];
   String _query = '';
-  TsPhoneProblem? _problem;
+  CorHubProblem? _problem;
   bool _loading = true;
   bool _saving = false;
   @override
@@ -79,7 +79,7 @@ class _ModelPickerState extends State<_ModelPicker> {
       final models = await widget.gateway.models();
       if (mounted) setState(() => _models = models);
     } catch (error) {
-      if (mounted) setState(() => _problem = describeTsPhoneProblem(error));
+      if (mounted) setState(() => _problem = describeCorHubProblem(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,7 +95,7 @@ class _ModelPickerState extends State<_ModelPicker> {
       await widget.onSelect?.call(model);
       if (mounted) Navigator.of(context).pop(model);
     } catch (error) {
-      if (mounted) setState(() => _problem = describeTsPhoneProblem(error));
+      if (mounted) setState(() => _problem = describeCorHubProblem(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -1,11 +1,11 @@
 # Architecture
 
-TS Phone is a presentation client of `research-agent-host/2`. Pi sessions own their execution, conversation and durable history. Host owns workspace routing,
+CoRHub is a presentation client of `research-agent-host/2`. Pi sessions own their execution, conversation and durable history. Host owns workspace routing,
 session discovery and routing to the native Pi Harness worker. Task monitoring
 belongs to the server and continues independently of the phone screen.
 
 ```text
-TS Phone -> Relay -> Host -> Pi Harness worker -> durable Pi session
+CoRHub -> Relay -> Host -> Pi Harness worker -> durable Pi session
                        +-> workspace task monitors
 ```
 

@@ -23,7 +23,7 @@ if (releaseTaskRequested &&
 ) {
     throw GradleException(
         "Release signing is unavailable. Set TS_PHONE_SIGNING_DIR to the " +
-            "protected TS Phone signing directory.",
+            "protected CoRHub signing directory.",
     )
 }
 

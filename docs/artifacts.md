@@ -4,10 +4,10 @@ The mobile release pipeline produces one immutable Android artifact set:
 
 ```text
 dist/android-current/
-  ts-phone-v<version>-build<build>-arm64-v8a-release.apk
-  ts-phone-v<version>-build<build>-armeabi-v7a-release.apk
-  ts-phone-v<version>-build<build>-x86_64-release.apk
-  ts-phone-v<version>-build<build>-release.aab
+  corhub-v<version>-build<build>-arm64-v8a-release.apk
+  corhub-v<version>-build<build>-armeabi-v7a-release.apk
+  corhub-v<version>-build<build>-x86_64-release.apk
+  corhub-v<version>-build<build>-release.aab
   *.attestation.json
   SHA256SUMS  # added by the GitHub publication workflow
 ```
@@ -17,10 +17,10 @@ embeds the source identity manifest (commit/digest, not source files) in each ar
 version code, ABI, non-debuggable flag, and release certificate. The release
 set is content-addressed and switched into place atomically.
 
-The artifact contains only the Flutter client. It does not bundle a TS Phone
+The artifact contains only the Flutter client. It does not bundle a CoRHub
 server, protocol package, Node runtime, systemd unit, reverse proxy, or Pi
-credentials. Host releases are produced independently by ResearchAgent and are
-selected by the ResearchAgent installation's package pointer.
+credentials. Host releases are produced independently by CoRAgent and are
+selected by the CoRAgent installation's package pointer.
 
 To inspect a source attestation:
 

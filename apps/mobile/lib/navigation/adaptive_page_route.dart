@@ -48,7 +48,7 @@ Route<T> tsAdaptivePageRoute<T>({
   );
 }
 
-Future<T?> pushTsPhonePage<T>({
+Future<T?> pushCorHubPage<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   RouteSettings? settings,

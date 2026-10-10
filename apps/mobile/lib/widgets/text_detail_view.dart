@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations_extensions.dart';
@@ -86,7 +86,7 @@ class TextDetailPreview extends StatelessWidget {
                   IconButton(
                     tooltip: context.l10n.viewFullOutput,
                     icon: const Icon(AppIcons.open_in_full_rounded, size: 18),
-                    onPressed: () => pushTsPhonePage<void>(
+                    onPressed: () => pushCorHubPage<void>(
                       context: context,
                       builder: (_) => _TextDetailPage(text: text, title: title),
                     ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 
 import '../l10n/app_localizations_extensions.dart';
 

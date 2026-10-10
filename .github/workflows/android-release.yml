@@ -1,12 +1,12 @@
-name: TS Phone Android Release
+name: CoRHub Android Release
 
 on:
   push:
-    tags: ["ts-phone-v*"]
+    tags: ["corhub-v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing immutable tag, e.g. ts-phone-v0.19.0+62"
+        description: "Existing immutable tag, e.g. corhub-v0.19.1+63"
         required: true
         type: string
 
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ts-phone-release-${{ inputs.tag || github.ref_name }}
+  group: corhub-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:

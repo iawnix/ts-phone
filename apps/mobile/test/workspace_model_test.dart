@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/models/workspace.dart';
+import 'package:corhub/models/workspace.dart';
 
 void main() {
   SessionSummary session({String? model, SessionRuntimeModel? runtimeModel}) =>

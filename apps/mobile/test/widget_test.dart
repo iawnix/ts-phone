@@ -4,23 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/app.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/data/settings_store.dart';
-import 'package:ts_phone/features/connection/connection_page.dart';
-import 'package:ts_phone/features/settings/settings_page.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/models/app_theme_preference.dart';
-import 'package:ts_phone/models/app_locale_preference.dart';
-import 'package:ts_phone/models/connection_settings.dart';
-import 'package:ts_phone/platform/ts_accessibility_controller.dart';
-import 'package:ts_phone/theme/app_icons.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
-import 'package:ts_phone/models/chat_message.dart';
-import 'package:ts_phone/widgets/chat_message_view.dart';
-import 'package:ts_phone/widgets/markdown_message.dart';
-import 'package:ts_phone/widgets/presentation.dart';
-import 'package:ts_phone/widgets/ts_phone_brand_mark.dart';
+import 'package:corhub/app.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/data/settings_store.dart';
+import 'package:corhub/features/connection/connection_page.dart';
+import 'package:corhub/features/settings/settings_page.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/models/app_theme_preference.dart';
+import 'package:corhub/models/app_locale_preference.dart';
+import 'package:corhub/models/connection_settings.dart';
+import 'package:corhub/platform/ts_accessibility_controller.dart';
+import 'package:corhub/theme/app_icons.dart';
+import 'package:corhub/theme/corhub_theme.dart';
+import 'package:corhub/models/chat_message.dart';
+import 'package:corhub/widgets/chat_message_view.dart';
+import 'package:corhub/widgets/markdown_message.dart';
+import 'package:corhub/widgets/presentation.dart';
+import 'package:corhub/widgets/corhub_brand_mark.dart';
 
 const _hostId = '123e4567-e89b-42d3-a456-426614174000';
 const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
@@ -35,15 +35,15 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(TsPhoneApp(settingsStore: MemorySettingsStore()));
+    await tester.pumpWidget(CorHubApp(settingsStore: MemorySettingsStore()));
     await tester.pumpAndSettle();
 
-    expect(find.text('TS Phone'), findsWidgets);
-    expect(find.text('TSPi Relay'), findsOneWidget);
+    expect(find.text('CoRHub'), findsWidgets);
+    expect(find.text('CoRAgent Relay'), findsOneWidget);
     expect(find.text('配对码'), findsOneWidget);
     expect(find.text('设备名称'), findsOneWidget);
     expect(find.text('配对'), findsOneWidget);
-    expect(find.byType(TsPhoneBrandMark), findsOneWidget);
+    expect(find.byType(CorHubBrandMark), findsOneWidget);
     final connectButton = tester.getRect(
       find.byKey(const ValueKey<String>('connect-action')),
     );
@@ -100,7 +100,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: const Scaffold(
           body: MarkdownMessage(
             data: 'Run `claim_2` next.\n\n```sh\nrecalculation complete\n```',
@@ -161,7 +161,7 @@ void main() {
     expect(title.maxLines, 2);
     expect(title.overflow, TextOverflow.ellipsis);
     expect(find.text('就绪'), findsNothing);
-    expect(find.text('TSPi'), findsNothing);
+    expect(find.text('CoRAgent'), findsNothing);
     expect(find.byKey(const ValueKey<String>('tool-raw-output')), findsNothing);
     expect(
       tester
@@ -187,7 +187,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -210,7 +210,7 @@ void main() {
       find.byKey(const ValueKey<String>('tool-disclosure-row')),
     );
     expect(disclosure.color, Colors.transparent);
-    expect(find.text('TSPi'), findsNothing);
+    expect(find.text('CoRAgent'), findsNothing);
     expect(find.text('raw calculation output'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('tool-disclosure-row')));
@@ -229,7 +229,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -261,7 +261,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: const Scaffold(
           body: ChatMessageView(
             message: ChatMessage(
@@ -275,7 +275,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TSPi'), findsNothing);
+    expect(find.text('CoRAgent'), findsNothing);
     expect(find.text('Research result'), findsOneWidget);
     expect(find.text('记录研究决策'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('tool-disclosure-row')));
@@ -353,7 +353,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openSettings(tester, '设置');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TSPi Link').first);
+    await tester.tap(find.text('CoRAgent Link').first);
     await tester.pumpAndSettle();
 
     expect(find.text('连接设置'), findsOneWidget);
@@ -364,9 +364,9 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('设置'), findsOneWidget);
-    expect(find.text('TSPi Link'), findsWidgets);
+    expect(find.text('CoRAgent Link'), findsWidgets);
 
-    await tester.tap(find.text('TSPi Link').first);
+    await tester.tap(find.text('CoRAgent Link').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
@@ -496,7 +496,7 @@ void main() {
   testWidgets('interactive controls have visible pressed-state feedback', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(TsPhoneApp(settingsStore: MemorySettingsStore()));
+    await tester.pumpWidget(CorHubApp(settingsStore: MemorySettingsStore()));
     await tester.pumpAndSettle();
     final theme = Theme.of(tester.element(find.byType(ConnectionPage)));
     final style = theme.iconButtonTheme.style!;
@@ -515,7 +515,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: MediaQuery(
           data: const MediaQueryData(disableAnimations: true),
           child: const Scaffold(
@@ -537,7 +537,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: MediaQuery(
           data: const MediaQueryData(highContrast: true),
           child: Scaffold(
@@ -585,7 +585,7 @@ void main() {
     expect(store.localePreference, AppLocalePreference.en);
     expect(find.text('Language'), findsOneWidget);
     expect(find.text('Appearance'), findsOneWidget);
-    expect(find.text('TSPi Link'), findsWidgets);
+    expect(find.text('CoRAgent Link'), findsWidgets);
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
       const Locale('en'),
@@ -612,7 +612,7 @@ void main() {
     await tester.pumpWidget(_appWithStore(store));
     await tester.pumpAndSettle();
 
-    expect(find.text('TSPi Relay'), findsOneWidget);
+    expect(find.text('CoRAgent Relay'), findsOneWidget);
     expect(find.text('Pairing code'), findsOneWidget);
     expect(find.text('Device name'), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);
@@ -651,7 +651,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
+      expect(find.byType(CorHubBrandBadge), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -720,7 +720,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byType(TsPhoneBrandBadge), findsOneWidget);
+    expect(find.byType(CorHubBrandBadge), findsOneWidget);
     expect(
       find.byWidgetPredicate((widget) => widget is TsSegmentedControl),
       findsNothing,
@@ -760,7 +760,7 @@ void main() {
           locale: const Locale('en'),
           supportedLocales: AppLocalizations.supportedLocales,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
-          theme: TsPhoneTheme.light(),
+          theme: CorHubTheme.light(),
           home: SettingsPage(
             connectionSettings: settings,
             themePreference: AppThemePreference.system,
@@ -815,7 +815,7 @@ void main() {
         locale: const Locale('en'),
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: SettingsPage(
           connectionSettings: settings,
           themePreference: AppThemePreference.system,
@@ -921,12 +921,12 @@ void main() {
   }
 
   test('light and dark themes keep distinct neutral surfaces', () {
-    final lightTheme = TsPhoneTheme.light();
-    final darkTheme = TsPhoneTheme.dark();
+    final lightTheme = CorHubTheme.light();
+    final darkTheme = CorHubTheme.dark();
     final light = lightTheme.colorScheme;
     final dark = darkTheme.colorScheme;
-    final lightStatus = lightTheme.extension<TsPhoneStatusTheme>()!;
-    final darkStatus = darkTheme.extension<TsPhoneStatusTheme>()!;
+    final lightStatus = lightTheme.extension<CorHubStatusTheme>()!;
+    final darkStatus = darkTheme.extension<CorHubStatusTheme>()!;
 
     expect(light.surface, isNot(light.primaryContainer));
     expect(dark.surface, isNot(dark.primaryContainer));
@@ -942,10 +942,10 @@ void main() {
   });
 
   test('system chrome uses readable icons and theme-matched surfaces', () {
-    final lightTheme = TsPhoneTheme.light();
-    final darkTheme = TsPhoneTheme.dark();
-    final light = TsPhoneTheme.systemUiOverlayStyle(lightTheme.colorScheme);
-    final dark = TsPhoneTheme.systemUiOverlayStyle(darkTheme.colorScheme);
+    final lightTheme = CorHubTheme.light();
+    final darkTheme = CorHubTheme.dark();
+    final light = CorHubTheme.systemUiOverlayStyle(lightTheme.colorScheme);
+    final dark = CorHubTheme.systemUiOverlayStyle(darkTheme.colorScheme);
 
     expect(light.statusBarColor, Colors.transparent);
     expect(light.statusBarIconBrightness, Brightness.dark);
@@ -981,7 +981,7 @@ void main() {
   });
 }
 
-class _WidgetDiagnosticGateway implements TsPhoneGateway {
+class _WidgetDiagnosticGateway implements CorHubGateway {
   @override
   Future<Map<String, Object?>> version() async => const {
     'apiVersion': 'pi-app-server/8',
@@ -999,7 +999,7 @@ class _WidgetDiagnosticGateway implements TsPhoneGateway {
 Widget _appWithStore(
   SettingsStore store, {
   TsAccessibilityController? accessibilityController,
-}) => TsPhoneApp(
+}) => CorHubApp(
   settingsStore: store,
   accessibilityController: accessibilityController,
   gatewayBuilder: (_) => _WidgetDiagnosticGateway(),

@@ -4,11 +4,11 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/host_gateway.dart';
-import 'package:ts_phone/data/host_rpc_client.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/models/connection_settings.dart';
-import 'package:ts_phone/models/phone_model.dart';
+import 'package:corhub/data/host_gateway.dart';
+import 'package:corhub/data/host_rpc_client.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/models/connection_settings.dart';
+import 'package:corhub/models/phone_model.dart';
 
 void main() {
   test(
@@ -21,8 +21,8 @@ void main() {
                 ).readAsString(),
               )
               as Map;
-      expect(tspiHostProtocol, identity['host_protocol']);
-      expect(tspiHostLinkProtocol, identity['link_protocol']);
+      expect(hostProtocol, identity['host_protocol']);
+      expect(hostLinkProtocol, identity['link_protocol']);
       expect(identity['device_token_prefix'], 'rad_');
       final directory = await Directory(
         Platform.environment['RESEARCH_AGENT_TEST_ROOT']!,
@@ -183,7 +183,7 @@ void main() {
         );
         stopped = true;
         expect(await File(socketPath).exists(), isFalse);
-      } on TsPhoneApiException catch (error) {
+      } on CorHubApiException catch (error) {
         throw StateError('Host RPC failed (${error.code})');
       } finally {
         gateway?.close();

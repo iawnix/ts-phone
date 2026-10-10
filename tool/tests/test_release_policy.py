@@ -34,7 +34,7 @@ class ReleasePolicyTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / "apps/mobile/lib").mkdir(parents=True)
-        (self.root / "apps/mobile/pubspec.yaml").write_text("name: ts_phone\nversion: 0.18.9+60\n")
+        (self.root / "apps/mobile/pubspec.yaml").write_text("name: corhub\nversion: 0.18.9+60\n")
         (self.root / "apps/mobile/lib/app_identity.dart").write_text(version.identity("0.18.9+60"))
         self.git("init", "-q")
         self.git("config", "user.name", "Local Test")
@@ -60,19 +60,42 @@ class ReleasePolicyTest(unittest.TestCase):
         self.assertEqual(version.current(self.root), "0.18.9+60")
 
     def test_checks_against_release_tags_not_only_working_version(self):
-        self.git("tag", "ts-phone-v0.19.0+70")
+        self.git("tag", "corhub-v0.19.0+70")
         with self.assertRaises(ValueError):
             version.set_version(self.root, "0.19.0+61")
 
+    def test_legacy_tags_still_prevent_build_reuse_and_version_rollback(self):
+        self.git("tag", "ts-phone-v0.19.0+70")
+        with self.assertRaises(ValueError):
+            version.check(self.root)
+        for value in ("0.19.1+70", "0.18.9+71"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                version.set_version(self.root, value)
+        version.set_version(self.root, "0.19.1+71")
+        self.assertEqual(version.check(self.root, tag="corhub-v0.19.1+71"), "0.19.1+71")
+
+    def test_rebrand_cannot_republish_a_legacy_build_under_a_new_tag(self):
+        self.git("tag", "ts-phone-v0.18.9+60")
+        self.assertEqual(version.check(self.root), "0.18.9+60")
+        (self.root / "CHANGELOG.md").write_text("# Changelog\n\n## 0.18.9+60\n\nRebrand.\n")
+        self.commit()
+        self.git("tag", "corhub-v0.18.9+60")
+        with self.assertRaises(ValueError):
+            version.check(self.root, tag="corhub-v0.18.9+60", release=True)
+
+    def test_new_releases_require_the_corhub_prefix(self):
+        with self.assertRaises(ValueError):
+            version.check(self.root, tag="ts-phone-v0.18.9+60")
+
     def test_rejects_stale_identity_and_incorrect_tag(self):
         with self.assertRaises(ValueError):
-            version.check(self.root, tag="ts-phone-v0.18.3+48")
+            version.check(self.root, tag="corhub-v0.18.3+48")
         (self.root / "apps/mobile/lib/app_identity.dart").write_text(version.identity("0.18.8+59"))
         with self.assertRaises(ValueError):
             version.check(self.root)
 
     def test_release_requires_changelog_clean_tree_and_exact_tag_commit(self):
-        tag = "ts-phone-v0.18.9+60"
+        tag = "corhub-v0.18.9+60"
         (self.root / "CHANGELOG.md").write_text("# Changelog\n\n## 0.18.9+60\n\nTest release.\n")
         self.commit()
         self.git("tag", tag)
@@ -96,7 +119,7 @@ class ReleasePolicyTest(unittest.TestCase):
                 builder.snapshot_from_tree(self.root, [os.fsencode(relative)], git_commit="a" * 40, dirty=True)
 
     def test_published_release_is_refused_before_any_mutation(self):
-        with patch.object(sys, "argv", ["publish_release.py", "--tag", "ts-phone-v0.19.0+61"]), patch.dict(os.environ, {"GITHUB_REPOSITORY": "example/test"}), patch.object(publisher.version, "check", return_value="0.19.0+61"), patch.object(publisher, "release_for_tag", return_value={"draft": False}), patch.object(publisher, "gh") as gh, contextlib.redirect_stderr(io.StringIO()):
+        with patch.object(sys, "argv", ["publish_release.py", "--tag", "corhub-v0.19.0+61"]), patch.dict(os.environ, {"GITHUB_REPOSITORY": "example/test"}), patch.object(publisher.version, "check", return_value="0.19.0+61"), patch.object(publisher, "release_for_tag", return_value={"draft": False}), patch.object(publisher, "gh") as gh, contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 publisher.main()
             gh.assert_not_called()

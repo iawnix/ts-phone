@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'TS Phone'**
+  /// **'CoRHub'**
   String get appTitle;
 
   /// No description provided for @back.
@@ -122,22 +122,22 @@ abstract class AppLocalizations {
   /// **'Connection settings'**
   String get connectionSettings;
 
-  /// No description provided for @connectTsPhone.
+  /// No description provided for @connectCorHub.
   ///
   /// In en, this message translates to:
-  /// **'Pair TS Phone'**
-  String get connectTsPhone;
+  /// **'Pair CoRHub'**
+  String get connectCorHub;
 
   /// No description provided for @mobileCompanion.
   ///
   /// In en, this message translates to:
-  /// **'Connect this device to your TSPi Host'**
+  /// **'Connect this device to CoRAgent'**
   String get mobileCompanion;
 
   /// No description provided for @relay.
   ///
   /// In en, this message translates to:
-  /// **'TSPi Relay'**
+  /// **'CoRAgent Relay'**
   String get relay;
 
   /// No description provided for @relayHint.
@@ -167,7 +167,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceNameHint.
   ///
   /// In en, this message translates to:
-  /// **'TS Phone'**
+  /// **'CoRHub'**
   String get deviceNameHint;
 
   /// No description provided for @pair.
@@ -209,25 +209,25 @@ abstract class AppLocalizations {
   /// No description provided for @validationServerId.
   ///
   /// In en, this message translates to:
-  /// **'The Host ID returned by TSPi Relay is invalid.'**
+  /// **'The Host ID returned by CoRAgent Relay is invalid.'**
   String get validationServerId;
 
   /// No description provided for @validationDeviceId.
   ///
   /// In en, this message translates to:
-  /// **'The Device ID returned by TSPi Relay is invalid.'**
+  /// **'The Device ID returned by CoRAgent Relay is invalid.'**
   String get validationDeviceId;
 
   /// No description provided for @validationTokenInvalid.
   ///
   /// In en, this message translates to:
-  /// **'The device authorization returned by TSPi Relay is invalid.'**
+  /// **'The device authorization returned by CoRAgent Relay is invalid.'**
   String get validationTokenInvalid;
 
   /// No description provided for @validationPairingCode.
   ///
   /// In en, this message translates to:
-  /// **'Enter the eight-character pairing code shown by TSPi.'**
+  /// **'Enter the eight-character pairing code shown by CoRAgent.'**
   String get validationPairingCode;
 
   /// No description provided for @validationDeviceName.
@@ -245,13 +245,13 @@ abstract class AppLocalizations {
   /// No description provided for @pairingRelayUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'Could not reach TSPi Relay.'**
+  /// **'Could not reach CoRAgent Relay.'**
   String get pairingRelayUnavailable;
 
   /// No description provided for @pairingRelayResponseInvalid.
   ///
   /// In en, this message translates to:
-  /// **'TSPi Relay returned an invalid response.'**
+  /// **'CoRAgent Relay returned an invalid response.'**
   String get pairingRelayResponseInvalid;
 
   /// No description provided for @pairingProtocolUnsupported.
@@ -263,7 +263,7 @@ abstract class AppLocalizations {
   /// No description provided for @pairingRejected.
   ///
   /// In en, this message translates to:
-  /// **'TSPi Relay rejected the pairing request.'**
+  /// **'CoRAgent Relay rejected the pairing request.'**
   String get pairingRejected;
 
   /// No description provided for @preferences.
@@ -344,11 +344,11 @@ abstract class AppLocalizations {
   /// **'Connection details'**
   String get connectionDetails;
 
-  /// No description provided for @tsPhoneService.
+  /// No description provided for @corHubService.
   ///
   /// In en, this message translates to:
-  /// **'TSPi Link'**
-  String get tsPhoneService;
+  /// **'CoRAgent Link'**
+  String get corHubService;
 
   /// No description provided for @notConfigured.
   ///
@@ -365,7 +365,7 @@ abstract class AppLocalizations {
   /// No description provided for @clientDescription.
   ///
   /// In en, this message translates to:
-  /// **'Client {version} · TSPi mobile companion'**
+  /// **'Client {version} · CoRHub mobile companion'**
   String clientDescription(String version);
 
   /// No description provided for @clientVersionBuild.
@@ -377,7 +377,7 @@ abstract class AppLocalizations {
   /// No description provided for @endpoint.
   ///
   /// In en, this message translates to:
-  /// **'TSPi Relay'**
+  /// **'CoRAgent Relay'**
   String get endpoint;
 
   /// No description provided for @hostId.
@@ -437,13 +437,13 @@ abstract class AppLocalizations {
   /// No description provided for @problemModelUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'No model is ready in this TSPi session. Check the model selection on the App Server.'**
+  /// **'No model is ready in this CoRAgent session. Check the model selection on the App Server.'**
   String get problemModelUnavailable;
 
   /// No description provided for @problemModelAuthMissing.
   ///
   /// In en, this message translates to:
-  /// **'The model needs authentication on the Pi App Server. Your TS Phone connection is still valid.'**
+  /// **'The model needs authentication on the Pi App Server. Your CoRHub connection is still valid.'**
   String get problemModelAuthMissing;
 
   /// No description provided for @problemModelCheckFailed.
@@ -485,13 +485,13 @@ abstract class AppLocalizations {
   /// No description provided for @problemModelStorageUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'TSPi cannot access its model credentials or cache. Check the App Server\'s Pi directory permissions.'**
+  /// **'CoRAgent cannot access its model credentials or cache. Check the App Server\'s Pi directory permissions.'**
   String get problemModelStorageUnavailable;
 
   /// No description provided for @problemRuntimeExtensionError.
   ///
   /// In en, this message translates to:
-  /// **'An extension failed in this TSPi session. Check the latest messages and App Server logs.'**
+  /// **'An extension failed in this CoRAgent session. Check the latest messages and App Server logs.'**
   String get problemRuntimeExtensionError;
 
   /// No description provided for @problemPromptRejected.
@@ -623,7 +623,7 @@ abstract class AppLocalizations {
   /// No description provided for @noWorkspacesMessage.
   ///
   /// In en, this message translates to:
-  /// **'Create a project to start a separate TSPi research workspace.'**
+  /// **'Create a project to start a separate CoRAgent research workspace.'**
   String get noWorkspacesMessage;
 
   /// No description provided for @workspaces.
@@ -827,7 +827,7 @@ abstract class AppLocalizations {
   /// No description provided for @problemPreflightUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'TSPi could not verify this operation. Check the App Server\'s TSPi configuration and try again.'**
+  /// **'CoRAgent could not verify this operation. Check the App Server\'s CoRAgent configuration and try again.'**
   String get problemPreflightUnavailable;
 
   /// No description provided for @problemManagementUnsupported.
@@ -1025,13 +1025,13 @@ abstract class AppLocalizations {
   /// No description provided for @runtimeOffline.
   ///
   /// In en, this message translates to:
-  /// **'TSPi not running'**
+  /// **'CoRAgent not running'**
   String get runtimeOffline;
 
   /// No description provided for @runtimeConnecting.
   ///
   /// In en, this message translates to:
-  /// **'Connecting to TSPi'**
+  /// **'Connecting to CoRAgent'**
   String get runtimeConnecting;
 
   /// No description provided for @runtimeIdle.
@@ -1313,7 +1313,7 @@ abstract class AppLocalizations {
   /// No description provided for @composerOffline.
   ///
   /// In en, this message translates to:
-  /// **'TSPi is offline'**
+  /// **'CoRAgent is offline'**
   String get composerOffline;
 
   /// No description provided for @composerHistory.
@@ -1394,11 +1394,11 @@ abstract class AppLocalizations {
   /// **'The connection was interrupted during generation. Check the last message on your computer first; it will not be resent automatically.'**
   String get generationDisconnectedBanner;
 
-  /// No description provided for @tspiDisconnectedBanner.
+  /// No description provided for @agentDisconnectedBanner.
   ///
   /// In en, this message translates to:
-  /// **'TSPi disconnected. Synchronization will resume after it restarts.'**
-  String get tspiDisconnectedBanner;
+  /// **'CoRAgent disconnected. Synchronization will resume after it restarts.'**
+  String get agentDisconnectedBanner;
 
   /// No description provided for @reconnect.
   ///
@@ -1406,23 +1406,23 @@ abstract class AppLocalizations {
   /// **'Reconnect'**
   String get reconnect;
 
-  /// No description provided for @tspiNotStartedTitle.
+  /// No description provided for @agentNotStartedTitle.
   ///
   /// In en, this message translates to:
-  /// **'TSPi has not started'**
-  String get tspiNotStartedTitle;
+  /// **'CoRAgent has not started'**
+  String get agentNotStartedTitle;
 
-  /// No description provided for @tspiNotStartedDescription.
+  /// No description provided for @agentNotStartedDescription.
   ///
   /// In en, this message translates to:
   /// **'Run this command on your computer. This page will connect automatically.'**
-  String get tspiNotStartedDescription;
+  String get agentNotStartedDescription;
 
-  /// No description provided for @waitingForTspi.
+  /// No description provided for @waitingForAgent.
   ///
   /// In en, this message translates to:
-  /// **'Waiting for TSPi'**
-  String get waitingForTspi;
+  /// **'Waiting for CoRAgent'**
+  String get waitingForAgent;
 
   /// No description provided for @generationDisconnectedTitle.
   ///
@@ -1433,7 +1433,7 @@ abstract class AppLocalizations {
   /// No description provided for @generationDisconnectedDescription.
   ///
   /// In en, this message translates to:
-  /// **'The last prompt will not be resent automatically. Check the TSPi session on your computer first.'**
+  /// **'The last prompt will not be resent automatically. Check the CoRAgent session on your computer first.'**
   String get generationDisconnectedDescription;
 
   /// No description provided for @waitingForRecovery.
@@ -1502,11 +1502,17 @@ abstract class AppLocalizations {
   /// **'Waiting for live sync'**
   String get messageSynchronizing;
 
-  /// No description provided for @tspiGenerating.
+  /// No description provided for @agentName.
   ///
   /// In en, this message translates to:
-  /// **'TSPi · Generating'**
-  String get tspiGenerating;
+  /// **'CoRAgent'**
+  String get agentName;
+
+  /// No description provided for @agentGenerating.
+  ///
+  /// In en, this message translates to:
+  /// **'CoRAgent · Generating'**
+  String get agentGenerating;
 
   /// No description provided for @toolResult.
   ///
@@ -1631,7 +1637,7 @@ abstract class AppLocalizations {
   /// No description provided for @problemSessionOffline.
   ///
   /// In en, this message translates to:
-  /// **'The TSPi session is offline'**
+  /// **'The CoRAgent session is offline'**
   String get problemSessionOffline;
 
   /// No description provided for @problemSessionChanged.
@@ -1895,7 +1901,7 @@ abstract class AppLocalizations {
   /// No description provided for @activationInspectionFailed.
   ///
   /// In en, this message translates to:
-  /// **'The App Server could not complete the session guard check. Check the TSPi installation diagnostics before retrying. History and drafts are kept.'**
+  /// **'The App Server could not complete the session guard check. Check the CoRAgent installation diagnostics before retrying. History and drafts are kept.'**
   String get activationInspectionFailed;
 
   /// No description provided for @activationGuardInvalid.

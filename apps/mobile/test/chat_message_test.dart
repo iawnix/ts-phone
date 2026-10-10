@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/models/chat_message.dart';
+import 'package:corhub/models/chat_message.dart';
 
 void main() {
   test(

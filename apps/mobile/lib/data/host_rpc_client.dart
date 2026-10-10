@@ -5,8 +5,8 @@ import 'dart:typed_data';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-const tspiHostProtocol = 'research-agent-host/2';
-const tspiHostLinkProtocol = 'research-agent-link.v1';
+const hostProtocol = 'research-agent-host/2';
+const hostLinkProtocol = 'research-agent-link.v1';
 const _maxLineBytes = 16 * 1024 * 1024;
 
 class HostRpcException implements Exception {
@@ -105,11 +105,11 @@ class HostRpcClient {
         );
       }
       final response = await _request('initialize', {
-        'protocol': tspiHostProtocol,
+        'protocol': hostProtocol,
         'server_id': serverId,
-        'client': {'name': 'ts-phone'},
+        'client': {'name': 'corhub'},
       });
-      if (response is! Map || response['protocol'] != tspiHostProtocol) {
+      if (response is! Map || response['protocol'] != hostProtocol) {
         throw const HostRpcException(
           'Unsupported Host protocol',
           code: 'version',
@@ -269,7 +269,7 @@ class HostRpcClient {
   ) => IOWebSocketChannel.connect(
     uri,
     headers: headers,
-    protocols: const [tspiHostLinkProtocol],
+    protocols: const [hostLinkProtocol],
     pingInterval: const Duration(seconds: 20),
     connectTimeout: const Duration(seconds: 20),
   );

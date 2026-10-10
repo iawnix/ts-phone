@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import '../../widgets/presentation.dart';
 import 'session_view_state.dart';
 
@@ -22,7 +22,7 @@ class SessionNoticeView extends StatelessWidget {
   });
 
   final SessionViewState state;
-  final TsPhoneProblem? problem;
+  final CorHubProblem? problem;
   final VoidCallback onRetry;
 
   @override
@@ -30,7 +30,7 @@ class SessionNoticeView extends StatelessWidget {
     final notice = state.notice;
     if (notice == null) {
       return AnimatedSwitcher(
-        duration: TsPhoneMotion.resolveFade(context, TsPhoneMotion.standard),
+        duration: CorHubMotion.resolveFade(context, CorHubMotion.standard),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeOutCubic,
         child: const SizedBox(key: ValueKey<String>('session-notice-empty')),
@@ -51,7 +51,7 @@ class SessionNoticeView extends StatelessWidget {
       SessionNoticeKind.offline => (
         AppIcons.cloud_off_outlined,
         TsInfoTone.warning,
-        l10n.tspiDisconnectedBanner,
+        l10n.agentDisconnectedBanner,
       ),
     };
 
@@ -74,7 +74,7 @@ class SessionNoticeView extends StatelessWidget {
     };
 
     return AnimatedSwitcher(
-      duration: TsPhoneMotion.resolveFade(context, TsPhoneMotion.standard),
+      duration: CorHubMotion.resolveFade(context, CorHubMotion.standard),
       switchInCurve: Curves.easeOutCubic,
       // Keep the exit responsive so a recovery/error update can be replaced
       // immediately without making the user wait for a slow fade.

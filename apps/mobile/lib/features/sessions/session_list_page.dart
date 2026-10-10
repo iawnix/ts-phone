@@ -1,19 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/session_gateway.dart';
 import '../../data/host_gateway.dart';
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../models/host_monitor.dart';
 import '../../models/workspace.dart';
 import '../../navigation/adaptive_page_route.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
 import '../chat/chat_page.dart';
@@ -21,7 +21,7 @@ import '../monitors/monitor_page.dart';
 import '../../l10n/host_monitor_localizations.dart';
 
 typedef SessionGatewayBuilder =
-    TsPhoneGateway Function(ConnectionSettings settings);
+    CorHubGateway Function(ConnectionSettings settings);
 
 class SessionListPage extends StatefulWidget {
   const SessionListPage({
@@ -65,9 +65,9 @@ class SessionListPage extends StatefulWidget {
 
 class _SessionListPageState extends State<SessionListPage>
     with WidgetsBindingObserver {
-  late final TsPhoneGateway _gateway;
+  late final CorHubGateway _gateway;
   List<SessionSummary>? _sessions;
-  TsPhoneProblem? _problem;
+  CorHubProblem? _problem;
   String? _openingSessionId;
   String? _removingSessionId;
   bool _refreshing = false;
@@ -143,7 +143,7 @@ class _SessionListPageState extends State<SessionListPage>
     } on Object catch (error) {
       if (!mounted || generation != _refreshGeneration) return;
       if (announce) ActionFeedback.error();
-      setState(() => _problem = describeTsPhoneProblem(error));
+      setState(() => _problem = describeCorHubProblem(error));
     } finally {
       if (mounted && generation == _refreshGeneration) {
         setState(() => _refreshing = false);
@@ -168,7 +168,7 @@ class _SessionListPageState extends State<SessionListPage>
         return;
       }
       if (!mounted) return;
-      await pushTsPhonePage<void>(
+      await pushCorHubPage<void>(
         context: context,
         builder: (context) => ChatPage(
           settings: widget.settings,
@@ -207,7 +207,7 @@ class _SessionListPageState extends State<SessionListPage>
   Future<void> _openMonitors() async {
     final gateway = _gateway;
     if (gateway is! HostMonitorGateway) return;
-    await pushTsPhonePage<void>(
+    await pushCorHubPage<void>(
       context: context,
       builder: (context) => MonitorPage(
         workspace: widget.workspace,
@@ -221,7 +221,7 @@ class _SessionListPageState extends State<SessionListPage>
     if (_busy || gateway == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+      animationStyle: CorHubMotion.resolveAnimationStyle(context),
       builder: (context) => AlertDialog(
         title: Text(context.l10n.deletePermanently),
         content: Text(
@@ -265,7 +265,7 @@ class _SessionListPageState extends State<SessionListPage>
       ..showSnackBar(
         SnackBar(
           content: Text(
-            describeTsPhoneProblem(error).localizedMessage(context.l10n),
+            describeCorHubProblem(error).localizedMessage(context.l10n),
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -319,7 +319,7 @@ class _SessionListPageState extends State<SessionListPage>
                     child: Row(
                       children: [
                         const Icon(AppIcons.refresh_rounded, size: 20),
-                        const SizedBox(width: TsPhoneSpacing.medium),
+                        const SizedBox(width: CorHubSpacing.medium),
                         Text(l10n.refreshSessions),
                       ],
                     ),
@@ -334,7 +334,7 @@ class _SessionListPageState extends State<SessionListPage>
                           AppIcons.notifications_active_outlined,
                           size: 20,
                         ),
-                        const SizedBox(width: TsPhoneSpacing.medium),
+                        const SizedBox(width: CorHubSpacing.medium),
                         Text(l10n.hostMonitors),
                       ],
                     ),
@@ -346,7 +346,7 @@ class _SessionListPageState extends State<SessionListPage>
       body: TsPageBackdrop(
         child: SafeArea(
           top: false,
-          minimum: const EdgeInsets.only(bottom: TsPhoneSpacing.xLarge),
+          minimum: const EdgeInsets.only(bottom: CorHubSpacing.xLarge),
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
@@ -504,7 +504,7 @@ class _SessionListPageState extends State<SessionListPage>
           child: RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: TsPhoneSpacing.xLarge),
+              padding: const EdgeInsets.only(bottom: CorHubSpacing.xLarge),
               itemCount: _sessions!.length + 1,
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -593,7 +593,7 @@ class _SessionListPageState extends State<SessionListPage>
           child: Row(
             children: <Widget>[
               const Icon(AppIcons.delete_outline, size: 20),
-              const SizedBox(width: TsPhoneSpacing.medium),
+              const SizedBox(width: CorHubSpacing.medium),
               Flexible(child: Text(context.l10n.deletePermanently)),
             ],
           ),
@@ -634,7 +634,7 @@ List<SessionSummary> _prioritizeSessions(List<SessionSummary> sessions) {
 class _SessionError extends StatelessWidget {
   const _SessionError({required this.problem, required this.onRetry});
 
-  final TsPhoneProblem problem;
+  final CorHubProblem problem;
   final Future<void> Function() onRetry;
 
   @override

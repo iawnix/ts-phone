@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
-import '../data/ts_phone_api.dart';
-import '../data/tspi_link_pairing.dart';
+import '../data/corhub_api.dart';
+import '../data/link_pairing.dart';
 import '../models/connection_settings.dart';
 import '../models/workspace.dart';
 import 'app_localizations.dart';
@@ -66,7 +66,7 @@ extension ConnectionValidationLocalizations on ConnectionValidationReason {
   };
 }
 
-extension TspiLinkPairingLocalizations on TspiLinkPairingException {
+extension LinkPairingLocalizations on LinkPairingException {
   String localizedMessage(AppLocalizations l10n) => switch (code) {
     'invalid_pairing_code' => l10n.validationPairingCode,
     'invalid_device_name' => l10n.validationDeviceName,
@@ -78,56 +78,55 @@ extension TspiLinkPairingLocalizations on TspiLinkPairingException {
   };
 }
 
-extension TsPhoneProblemLocalizations on TsPhoneProblem {
+extension CorHubProblemLocalizations on CorHubProblem {
   String localizedMessage(AppLocalizations l10n) => switch (code) {
-    TsPhoneProblemCode.apiRouteMissing => l10n.problemApiRouteMissing,
-    TsPhoneProblemCode.queueStorageUnavailable => l10n.problemQueueStorage,
-    TsPhoneProblemCode.queueCapacity => l10n.problemQueueCapacity,
-    TsPhoneProblemCode.queueRecovery => l10n.problemQueueRecovery,
-    TsPhoneProblemCode.providerUnavailable => l10n.problemProviderUnavailable,
-    TsPhoneProblemCode.providerRateLimited => l10n.problemProviderRateLimited,
-    TsPhoneProblemCode.providerAuthFailed => l10n.problemProviderAuthFailed,
-    TsPhoneProblemCode.providerError => l10n.problemProviderError,
-    TsPhoneProblemCode.generationIncomplete => l10n.problemGenerationIncomplete,
-    TsPhoneProblemCode.incompatible => l10n.problemIncompatible,
-    TsPhoneProblemCode.modelUnavailable => l10n.problemModelUnavailable,
-    TsPhoneProblemCode.modelAuthMissing => l10n.problemModelAuthMissing,
-    TsPhoneProblemCode.modelStorageUnavailable =>
+    CorHubProblemCode.apiRouteMissing => l10n.problemApiRouteMissing,
+    CorHubProblemCode.queueStorageUnavailable => l10n.problemQueueStorage,
+    CorHubProblemCode.queueCapacity => l10n.problemQueueCapacity,
+    CorHubProblemCode.queueRecovery => l10n.problemQueueRecovery,
+    CorHubProblemCode.providerUnavailable => l10n.problemProviderUnavailable,
+    CorHubProblemCode.providerRateLimited => l10n.problemProviderRateLimited,
+    CorHubProblemCode.providerAuthFailed => l10n.problemProviderAuthFailed,
+    CorHubProblemCode.providerError => l10n.problemProviderError,
+    CorHubProblemCode.generationIncomplete => l10n.problemGenerationIncomplete,
+    CorHubProblemCode.incompatible => l10n.problemIncompatible,
+    CorHubProblemCode.modelUnavailable => l10n.problemModelUnavailable,
+    CorHubProblemCode.modelAuthMissing => l10n.problemModelAuthMissing,
+    CorHubProblemCode.modelStorageUnavailable =>
       l10n.problemModelStorageUnavailable,
-    TsPhoneProblemCode.modelCheckFailed => l10n.problemModelCheckFailed,
-    TsPhoneProblemCode.promptRejected => l10n.problemPromptRejected,
-    TsPhoneProblemCode.runtimeExtensionError =>
+    CorHubProblemCode.modelCheckFailed => l10n.problemModelCheckFailed,
+    CorHubProblemCode.promptRejected => l10n.problemPromptRejected,
+    CorHubProblemCode.runtimeExtensionError =>
       l10n.problemRuntimeExtensionError,
-    TsPhoneProblemCode.deliveryUncertain => l10n.problemDeliveryUncertain,
-    TsPhoneProblemCode.authentication => l10n.problemAuthentication,
-    TsPhoneProblemCode.sessionOffline => l10n.problemSessionOffline,
-    TsPhoneProblemCode.sessionChanged => l10n.problemSessionChanged,
-    TsPhoneProblemCode.agentRunChanged => l10n.problemAgentRunChanged,
-    TsPhoneProblemCode.managementChanged => l10n.problemManagementChanged,
-    TsPhoneProblemCode.activationExternalOwner => l10n.activationExternalOwner,
-    TsPhoneProblemCode.activationUpgradeRequired =>
+    CorHubProblemCode.deliveryUncertain => l10n.problemDeliveryUncertain,
+    CorHubProblemCode.authentication => l10n.problemAuthentication,
+    CorHubProblemCode.sessionOffline => l10n.problemSessionOffline,
+    CorHubProblemCode.sessionChanged => l10n.problemSessionChanged,
+    CorHubProblemCode.agentRunChanged => l10n.problemAgentRunChanged,
+    CorHubProblemCode.managementChanged => l10n.problemManagementChanged,
+    CorHubProblemCode.activationExternalOwner => l10n.activationExternalOwner,
+    CorHubProblemCode.activationUpgradeRequired =>
       l10n.activationUpgradeRequired,
-    TsPhoneProblemCode.activationWriterActive => l10n.activationWriterActive,
-    TsPhoneProblemCode.activationInspectionFailed =>
+    CorHubProblemCode.activationWriterActive => l10n.activationWriterActive,
+    CorHubProblemCode.activationInspectionFailed =>
       l10n.activationInspectionFailed,
-    TsPhoneProblemCode.activationGuardInvalid => l10n.activationGuardInvalid,
-    TsPhoneProblemCode.activationFailed => l10n.activationFailed,
-    TsPhoneProblemCode.activationOutcomeUnknown =>
-      l10n.activationOutcomeUnknown,
-    TsPhoneProblemCode.activationCapacity => l10n.activationCapacity,
-    TsPhoneProblemCode.runtimeRecoveryRequired =>
+    CorHubProblemCode.activationGuardInvalid => l10n.activationGuardInvalid,
+    CorHubProblemCode.activationFailed => l10n.activationFailed,
+    CorHubProblemCode.activationOutcomeUnknown => l10n.activationOutcomeUnknown,
+    CorHubProblemCode.activationCapacity => l10n.activationCapacity,
+    CorHubProblemCode.runtimeRecoveryRequired =>
       l10n.activationRecoveryRequired,
-    TsPhoneProblemCode.resourcesBusy => l10n.problemResourcesBusy,
-    TsPhoneProblemCode.preflightUnavailable => l10n.problemPreflightUnavailable,
-    TsPhoneProblemCode.managementCapacity => l10n.problemManagementCapacity,
-    TsPhoneProblemCode.managementUnsupported =>
+    CorHubProblemCode.resourcesBusy => l10n.problemResourcesBusy,
+    CorHubProblemCode.preflightUnavailable => l10n.problemPreflightUnavailable,
+    CorHubProblemCode.managementCapacity => l10n.problemManagementCapacity,
+    CorHubProblemCode.managementUnsupported =>
       l10n.problemManagementUnsupported,
-    TsPhoneProblemCode.serviceUnavailable => l10n.problemServiceUnavailable,
-    TsPhoneProblemCode.connectionFailed => l10n.problemConnectionFailed,
-    TsPhoneProblemCode.requestTimeout => l10n.problemRequestTimeout,
-    TsPhoneProblemCode.requestFailed => l10n.problemRequestFailed,
-    TsPhoneProblemCode.networkRetrying => l10n.networkRetrying,
-    TsPhoneProblemCode.invalidMessage => l10n.invalidMessage,
-    TsPhoneProblemCode.invalidHistoryMessage => l10n.invalidHistoryMessage,
+    CorHubProblemCode.serviceUnavailable => l10n.problemServiceUnavailable,
+    CorHubProblemCode.connectionFailed => l10n.problemConnectionFailed,
+    CorHubProblemCode.requestTimeout => l10n.problemRequestTimeout,
+    CorHubProblemCode.requestFailed => l10n.problemRequestFailed,
+    CorHubProblemCode.networkRetrying => l10n.networkRetrying,
+    CorHubProblemCode.invalidMessage => l10n.invalidMessage,
+    CorHubProblemCode.invalidHistoryMessage => l10n.invalidHistoryMessage,
   };
 }

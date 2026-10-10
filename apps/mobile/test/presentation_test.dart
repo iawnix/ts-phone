@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
-import 'package:ts_phone/theme/ts_visual_accessibility.dart';
-import 'package:ts_phone/widgets/presentation.dart';
+import 'package:corhub/theme/corhub_theme.dart';
+import 'package:corhub/theme/ts_visual_accessibility.dart';
+import 'package:corhub/widgets/presentation.dart';
 
 void main() {
   testWidgets('glass app bar uses one surface and standard icon targets', (
@@ -11,7 +11,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: Scaffold(
           appBar: TsGlassAppBar(
             leading: IconButton(
@@ -55,7 +55,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
@@ -84,7 +84,7 @@ void main() {
     (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          theme: TsPhoneTheme.light(),
+          theme: CorHubTheme.light(),
           home: Scaffold(
             extendBodyBehindAppBar: true,
             appBar: const TsGlassAppBar(title: Text('Research')),
@@ -110,7 +110,7 @@ void main() {
       final context = tester.element(find.byType(TsGlassAppBar));
       expect(
         appBarMaterial().color,
-        TsPhoneGlassTheme.resolve(context).elevatedSurface,
+        CorHubGlassTheme.resolve(context).elevatedSurface,
       );
       expect(tester.takeException(), isNull);
     },
@@ -121,7 +121,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: const TsVisualAccessibility(
           reduceTransparency: true,
           child: Scaffold(
@@ -144,7 +144,7 @@ void main() {
   testWidgets('ordinary content remains opaque', (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: const Scaffold(
           body: TsContentSurface(child: SizedBox.square(dimension: 44)),
         ),
@@ -164,7 +164,7 @@ void main() {
     var selected = 'all';
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         home: StatefulBuilder(
           builder: (context, setState) => Scaffold(
             body: TsSegmentedControl<String>(
@@ -205,7 +205,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: TsPhoneTheme.light(),
+        theme: CorHubTheme.light(),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
@@ -233,13 +233,13 @@ void main() {
 
   test('semantic foreground colors meet normal-text contrast', () {
     for (final theme in <ThemeData>[
-      TsPhoneTheme.light(),
-      TsPhoneTheme.dark(),
-      TsPhoneTheme.highContrastLight(),
-      TsPhoneTheme.highContrastDark(),
+      CorHubTheme.light(),
+      CorHubTheme.dark(),
+      CorHubTheme.highContrastLight(),
+      CorHubTheme.highContrastDark(),
     ]) {
       final colors = theme.colorScheme;
-      final status = theme.extension<TsPhoneStatusTheme>()!;
+      final status = theme.extension<CorHubStatusTheme>()!;
       for (final pair in <(Color, Color)>[
         (colors.primary, colors.surface),
         (colors.onSurfaceVariant, colors.surface),
@@ -267,8 +267,8 @@ void main() {
 
   test('high contrast controls keep opaque, visible boundaries', () {
     for (final theme in <ThemeData>[
-      TsPhoneTheme.highContrastLight(),
-      TsPhoneTheme.highContrastDark(),
+      CorHubTheme.highContrastLight(),
+      CorHubTheme.highContrastDark(),
     ]) {
       final colors = theme.colorScheme;
       final inputBorder = theme.inputDecorationTheme.enabledBorder!;
@@ -285,10 +285,7 @@ void main() {
   });
 
   test('transient overlays share the app surface language', () {
-    for (final theme in <ThemeData>[
-      TsPhoneTheme.light(),
-      TsPhoneTheme.dark(),
-    ]) {
+    for (final theme in <ThemeData>[CorHubTheme.light(), CorHubTheme.dark()]) {
       final colors = theme.colorScheme;
       expect(theme.dialogTheme.backgroundColor, colors.surfaceContainerLowest);
       expect(

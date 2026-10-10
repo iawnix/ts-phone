@@ -1,17 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 
 import '../../data/session_gateway.dart';
 import '../../data/host_gateway.dart';
 import '../../data/settings_store.dart';
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
 import '../../models/workspace.dart';
 import '../../navigation/adaptive_page_route.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import '../../widgets/presentation.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_view_memory.dart';
@@ -31,7 +31,7 @@ class ConversationShell extends StatefulWidget {
   final ConnectionSettings settings;
   final VoidCallback onOpenSettings;
   final ConversationSelectionStore? selectionStore;
-  final TsPhoneGateway Function(ConnectionSettings settings)? gatewayBuilder;
+  final CorHubGateway Function(ConnectionSettings settings)? gatewayBuilder;
 
   @override
   State<ConversationShell> createState() => _ConversationShellState();
@@ -42,10 +42,10 @@ class _ConversationShellState extends State<ConversationShell>
   final _navigator = GlobalKey<NavigatorState>();
   final _scaffold = GlobalKey<ScaffoldState>();
   final _memory = ConversationMemory();
-  late final TsPhoneGateway _api;
+  late final CorHubGateway _api;
   List<WorkspaceSummary>? _workspaces;
   WorkspaceSummary? _workspace;
-  TsPhoneProblem? _workspaceProblem;
+  CorHubProblem? _workspaceProblem;
   SessionSummary? _session;
   List<SessionSummary>? _sessions;
   bool _creating = false;
@@ -134,7 +134,7 @@ class _ConversationShellState extends State<ConversationShell>
     } on Object catch (error) {
       if (!mounted) return;
       setState(() => _initializing = false);
-      final problem = describeTsPhoneProblem(error);
+      final problem = describeCorHubProblem(error);
       setState(() => _workspaceProblem = problem);
       if (hadWorkspaces) {
         ScaffoldMessenger.of(context)
@@ -186,7 +186,7 @@ class _ConversationShellState extends State<ConversationShell>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                describeTsPhoneProblem(error).localizedMessage(context.l10n),
+                describeCorHubProblem(error).localizedMessage(context.l10n),
               ),
             ),
           );
@@ -244,7 +244,7 @@ class _ConversationShellState extends State<ConversationShell>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              describeTsPhoneProblem(error).localizedMessage(context.l10n),
+              describeCorHubProblem(error).localizedMessage(context.l10n),
             ),
           ),
         );
@@ -284,7 +284,7 @@ class _ConversationShellState extends State<ConversationShell>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              describeTsPhoneProblem(error).localizedMessage(context.l10n),
+              describeCorHubProblem(error).localizedMessage(context.l10n),
             ),
           ),
         );
@@ -301,7 +301,7 @@ class _ConversationShellState extends State<ConversationShell>
     final controller = TextEditingController();
     final workspaceId = await showDialog<String>(
       context: context,
-      animationStyle: TsPhoneMotion.resolveAnimationStyle(context),
+      animationStyle: CorHubMotion.resolveAnimationStyle(context),
       builder: (context) => AlertDialog(
         title: Text(context.l10n.newProject),
         content: TextField(
@@ -336,7 +336,7 @@ class _ConversationShellState extends State<ConversationShell>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            describeTsPhoneProblem(error).localizedMessage(context.l10n),
+            describeCorHubProblem(error).localizedMessage(context.l10n),
           ),
         ),
       );
@@ -518,8 +518,8 @@ class _ConversationShellState extends State<ConversationShell>
                             : context.l10n.sessionCount(workspace.sessionCount);
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(
-                            horizontal: TsPhoneSpacing.large,
-                            vertical: TsPhoneSpacing.xSmall,
+                            horizontal: CorHubSpacing.large,
+                            vertical: CorHubSpacing.xSmall,
                           ),
                           leading: const Icon(AppIcons.folder_outlined),
                           title: Text(workspace.name),

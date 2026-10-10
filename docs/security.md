@@ -1,7 +1,7 @@
 # Security
 
-TS Phone is intentionally unable to act as a server. The only network
-transport is an authenticated ResearchAgent Link WebSocket to a trusted Relay.
+CoRHub is intentionally unable to act as a server. The only network
+transport is an authenticated CoRAgent Link WebSocket to a trusted Relay.
 
 - Device credentials are kept in platform secure storage and never entered or
   displayed as long-lived text in the app.
@@ -17,9 +17,9 @@ transport is an authenticated ResearchAgent Link WebSocket to a trusted Relay.
 - Offline history is presentation-only; write actions require a fresh server
   snapshot.
 
-The local Unix socket is private to the ResearchAgent service user and is not exposed by the
+The local Unix socket is private to the CoRAgent service user and is not exposed by the
 phone. Workspace locks, Pi credentials, skills, extensions, and scientific
-software are server-side concerns governed by the ResearchAgent installation.
+software are server-side concerns governed by the CoRAgent installation.
 
 WSS protects Phone-to-Relay and Host-to-Relay traffic. Link 1 does not add
 application-level end-to-end encryption, so the Relay operator can observe the

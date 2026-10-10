@@ -2,10 +2,10 @@ import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 
 import '../models/workspace.dart';
-import '../theme/ts_phone_theme.dart';
+import '../theme/corhub_theme.dart';
 import '../theme/ts_visual_accessibility.dart';
 import '../l10n/app_localizations_extensions.dart';
 import 'text_detail_view.dart';
@@ -41,7 +41,7 @@ class TsContentSurface extends StatelessWidget {
     this.backgroundColor,
     this.borderColor,
     this.borderRadius = const BorderRadius.all(
-      Radius.circular(TsPhoneRadii.panel),
+      Radius.circular(CorHubRadii.panel),
     ),
   });
 
@@ -82,7 +82,7 @@ class TsGlassSurface extends StatelessWidget {
     required this.child,
     this.padding,
     this.borderRadius = const BorderRadius.all(
-      Radius.circular(TsPhoneRadii.panel),
+      Radius.circular(CorHubRadii.panel),
     ),
     this.elevated = false,
     this.blurSigma,
@@ -101,7 +101,7 @@ class TsGlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final glass = TsPhoneGlassTheme.resolve(context);
+    final glass = CorHubGlassTheme.resolve(context);
     final highContrast = MediaQuery.highContrastOf(context);
     final reduceTransparency =
         highContrast || TsVisualAccessibility.reduceTransparencyOf(context);
@@ -188,7 +188,7 @@ class TsGlassBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final glass = TsPhoneGlassTheme.resolve(context);
+    final glass = CorHubGlassTheme.resolve(context);
     final highContrast = MediaQuery.highContrastOf(context);
     final reduceTransparency =
         highContrast || TsVisualAccessibility.reduceTransparencyOf(context);
@@ -269,7 +269,7 @@ class TsGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final glass = TsPhoneGlassTheme.resolve(context);
+    final glass = CorHubGlassTheme.resolve(context);
     final highContrast = MediaQuery.highContrastOf(context);
     final reduceTransparency =
         highContrast || TsVisualAccessibility.reduceTransparencyOf(context);
@@ -347,7 +347,7 @@ class _TsPressableState extends State<TsPressable> {
         widget.onDoubleTap != null;
     return AnimatedScale(
       scale: _pressed && interactive && !reduceMotion ? 0.98 : 1,
-      duration: TsPhoneMotion.resolve(context, TsPhoneMotion.quick),
+      duration: CorHubMotion.resolve(context, CorHubMotion.quick),
       curve: Curves.easeOutCubic,
       child: InkWell(
         onTap: widget.onTap,
@@ -403,7 +403,7 @@ class TsSectionHeader extends StatelessWidget {
                       ?trailing,
                     ],
                   ),
-                  const SizedBox(height: TsPhoneSpacing.xSmall),
+                  const SizedBox(height: CorHubSpacing.xSmall),
                   Text(
                     captionValue,
                     style: theme.textTheme.labelSmall?.copyWith(
@@ -420,7 +420,7 @@ class TsSectionHeader extends StatelessWidget {
                     Flexible(
                       child: Padding(
                         padding: const EdgeInsets.only(
-                          left: TsPhoneSpacing.medium,
+                          left: CorHubSpacing.medium,
                         ),
                         child: Text(
                           captionValue,
@@ -438,10 +438,10 @@ class TsSectionHeader extends StatelessWidget {
               );
         return Padding(
           padding: const EdgeInsets.fromLTRB(
-            TsPhoneSpacing.large,
-            TsPhoneSpacing.large,
-            TsPhoneSpacing.large,
-            TsPhoneSpacing.small,
+            CorHubSpacing.large,
+            CorHubSpacing.large,
+            CorHubSpacing.large,
+            CorHubSpacing.small,
           ),
           child: content,
         );
@@ -450,7 +450,7 @@ class TsSectionHeader extends StatelessWidget {
   }
 }
 
-/// The single segmented-control implementation used across TS Phone.
+/// The single segmented-control implementation used across CoRHub.
 ///
 /// It intentionally omits Material's selected check mark and lets the shared
 /// theme express selection through fill, foreground, and border contrast.
@@ -489,7 +489,7 @@ class TsReadyStatusIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = TsPhoneStatusTheme.resolve(context).connected;
+    final color = CorHubStatusTheme.resolve(context).connected;
     return Semantics(
       label: label,
       child: Tooltip(
@@ -545,15 +545,15 @@ class TsInfoBand extends StatelessWidget {
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        TsPhoneSpacing.medium,
-        TsPhoneSpacing.small,
-        TsPhoneSpacing.medium,
+        CorHubSpacing.medium,
+        CorHubSpacing.small,
+        CorHubSpacing.medium,
         0,
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+          borderRadius: BorderRadius.circular(CorHubRadii.small),
           border: Border(left: BorderSide(color: rail, width: 3)),
         ),
         child: LayoutBuilder(
@@ -569,7 +569,7 @@ class TsInfoBand extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 1),
                   child: Icon(icon, size: 19, color: rail),
                 ),
-                const SizedBox(width: TsPhoneSpacing.small),
+                const SizedBox(width: CorHubSpacing.small),
                 Expanded(
                   child: Text(
                     message,
@@ -585,15 +585,15 @@ class TsInfoBand extends StatelessWidget {
             );
             return Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: TsPhoneSpacing.medium,
-                vertical: TsPhoneSpacing.small,
+                horizontal: CorHubSpacing.medium,
+                vertical: CorHubSpacing.small,
               ),
               child: stackAction
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         messageRow,
-                        const SizedBox(height: TsPhoneSpacing.xSmall),
+                        const SizedBox(height: CorHubSpacing.xSmall),
                         Align(alignment: Alignment.centerRight, child: action),
                       ],
                     )
@@ -651,8 +651,8 @@ class TsStatusListTile extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 68),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: TsPhoneSpacing.large,
-                vertical: TsPhoneSpacing.small,
+                horizontal: CorHubSpacing.large,
+                vertical: CorHubSpacing.small,
               ),
               child: Row(
                 children: <Widget>[
@@ -683,7 +683,7 @@ class TsStatusListTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: TsPhoneSpacing.medium),
+                  const SizedBox(width: CorHubSpacing.medium),
                   Expanded(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -694,7 +694,7 @@ class TsStatusListTile extends StatelessWidget {
                           monospace: titleMonospace,
                           trailing: titleTrailing,
                         ),
-                        const SizedBox(height: TsPhoneSpacing.xSmall),
+                        const SizedBox(height: CorHubSpacing.xSmall),
                         details ??
                             Text(
                               subtitle,
@@ -706,7 +706,7 @@ class TsStatusListTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: TsPhoneSpacing.small),
+                  const SizedBox(width: CorHubSpacing.small),
                   trailing ??
                       Icon(
                         AppIcons.chevron_right,
@@ -753,8 +753,8 @@ class _StatusListTileTitle extends StatelessWidget {
     if (trailingWidget == null) return titleWidget;
 
     return Wrap(
-      spacing: TsPhoneSpacing.small,
-      runSpacing: TsPhoneSpacing.xSmall,
+      spacing: CorHubSpacing.small,
+      runSpacing: CorHubSpacing.xSmall,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[titleWidget, trailingWidget],
     );
@@ -779,9 +779,9 @@ class TsSettingsSection extends StatelessWidget {
     final colors = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.xLarge,
-        TsPhoneSpacing.large,
+        CorHubSpacing.large,
+        CorHubSpacing.xLarge,
+        CorHubSpacing.large,
         0,
       ),
       child: Column(
@@ -789,10 +789,10 @@ class TsSettingsSection extends StatelessWidget {
         children: <Widget>[
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              TsPhoneSpacing.small,
+              CorHubSpacing.small,
               0,
-              TsPhoneSpacing.small,
-              TsPhoneSpacing.small,
+              CorHubSpacing.small,
+              CorHubSpacing.small,
             ),
             child: Text(
               title,
@@ -818,9 +818,9 @@ class TsSettingsSection extends StatelessWidget {
           if (footer case final value?)
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                TsPhoneSpacing.small,
-                TsPhoneSpacing.small,
-                TsPhoneSpacing.small,
+                CorHubSpacing.small,
+                CorHubSpacing.small,
+                CorHubSpacing.small,
                 0,
               ),
               child: Text(
@@ -854,11 +854,11 @@ class TsEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final content = Padding(
-      padding: const EdgeInsets.all(TsPhoneSpacing.large),
+      padding: const EdgeInsets.all(CorHubSpacing.large),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Padding(
-          padding: const EdgeInsets.all(TsPhoneSpacing.xLarge),
+          padding: const EdgeInsets.all(CorHubSpacing.xLarge),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -866,13 +866,13 @@ class TsEmptyState extends StatelessWidget {
                 dimension: 48,
                 child: Icon(icon, size: 30, color: theme.colorScheme.primary),
               ),
-              const SizedBox(height: TsPhoneSpacing.large),
+              const SizedBox(height: CorHubSpacing.large),
               Text(
                 title,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleMedium,
               ),
-              const SizedBox(height: TsPhoneSpacing.small),
+              const SizedBox(height: CorHubSpacing.small),
               Text(
                 message,
                 textAlign: TextAlign.center,
@@ -881,7 +881,7 @@ class TsEmptyState extends StatelessWidget {
                 ),
               ),
               if (action case final value?) ...<Widget>[
-                const SizedBox(height: TsPhoneSpacing.large),
+                const SizedBox(height: CorHubSpacing.large),
                 value,
               ],
             ],
@@ -1087,7 +1087,7 @@ class TsRuntimeStatusGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final status = TsPhoneStatusTheme.resolve(context);
+    final status = CorHubStatusTheme.resolve(context);
     final (kind, color, icon, pulsing) = switch (state) {
       RuntimeState.running => (
         TsStatusGlyphKind.dot,
@@ -1345,13 +1345,13 @@ class TsTerminalBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final terminal = TsPhoneStatusTheme.resolve(context);
+    final terminal = CorHubStatusTheme.resolve(context);
     final statusColor = isError ? terminal.error : terminal.connected;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: terminal.terminalBackground,
-        borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+        borderRadius: BorderRadius.circular(CorHubRadii.small),
         border: Border.all(
           color: isError
               ? terminal.error.withValues(alpha: 0.48)
@@ -1366,8 +1366,8 @@ class TsTerminalBlock extends StatelessWidget {
             Container(
               color: terminal.terminalSurface,
               padding: const EdgeInsets.symmetric(
-                horizontal: TsPhoneSpacing.medium,
-                vertical: TsPhoneSpacing.small,
+                horizontal: CorHubSpacing.medium,
+                vertical: CorHubSpacing.small,
               ),
               child: Row(
                 children: <Widget>[
@@ -1401,7 +1401,7 @@ class TsTerminalBlock extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.all(TsPhoneSpacing.medium),
+            padding: const EdgeInsets.all(CorHubSpacing.medium),
             child: TextDetailPreview(
               text: body,
               horizontal: true,

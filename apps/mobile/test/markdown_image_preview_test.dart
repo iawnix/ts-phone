@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/l10n/app_localizations.dart';
-import 'package:ts_phone/theme/ts_phone_theme.dart';
-import 'package:ts_phone/widgets/markdown_message.dart';
+import 'package:corhub/l10n/app_localizations.dart';
+import 'package:corhub/theme/corhub_theme.dart';
+import 'package:corhub/widgets/markdown_message.dart';
 
 void main() {
   testWidgets('HTTPS Markdown images load only after opening the preview', (
@@ -186,7 +186,7 @@ Widget _testApp(Widget child, {TextScaler textScaler = TextScaler.noScaling}) {
     locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    theme: TsPhoneTheme.light(),
+    theme: CorHubTheme.light(),
     builder: (context, appChild) => MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: textScaler),
       child: appChild!,

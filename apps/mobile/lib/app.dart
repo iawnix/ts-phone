@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
 import 'data/settings_store.dart';
-import 'data/ts_phone_api.dart';
-import 'data/tspi_link_pairing.dart';
+import 'data/corhub_api.dart';
+import 'data/link_pairing.dart';
 import 'features/connection/connection_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/sessions/conversation_shell.dart';
@@ -16,12 +16,12 @@ import 'models/app_theme_preference.dart';
 import 'models/connection_settings.dart';
 import 'navigation/adaptive_page_route.dart';
 import 'platform/ts_accessibility_controller.dart';
-import 'theme/ts_phone_theme.dart';
+import 'theme/corhub_theme.dart';
 import 'theme/ts_visual_accessibility.dart';
 import 'widgets/presentation.dart';
 
-class TsPhoneApp extends StatefulWidget {
-  const TsPhoneApp({
+class CorHubApp extends StatefulWidget {
+  const CorHubApp({
     super.key,
     required this.settingsStore,
     this.accessibilityController,
@@ -36,14 +36,14 @@ class TsPhoneApp extends StatefulWidget {
   ///
   /// Production leaves this unset so the app connects directly to the Pi App
   /// Server configured by the user.
-  final TsPhoneGateway Function(ConnectionSettings settings)? gatewayBuilder;
-  final TspiLinkPairingRedeemer? pairingRedeemer;
+  final CorHubGateway Function(ConnectionSettings settings)? gatewayBuilder;
+  final LinkPairingRedeemer? pairingRedeemer;
 
   @override
-  State<TsPhoneApp> createState() => _TsPhoneAppState();
+  State<CorHubApp> createState() => _CorHubAppState();
 }
 
-class _TsPhoneAppState extends State<TsPhoneApp> {
+class _CorHubAppState extends State<CorHubApp> {
   late final TsAccessibilityController _visualAccessibility;
   late final bool _ownsVisualAccessibility;
   ConnectionSettings? _settings;
@@ -157,7 +157,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
     if (_connectionEditorOpen) return;
     _connectionEditorOpen = true;
     try {
-      await pushTsPhonePage<void>(
+      await pushCorHubPage<void>(
         context: context,
         builder: (routeContext) => ConnectionPage(
           initialSettings: _settings,
@@ -188,7 +188,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
     if (_settingsRouteOpen) return;
     _settingsRouteOpen = true;
     try {
-      await pushTsPhonePage<void>(
+      await pushCorHubPage<void>(
         context: context,
         builder: (routeContext) => StatefulBuilder(
           builder: (context, refreshRoute) => SettingsPage(
@@ -254,10 +254,10 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
       locale: _localePreference.locale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      theme: TsPhoneTheme.light(),
-      darkTheme: TsPhoneTheme.dark(),
-      highContrastTheme: TsPhoneTheme.highContrastLight(),
-      highContrastDarkTheme: TsPhoneTheme.highContrastDark(),
+      theme: CorHubTheme.light(),
+      darkTheme: CorHubTheme.dark(),
+      highContrastTheme: CorHubTheme.highContrastLight(),
+      highContrastDarkTheme: CorHubTheme.highContrastDark(),
       themeMode: switch (_themePreference) {
         AppThemePreference.system => ThemeMode.system,
         AppThemePreference.light => ThemeMode.light,
@@ -271,7 +271,7 @@ class _TsPhoneAppState extends State<TsPhoneApp> {
               _visualAccessibility.reduceTransparency,
           child: AnnotatedRegion<SystemUiOverlayStyle>(
             key: const ValueKey<String>('system-ui-overlay'),
-            value: TsPhoneTheme.systemUiOverlayStyle(
+            value: CorHubTheme.systemUiOverlayStyle(
               Theme.of(context).colorScheme,
             ),
             child: child ?? const SizedBox.shrink(),

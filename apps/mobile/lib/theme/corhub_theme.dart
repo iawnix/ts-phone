@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-abstract final class TsPhoneSpacing {
+abstract final class CorHubSpacing {
   static const double xSmall = 4;
   static const double small = 8;
   static const double medium = 12;
@@ -10,7 +10,7 @@ abstract final class TsPhoneSpacing {
   static const double xxLarge = 32;
 }
 
-abstract final class TsPhoneRadii {
+abstract final class CorHubRadii {
   static const double small = 6;
   static const double medium = 8;
   static const double panel = 8;
@@ -18,7 +18,7 @@ abstract final class TsPhoneRadii {
   static const double composer = 20;
 }
 
-abstract final class TsPhoneMotion {
+abstract final class CorHubMotion {
   static const Duration quick = Duration(milliseconds: 120);
   static const Duration standard = Duration(milliseconds: 180);
   static const Duration statusPulse = Duration(milliseconds: 720);
@@ -52,8 +52,8 @@ abstract final class TsPhoneMotion {
 }
 
 @immutable
-class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
-  const TsPhoneStatusTheme({
+class CorHubStatusTheme extends ThemeExtension<CorHubStatusTheme> {
+  const CorHubStatusTheme({
     required this.connected,
     required this.onConnected,
     required this.connectedContainer,
@@ -93,12 +93,12 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
   final Color terminalForeground;
   final Color terminalMuted;
 
-  factory TsPhoneStatusTheme.forBrightness(
+  factory CorHubStatusTheme.forBrightness(
     Brightness brightness, {
     bool highContrast = false,
   }) {
     final isLight = brightness == Brightness.light;
-    return TsPhoneStatusTheme(
+    return CorHubStatusTheme(
       connected: isLight
           ? highContrast
                 ? const Color(0xFF005A46)
@@ -154,20 +154,20 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
     );
   }
 
-  static TsPhoneStatusTheme resolve(BuildContext context) {
+  static CorHubStatusTheme resolve(BuildContext context) {
     final theme = Theme.of(context);
     if (MediaQuery.highContrastOf(context)) {
-      return TsPhoneStatusTheme.forBrightness(
+      return CorHubStatusTheme.forBrightness(
         theme.brightness,
         highContrast: true,
       );
     }
-    return theme.extension<TsPhoneStatusTheme>() ??
-        TsPhoneStatusTheme.forBrightness(theme.brightness);
+    return theme.extension<CorHubStatusTheme>() ??
+        CorHubStatusTheme.forBrightness(theme.brightness);
   }
 
   @override
-  TsPhoneStatusTheme copyWith({
+  CorHubStatusTheme copyWith({
     Color? connected,
     Color? onConnected,
     Color? connectedContainer,
@@ -187,7 +187,7 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
     Color? terminalForeground,
     Color? terminalMuted,
   }) {
-    return TsPhoneStatusTheme(
+    return CorHubStatusTheme(
       connected: connected ?? this.connected,
       onConnected: onConnected ?? this.onConnected,
       connectedContainer: connectedContainer ?? this.connectedContainer,
@@ -210,12 +210,12 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
   }
 
   @override
-  TsPhoneStatusTheme lerp(
-    covariant ThemeExtension<TsPhoneStatusTheme>? other,
+  CorHubStatusTheme lerp(
+    covariant ThemeExtension<CorHubStatusTheme>? other,
     double t,
   ) {
-    if (other is! TsPhoneStatusTheme) return this;
-    return TsPhoneStatusTheme(
+    if (other is! CorHubStatusTheme) return this;
+    return CorHubStatusTheme(
       connected: Color.lerp(connected, other.connected, t)!,
       onConnected: Color.lerp(onConnected, other.onConnected, t)!,
       connectedContainer: Color.lerp(
@@ -267,8 +267,8 @@ class TsPhoneStatusTheme extends ThemeExtension<TsPhoneStatusTheme> {
 }
 
 @immutable
-class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
-  const TsPhoneGlassTheme({
+class CorHubGlassTheme extends ThemeExtension<CorHubGlassTheme> {
+  const CorHubGlassTheme({
     required this.surface,
     required this.elevatedSurface,
     required this.controlSurface,
@@ -290,13 +290,13 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
   final double blurSigma;
   final double floatingBlurSigma;
 
-  factory TsPhoneGlassTheme.forBrightness(
+  factory CorHubGlassTheme.forBrightness(
     Brightness brightness, {
     bool highContrast = false,
   }) {
     final isLight = brightness == Brightness.light;
     if (highContrast) {
-      return TsPhoneGlassTheme(
+      return CorHubGlassTheme(
         surface: isLight ? Colors.white : Colors.black,
         elevatedSurface: isLight ? Colors.white : const Color(0xFF111111),
         controlSurface: isLight ? Colors.white : const Color(0xFF1C1C1E),
@@ -308,7 +308,7 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
         floatingBlurSigma: 0,
       );
     }
-    return TsPhoneGlassTheme(
+    return CorHubGlassTheme(
       surface: isLight ? const Color(0xBDF7F7F7) : const Color(0xBA181818),
       elevatedSurface: isLight
           ? const Color(0xD9FFFFFF)
@@ -325,14 +325,14 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
     );
   }
 
-  static TsPhoneGlassTheme resolve(BuildContext context) {
+  static CorHubGlassTheme resolve(BuildContext context) {
     final theme = Theme.of(context);
-    return theme.extension<TsPhoneGlassTheme>() ??
-        TsPhoneGlassTheme.forBrightness(theme.brightness);
+    return theme.extension<CorHubGlassTheme>() ??
+        CorHubGlassTheme.forBrightness(theme.brightness);
   }
 
   @override
-  TsPhoneGlassTheme copyWith({
+  CorHubGlassTheme copyWith({
     Color? surface,
     Color? elevatedSurface,
     Color? controlSurface,
@@ -343,7 +343,7 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
     double? blurSigma,
     double? floatingBlurSigma,
   }) {
-    return TsPhoneGlassTheme(
+    return CorHubGlassTheme(
       surface: surface ?? this.surface,
       elevatedSurface: elevatedSurface ?? this.elevatedSurface,
       controlSurface: controlSurface ?? this.controlSurface,
@@ -357,12 +357,12 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
   }
 
   @override
-  TsPhoneGlassTheme lerp(
-    covariant ThemeExtension<TsPhoneGlassTheme>? other,
+  CorHubGlassTheme lerp(
+    covariant ThemeExtension<CorHubGlassTheme>? other,
     double t,
   ) {
-    if (other is! TsPhoneGlassTheme) return this;
-    return TsPhoneGlassTheme(
+    if (other is! CorHubGlassTheme) return this;
+    return CorHubGlassTheme(
       surface: Color.lerp(surface, other.surface, t)!,
       elevatedSurface: Color.lerp(elevatedSurface, other.elevatedSurface, t)!,
       controlSurface: Color.lerp(controlSurface, other.controlSurface, t)!,
@@ -377,7 +377,7 @@ class TsPhoneGlassTheme extends ThemeExtension<TsPhoneGlassTheme> {
   }
 }
 
-abstract final class TsPhoneTheme {
+abstract final class CorHubTheme {
   static ThemeData light() => _build(Brightness.light);
 
   static ThemeData dark() => _build(Brightness.dark);
@@ -406,11 +406,11 @@ abstract final class TsPhoneTheme {
 
   static ThemeData _build(Brightness brightness, {bool highContrast = false}) {
     final isLight = brightness == Brightness.light;
-    final glassTheme = TsPhoneGlassTheme.forBrightness(
+    final glassTheme = CorHubGlassTheme.forBrightness(
       brightness,
       highContrast: highContrast,
     );
-    final statusTheme = TsPhoneStatusTheme.forBrightness(
+    final statusTheme = CorHubStatusTheme.forBrightness(
       brightness,
       highContrast: highContrast,
     );
@@ -547,7 +547,7 @@ abstract final class TsPhoneTheme {
     );
 
     final inputBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
+      borderRadius: BorderRadius.circular(CorHubRadii.medium),
       borderSide: BorderSide(
         color: highContrast
             ? scheme.outline
@@ -555,7 +555,7 @@ abstract final class TsPhoneTheme {
       ),
     );
     final overlayShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
+      borderRadius: BorderRadius.circular(CorHubRadii.panel),
       side: BorderSide(
         color: highContrast ? scheme.outline : scheme.outlineVariant,
         width: highContrast ? 1 : 0.5,
@@ -599,7 +599,7 @@ abstract final class TsPhoneTheme {
         color: scheme.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
+          borderRadius: BorderRadius.circular(CorHubRadii.panel),
           side: BorderSide(color: scheme.outlineVariant, width: 0.5),
         ),
       ),
@@ -610,10 +610,10 @@ abstract final class TsPhoneTheme {
       ),
       listTileTheme: ListTileThemeData(
         minTileHeight: 52,
-        minVerticalPadding: TsPhoneSpacing.xSmall,
+        minVerticalPadding: CorHubSpacing.xSmall,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: TsPhoneSpacing.large,
-          vertical: TsPhoneSpacing.xSmall,
+          horizontal: CorHubSpacing.large,
+          vertical: CorHubSpacing.xSmall,
         ),
         iconColor: scheme.onSurfaceVariant,
         titleTextStyle: textTheme.bodyLarge?.copyWith(color: scheme.onSurface),
@@ -636,7 +636,7 @@ abstract final class TsPhoneTheme {
           borderSide: BorderSide(color: scheme.error, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: TsPhoneSpacing.large,
+          horizontal: CorHubSpacing.large,
           vertical: 14,
         ),
       ),
@@ -644,34 +644,34 @@ abstract final class TsPhoneTheme {
         style: FilledButton.styleFrom(
           minimumSize: const Size(44, 44),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
+            borderRadius: BorderRadius.circular(CorHubRadii.medium),
           ),
-          animationDuration: TsPhoneMotion.quick,
+          animationDuration: CorHubMotion.quick,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(44, 44),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
+            borderRadius: BorderRadius.circular(CorHubRadii.medium),
           ),
           side: BorderSide(color: scheme.outlineVariant),
-          animationDuration: TsPhoneMotion.quick,
+          animationDuration: CorHubMotion.quick,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           minimumSize: const Size(44, 44),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
+            borderRadius: BorderRadius.circular(CorHubRadii.medium),
           ),
-          animationDuration: TsPhoneMotion.quick,
+          animationDuration: CorHubMotion.quick,
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
           minimumSize: const WidgetStatePropertyAll<Size>(Size.square(48)),
-          animationDuration: TsPhoneMotion.quick,
+          animationDuration: CorHubMotion.quick,
           overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
             if (states.contains(WidgetState.pressed)) {
               return scheme.primary.withValues(alpha: 0.18);
@@ -693,7 +693,7 @@ abstract final class TsPhoneTheme {
           color: isLight ? Colors.white : const Color(0xFF1C1C1E),
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(TsPhoneRadii.panel),
+          borderRadius: BorderRadius.circular(CorHubRadii.panel),
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -720,7 +720,7 @@ abstract final class TsPhoneTheme {
         modalBarrierColor: Colors.black.withValues(alpha: 0.42),
         shape: RoundedRectangleBorder(
           borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(TsPhoneRadii.bubble),
+            top: Radius.circular(CorHubRadii.bubble),
           ),
           side: BorderSide(
             color: highContrast ? scheme.outline : scheme.outlineVariant,
@@ -751,7 +751,7 @@ abstract final class TsPhoneTheme {
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
-          animationDuration: TsPhoneMotion.quick,
+          animationDuration: CorHubMotion.quick,
           minimumSize: const WidgetStatePropertyAll<Size>(Size(44, 44)),
           backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
             if (states.contains(WidgetState.disabled)) {
@@ -792,7 +792,7 @@ abstract final class TsPhoneTheme {
           ),
           shape: WidgetStatePropertyAll<OutlinedBorder>(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(TsPhoneRadii.medium),
+              borderRadius: BorderRadius.circular(CorHubRadii.medium),
             ),
           ),
         ),

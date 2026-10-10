@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/workspace.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import 'package:intl/intl.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/presentation.dart';
@@ -193,10 +193,10 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
     final content = ListView(
       shrinkWrap: !widget.embedded,
       padding: const EdgeInsets.fromLTRB(
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.small,
-        TsPhoneSpacing.large,
-        TsPhoneSpacing.large,
+        CorHubSpacing.large,
+        CorHubSpacing.small,
+        CorHubSpacing.large,
+        CorHubSpacing.large,
       ),
       children: <Widget>[
         Row(
@@ -216,7 +216,7 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
               ),
           ],
         ),
-        const SizedBox(height: TsPhoneSpacing.xSmall),
+        const SizedBox(height: CorHubSpacing.xSmall),
         for (final workspace in _workspaces)
           _ContextRow(
             leading: TsRuntimeStatusGlyph(
@@ -231,7 +231,7 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
                 ? null
                 : () => _loadSessions(workspace),
           ),
-        const SizedBox(height: TsPhoneSpacing.large),
+        const SizedBox(height: CorHubSpacing.large),
         Row(
           children: <Widget>[
             Expanded(child: _SheetHeader(title: l10n.sessions)),
@@ -260,7 +260,7 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
         ),
         if (_searching)
           Padding(
-            padding: const EdgeInsets.only(bottom: TsPhoneSpacing.small),
+            padding: const EdgeInsets.only(bottom: CorHubSpacing.small),
             child: TextField(
               key: const ValueKey('context-search'),
               autofocus: true,
@@ -278,7 +278,7 @@ class _ContextSwitcherSheetState extends State<ContextSwitcherSheet> {
           )
         else if (_error case final error?)
           _ContextError(
-            message: describeTsPhoneProblem(error).localizedMessage(l10n),
+            message: describeCorHubProblem(error).localizedMessage(l10n),
             onRetry: () => _loadSessions(_workspace),
           )
         else if (sessions?.isEmpty == true)
@@ -374,7 +374,7 @@ class _ContextRow extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return TsPressable(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+      borderRadius: BorderRadius.circular(CorHubRadii.small),
       child: ListTile(
         dense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 4),
@@ -404,7 +404,7 @@ class _ContextError extends StatelessWidget {
     child: Column(
       children: <Widget>[
         Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: TsPhoneSpacing.small),
+        const SizedBox(height: CorHubSpacing.small),
         TextButton.icon(
           onPressed: onRetry,
           icon: const Icon(AppIcons.refresh_rounded),

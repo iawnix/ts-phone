@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/ts_phone_api.dart';
-import 'package:ts_phone/features/chat/chat_controller.dart';
-import 'package:ts_phone/models/phone_model.dart';
-import 'package:ts_phone/models/workspace.dart';
+import 'package:corhub/data/corhub_api.dart';
+import 'package:corhub/features/chat/chat_controller.dart';
+import 'package:corhub/models/phone_model.dart';
+import 'package:corhub/models/workspace.dart';
 
 import 'chat_controller_test.dart' as fixtures;
 
@@ -33,7 +33,7 @@ SessionSummary ready([PhoneModel model = first]) => SessionSummary(
   ),
 );
 
-class ModelGateway extends fixtures.FakeGateway implements TsPhoneModelGateway {
+class ModelGateway extends fixtures.FakeGateway implements CorHubModelGateway {
   List<PhoneModel> available = [first, second];
   int selections = 0;
   PhoneModel? selected;
@@ -77,10 +77,10 @@ void main() {
   test(
     'invalid model responses are presented as model availability errors',
     () {
-      final problem = describeTsPhoneProblem(
-        const TsPhoneApiException('unknown model', code: 'invalid_model'),
+      final problem = describeCorHubProblem(
+        const CorHubApiException('unknown model', code: 'invalid_model'),
       );
-      expect(problem.code, TsPhoneProblemCode.modelUnavailable);
+      expect(problem.code, CorHubProblemCode.modelUnavailable);
     },
   );
 

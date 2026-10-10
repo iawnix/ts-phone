@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ts_phone/data/tspi_link_pairing.dart';
+import 'package:corhub/data/link_pairing.dart';
 
 const _hostId = '123e4567-e89b-42d3-a456-426614174000';
 const _deviceId = '223e4567-e89b-42d3-a456-426614174000';
@@ -11,7 +11,7 @@ const _deviceToken = 'rad_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
 void main() {
   test('rejects the retired Link protocol', () async {
-    final client = TspiLinkPairingClient(
+    final client = LinkPairingClient(
       client: MockClient(
         (_) async =>
             http.Response(jsonEncode({'protocol': 'tspi-link.v1'}), 201),
@@ -24,7 +24,7 @@ void main() {
         deviceName: 'Phone',
       ),
       throwsA(
-        isA<TspiLinkPairingException>().having(
+        isA<LinkPairingException>().having(
           (e) => e.code,
           'code',
           'unsupported_protocol',
@@ -35,7 +35,7 @@ void main() {
 
   test('redeems a normalized pairing code for device credentials', () async {
     late http.Request captured;
-    final client = TspiLinkPairingClient(
+    final client = LinkPairingClient(
       client: MockClient((request) async {
         captured = request;
         return http.Response(
@@ -74,7 +74,7 @@ void main() {
   });
 
   test('preserves the Relay error code for localized presentation', () async {
-    final client = TspiLinkPairingClient(
+    final client = LinkPairingClient(
       client: MockClient(
         (_) async => http.Response(
           jsonEncode({
@@ -93,7 +93,7 @@ void main() {
         deviceName: 'Lab Phone',
       ),
       throwsA(
-        isA<TspiLinkPairingException>().having(
+        isA<LinkPairingException>().having(
           (error) => error.code,
           'code',
           'invalid_pairing',
@@ -103,7 +103,7 @@ void main() {
   });
 
   test('rejects credentials issued for a different Relay origin', () async {
-    final client = TspiLinkPairingClient(
+    final client = LinkPairingClient(
       client: MockClient(
         (_) async => http.Response(
           jsonEncode({
@@ -125,7 +125,7 @@ void main() {
         deviceName: 'Lab Phone',
       ),
       throwsA(
-        isA<TspiLinkPairingException>().having(
+        isA<LinkPairingException>().having(
           (error) => error.code,
           'code',
           'invalid_response',
@@ -135,7 +135,7 @@ void main() {
   });
 
   test('rejects an oversized Relay response', () async {
-    final client = TspiLinkPairingClient(
+    final client = LinkPairingClient(
       client: MockClient(
         (_) async => http.Response('x' * (64 * 1024 + 1), 200),
       ),
@@ -148,7 +148,7 @@ void main() {
         deviceName: 'Lab Phone',
       ),
       throwsA(
-        isA<TspiLinkPairingException>()
+        isA<LinkPairingException>()
             .having((error) => error.code, 'code', 'invalid_response')
             .having((error) => error.message, 'message', contains('too large')),
       ),

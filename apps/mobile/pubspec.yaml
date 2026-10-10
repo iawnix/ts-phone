@@ -1,5 +1,5 @@
-name: ts_phone
-description: "A secure Android and iOS companion for ResearchAgent."
+name: corhub
+description: "A secure Android and iOS companion for CoRAgent."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -73,8 +73,9 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/branding/ts-phone-mark.png
-    - assets/branding/ts-phone-mark-monochrome.png
+    - assets/branding/corhub-mark.png
+    - assets/branding/corhub-mark-small.png
+    - assets/branding/corhub-mark-monochrome.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:intl/intl.dart';
 
-import '../../data/ts_phone_api.dart';
+import '../../data/corhub_api.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../l10n/host_monitor_localizations.dart';
 import '../../models/host_monitor.dart';
 import '../../models/workspace.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
 
@@ -95,7 +95,7 @@ class _MonitorPageState extends State<MonitorPage> with WidgetsBindingObserver {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                describeTsPhoneProblem(error).localizedMessage(context.l10n),
+                describeCorHubProblem(error).localizedMessage(context.l10n),
               ),
             ),
           );
@@ -132,7 +132,7 @@ class _MonitorPageState extends State<MonitorPage> with WidgetsBindingObserver {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Text(
-                        describeTsPhoneProblem(error).localizedMessage(l10n),
+                        describeCorHubProblem(error).localizedMessage(l10n),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                         ),
@@ -183,10 +183,10 @@ class _MonitorCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-          TsPhoneSpacing.large,
-          TsPhoneSpacing.medium,
-          TsPhoneSpacing.small,
-          TsPhoneSpacing.medium,
+          CorHubSpacing.large,
+          CorHubSpacing.medium,
+          CorHubSpacing.small,
+          CorHubSpacing.medium,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,19 +194,19 @@ class _MonitorCard extends StatelessWidget {
             Expanded(
               child: TsPressable(
                 onTap: busy ? null : () => onChanged(!monitor.enabled),
-                borderRadius: BorderRadius.circular(TsPhoneRadii.small),
+                borderRadius: BorderRadius.circular(CorHubRadii.small),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    vertical: TsPhoneSpacing.xSmall,
+                    vertical: CorHubSpacing.xSmall,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(monitor.title, style: theme.textTheme.titleSmall),
-                      const SizedBox(height: TsPhoneSpacing.xSmall),
+                      const SizedBox(height: CorHubSpacing.xSmall),
                       Wrap(
-                        spacing: TsPhoneSpacing.small,
-                        runSpacing: TsPhoneSpacing.xSmall,
+                        spacing: CorHubSpacing.small,
+                        runSpacing: CorHubSpacing.xSmall,
                         children: <Widget>[
                           Text(
                             status,
@@ -225,16 +225,16 @@ class _MonitorCard extends StatelessWidget {
                       ),
                       if (monitor.pendingCount > 0 ||
                           error?.isNotEmpty == true) ...[
-                        const SizedBox(height: TsPhoneSpacing.small),
+                        const SizedBox(height: CorHubSpacing.small),
                         Wrap(
-                          spacing: TsPhoneSpacing.small,
-                          runSpacing: TsPhoneSpacing.xSmall,
+                          spacing: CorHubSpacing.small,
+                          runSpacing: CorHubSpacing.xSmall,
                           children: <Widget>[
                             if (monitor.pendingCount > 0)
                               Text(
                                 l10n.hostMonitorPending(monitor.pendingCount),
                                 style: theme.textTheme.labelMedium?.copyWith(
-                                  color: TsPhoneStatusTheme.resolve(
+                                  color: CorHubStatusTheme.resolve(
                                     context,
                                   ).warning,
                                 ),
@@ -261,7 +261,7 @@ class _MonitorCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: TsPhoneSpacing.small),
+            const SizedBox(width: CorHubSpacing.small),
             Semantics(
               label: monitor.title,
               value: status,

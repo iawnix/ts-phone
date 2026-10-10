@@ -59,13 +59,13 @@ expected_certificate="${expected_certificate,,}"
 [[ "$expected_certificate" =~ ^[0-9a-f]{64}$ ]] ||
     die "could not read the release certificate fingerprint"
 [[ "$expected_certificate" == "$RELEASE_CERTIFICATE_SHA256" ]] ||
-    die "configured keystore is not the pinned TS Phone release identity"
+    die "configured keystore is not the pinned CoRHub release identity"
 
 export TS_PHONE_SIGNING_DIR="$SIGNING_DIR"
 export JAVA_HOME="$JAVA_HOME_PATH"
 export ANDROID_HOME="$ANDROID_SDK"
 export ANDROID_SDK_ROOT="$ANDROID_SDK"
-readonly PRIVATE_ROOT="${TS_PHONE_BUILD_ROOT:-${RUNNER_TEMP:-/home/iaw/project/TSPi/local_debug/ts-phone}/android-build}"
+readonly PRIVATE_ROOT="${TS_PHONE_BUILD_ROOT:-${RUNNER_TEMP:-/home/iaw/project/TSPi/local_debug/corhub}/android-build}"
 install -d -m 0700 "$PRIVATE_ROOT" "$PRIVATE_ROOT/tmp"
 export TMPDIR="$PRIVATE_ROOT/tmp"
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$PRIVATE_ROOT/gradle}"
@@ -103,7 +103,7 @@ mobile_version=$(awk '$1 == "version:" { print $2; exit }' "${CAPTURED_MOBILE_RO
     die "invalid mobile version: ${mobile_version}"
 readonly VERSION_NAME="${BASH_REMATCH[1]}"
 readonly BUILD_NUMBER="${BASH_REMATCH[2]}"
-readonly ARTIFACT_PREFIX="ts-phone-v${VERSION_NAME}-build${BUILD_NUMBER}"
+readonly ARTIFACT_PREFIX="corhub-v${VERSION_NAME}-build${BUILD_NUMBER}"
 
 # The generated asset is outside its own digest, but inside the private source
 # tree that is the only input passed to Flutter.

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:ts_phone/theme/app_icons.dart';
+import 'package:corhub/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 
-import '../../data/ts_phone_api.dart';
-import '../../data/tspi_link_pairing.dart';
+import '../../data/corhub_api.dart';
+import '../../data/link_pairing.dart';
 import '../../l10n/app_localizations_extensions.dart';
 import '../../models/connection_settings.dart';
-import '../../theme/ts_phone_theme.dart';
+import '../../theme/corhub_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/presentation.dart';
-import '../../widgets/ts_phone_brand_mark.dart';
+import '../../widgets/corhub_brand_mark.dart';
 
 typedef ConnectionVerifier = Future<void> Function(ConnectionSettings settings);
 
@@ -29,7 +29,7 @@ class ConnectionPage extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onOpenSettings;
   final ConnectionVerifier? verifier;
-  final TspiLinkPairingRedeemer? pairingRedeemer;
+  final LinkPairingRedeemer? pairingRedeemer;
 
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
@@ -53,7 +53,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
       text: widget.initialSettings?.serverUrl ?? '',
     );
     _pairingCodeController = TextEditingController();
-    _deviceNameController = TextEditingController(text: 'TS Phone');
+    _deviceNameController = TextEditingController(text: 'CoRHub');
   }
 
   @override
@@ -89,12 +89,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
       ActionFeedback.error();
       setState(() {
         _error = switch (error) {
-          TspiLinkPairingException pairing => pairing.localizedMessage(
+          LinkPairingException pairing => pairing.localizedMessage(
             context.l10n,
           ),
           ConnectionValidationException validation =>
             validation.reason.localizedMessage(context.l10n),
-          _ => describeTsPhoneProblem(error).localizedMessage(context.l10n),
+          _ => describeCorHubProblem(error).localizedMessage(context.l10n),
         };
       });
     } finally {
@@ -125,7 +125,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
         deviceName: _deviceNameController.text,
       );
     }
-    final client = TspiLinkPairingClient();
+    final client = LinkPairingClient();
     try {
       return await client.redeem(
         relayUrl: _relayController.text,
@@ -171,15 +171,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(
-                  TsPhoneSpacing.large,
-                  TsPhoneSpacing.xLarge,
-                  TsPhoneSpacing.large,
-                  TsPhoneSpacing.xLarge,
+                  CorHubSpacing.large,
+                  CorHubSpacing.xLarge,
+                  CorHubSpacing.large,
+                  CorHubSpacing.xLarge,
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: TsContentSurface(
-                    padding: const EdgeInsets.all(TsPhoneSpacing.large),
+                    padding: const EdgeInsets.all(CorHubSpacing.large),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -195,7 +195,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               const mark = _ConnectionMark();
                               final copy = _ConnectionCopy(
                                 theme: theme,
-                                title: l10n.connectTsPhone,
+                                title: l10n.connectCorHub,
                                 subtitle: l10n.mobileCompanion,
                               );
                               return compact
@@ -205,7 +205,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                       children: <Widget>[
                                         mark,
                                         const SizedBox(
-                                          height: TsPhoneSpacing.medium,
+                                          height: CorHubSpacing.medium,
                                         ),
                                         copy,
                                       ],
@@ -214,14 +214,14 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                       children: <Widget>[
                                         mark,
                                         const SizedBox(
-                                          width: TsPhoneSpacing.medium,
+                                          width: CorHubSpacing.medium,
                                         ),
                                         Expanded(child: copy),
                                       ],
                                     );
                             },
                           ),
-                          const SizedBox(height: TsPhoneSpacing.xLarge),
+                          const SizedBox(height: CorHubSpacing.xLarge),
                           TextFormField(
                             key: const ValueKey<String>('relay-url-field'),
                             controller: _relayController,
@@ -246,7 +246,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               }
                             },
                           ),
-                          const SizedBox(height: TsPhoneSpacing.medium),
+                          const SizedBox(height: CorHubSpacing.medium),
                           TextFormField(
                             key: const ValueKey<String>('pairing-code-field'),
                             controller: _pairingCodeController,
@@ -275,7 +275,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                   : l10n.validationPairingCode;
                             },
                           ),
-                          const SizedBox(height: TsPhoneSpacing.medium),
+                          const SizedBox(height: CorHubSpacing.medium),
                           TextFormField(
                             key: const ValueKey<String>('device-name-field'),
                             controller: _deviceNameController,
@@ -300,22 +300,22 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             onFieldSubmitted: (_) => _connect(),
                           ),
                           if (_error case final message?) ...<Widget>[
-                            const SizedBox(height: TsPhoneSpacing.medium),
+                            const SizedBox(height: CorHubSpacing.medium),
                             TsInfoBand(
                               icon: AppIcons.error_outline_rounded,
                               message: message,
                               tone: TsInfoTone.error,
                             ),
                           ],
-                          const SizedBox(height: TsPhoneSpacing.large),
+                          const SizedBox(height: CorHubSpacing.large),
                           TsCenteredAction(
                             child: FilledButton.icon(
                               key: const ValueKey<String>('connect-action'),
                               onPressed: _connecting ? null : _connect,
                               icon: AnimatedSwitcher(
-                                duration: TsPhoneMotion.resolveFade(
+                                duration: CorHubMotion.resolveFade(
                                   context,
-                                  TsPhoneMotion.quick,
+                                  CorHubMotion.quick,
                                 ),
                                 child: _connecting
                                     ? const SizedBox.square(
@@ -355,7 +355,7 @@ class _ConnectionMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TsPhoneBrandBadge(size: 58);
+    return const CorHubBrandBadge(size: 58);
   }
 }
 
@@ -376,7 +376,7 @@ class _ConnectionCopy extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(title, style: theme.textTheme.titleLarge),
-        const SizedBox(height: TsPhoneSpacing.xSmall),
+        const SizedBox(height: CorHubSpacing.xSmall),
         Text(
           subtitle,
           style: theme.textTheme.bodySmall?.copyWith(

@@ -33,7 +33,7 @@ def sha256(path: Path) -> str:
 
 def inventory(directory: Path, value: str) -> list[Path]:
     semver, build = value.split("+")
-    prefix = f"ts-phone-v{semver}-build{build}"
+    prefix = f"corhub-v{semver}-build{build}"
     binaries = [f"{prefix}-{abi}-release.apk" for abi in ("arm64-v8a", "armeabi-v7a", "x86_64")] + [f"{prefix}-release.aab"]
     expected = set(binaries) | {name + ".attestation.json" for name in binaries}
     if {path.name for path in directory.iterdir()} != expected | {"SHA256SUMS"}:
@@ -76,9 +76,9 @@ def main() -> int:
         notes = ROOT / "dist/release-notes.md"
         notes.write_text(version.notes(ROOT, value))
         if release is None:
-            gh("release", "create", args.tag, "--repo", repository, "--verify-tag", "--draft", "--title", f"TS Phone v{value}", "--notes-file", str(notes))
+            gh("release", "create", args.tag, "--repo", repository, "--verify-tag", "--draft", "--title", f"CoRHub v{value}", "--notes-file", str(notes))
         else:
-            gh("release", "edit", args.tag, "--repo", repository, "--title", f"TS Phone v{value}", "--notes-file", str(notes))
+            gh("release", "edit", args.tag, "--repo", repository, "--title", f"CoRHub v{value}", "--notes-file", str(notes))
             # Only unpublished drafts can be repaired by a rerun.
             for asset in release["assets"]:
                 gh("release", "delete-asset", args.tag, asset["name"], "--repo", repository, "--yes")

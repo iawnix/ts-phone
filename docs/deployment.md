@@ -1,7 +1,7 @@
 # Android release operations
 
-TS Phone is a signed Flutter application. Install and enable Phone access on
-[ResearchAgent](https://github.com/iawnix/TSPi), then run on the server:
+CoRHub is a signed Flutter application. Install and enable Phone access on
+[CoRAgent](https://github.com/iawnix/TSPi), then run on the server:
 
 ```bash
 research-agent --workspace reaction-a
@@ -11,21 +11,21 @@ research-agent phone devices
 research-agent phone revoke <device-id>
 ```
 
-Host connects outbound to ResearchAgent Link Relay; no public Host port is
+Host connects outbound to CoRAgent Link Relay; no public Host port is
 required. The app uses the trusted HTTPS Relay origin and one-time pairing
-code. Upgrading from legacy TSPi protocol identities requires re-pairing.
+code. Upgrading from legacy protocol identities requires re-pairing.
 
 ## Publish on GitHub
 
 1. Fetch tags, choose an increasing version/build with `tool/version.py set`,
    and add its exact `## X.Y.Z+N` section to `CHANGELOG.md`.
 2. Run `tool/iterate.sh dev` and, for protocol changes, the local deterministic
-   ResearchAgent interoperability suite. Review the source and merge to `main`.
+   CoRAgent interoperability suite. Review the source and merge to `main`.
 3. From that clean commit, create and push the annotated tag:
 
    ```bash
    tag=$(python3 tool/version.py tag)
-   git tag -a "$tag" -m "TS Phone ${tag#ts-phone-v}"
+   git tag -a "$tag" -m "CoRHub ${tag#corhub-v}"
    python3 tool/version.py check --tag "$tag" --release
    git push origin "$tag"
    ```
@@ -60,8 +60,8 @@ For local validation, SDK copies, caches, temporary build files and outputs
 must be inside the private test root. Explicitly set:
 
 ```bash
-export TS_PHONE_BUILD_ROOT=/home/iaw/project/TSPi/local_debug/ts-phone/android-build
-export TS_PHONE_OUTPUT_ROOT=/home/iaw/project/TSPi/local_debug/ts-phone/android-output
+export TS_PHONE_BUILD_ROOT=/home/iaw/project/TSPi/local_debug/corhub/android-build
+export TS_PHONE_OUTPUT_ROOT=/home/iaw/project/TSPi/local_debug/corhub/android-output
 # Set private SDK/cache and protected signing paths before invoking:
 ./tool/iterate.sh release
 ```
@@ -75,3 +75,12 @@ tag; never upload artifacts from local_debug.
 Most users install the arm64-v8a APK. The AAB is for store upload. Android
 usually blocks downgrades and signer changes; see [recovery](recovery.md).
 iOS signing and binary distribution are not part of this workflow.
+
+## Identity retained across the CoRHub rename
+
+The `TS_PHONE_*` environment variables and GitHub secret names, signing key
+filename/alias and protected signing directory remain the existing operational
+contract. Do not generate new keys or rename secrets for this brand update.
+Android remains `xyz.iawnix.ts_phone`; iOS remains `xyz.iawnix.tsPhone`. Secure
+storage namespaces and Host/Link/runtime schemas also remain stable. Future
+release tags and downloadable filenames use `corhub-`; old releases are unchanged.

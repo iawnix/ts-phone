@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'TS Phone';
+  String get appTitle => 'CoRHub';
 
   @override
   String get back => '返回';
@@ -21,13 +21,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionSettings => '连接设置';
 
   @override
-  String get connectTsPhone => '配对 TS Phone';
+  String get connectCorHub => '配对 CoRHub';
 
   @override
-  String get mobileCompanion => '将此设备连接到你的 TSPi Host';
+  String get mobileCompanion => '将此设备连接到 CoRAgent';
 
   @override
-  String get relay => 'TSPi Relay';
+  String get relay => 'CoRAgent Relay';
 
   @override
   String get relayHint => 'https://link.example.com';
@@ -42,7 +42,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceName => '设备名称';
 
   @override
-  String get deviceNameHint => 'TS Phone';
+  String get deviceNameHint => 'CoRHub';
 
   @override
   String get pair => '配对';
@@ -63,16 +63,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get validationHttpsRequired => '远程服务器必须使用 HTTPS';
 
   @override
-  String get validationServerId => 'TSPi Relay 返回的 Host ID 无效。';
+  String get validationServerId => 'CoRAgent Relay 返回的 Host ID 无效。';
 
   @override
-  String get validationDeviceId => 'TSPi Relay 返回的 Device ID 无效。';
+  String get validationDeviceId => 'CoRAgent Relay 返回的 Device ID 无效。';
 
   @override
-  String get validationTokenInvalid => 'TSPi Relay 返回的设备授权无效。';
+  String get validationTokenInvalid => 'CoRAgent Relay 返回的设备授权无效。';
 
   @override
-  String get validationPairingCode => '请输入 TSPi 显示的 8 位配对码。';
+  String get validationPairingCode => '请输入 CoRAgent 显示的 8 位配对码。';
 
   @override
   String get validationDeviceName => '请输入不超过 80 个字符的设备名称。';
@@ -81,16 +81,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pairingInvalidOrExpired => '配对码无效、已过期或已被使用。';
 
   @override
-  String get pairingRelayUnavailable => '无法连接 TSPi Relay。';
+  String get pairingRelayUnavailable => '无法连接 CoRAgent Relay。';
 
   @override
-  String get pairingRelayResponseInvalid => 'TSPi Relay 返回了无效响应。';
+  String get pairingRelayResponseInvalid => 'CoRAgent Relay 返回了无效响应。';
 
   @override
   String get pairingProtocolUnsupported => '当前 App 不支持 Relay 使用的 Link 协议。';
 
   @override
-  String get pairingRejected => 'TSPi Relay 拒绝了配对请求。';
+  String get pairingRejected => 'CoRAgent Relay 拒绝了配对请求。';
 
   @override
   String get preferences => '偏好设置';
@@ -132,7 +132,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionDetails => '连接详情';
 
   @override
-  String get tsPhoneService => 'TSPi Link';
+  String get corHubService => 'CoRAgent Link';
 
   @override
   String get notConfigured => '尚未配置';
@@ -142,7 +142,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String clientDescription(String version) {
-    return '客户端 $version · TSPi 移动终端';
+    return '客户端 $version · CoRHub 移动终端';
   }
 
   @override
@@ -151,7 +151,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get endpoint => 'TSPi Relay';
+  String get endpoint => 'CoRAgent Relay';
 
   @override
   String get hostId => 'Host ID';
@@ -182,11 +182,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemModelUnavailable =>
-      '当前 TSPi 会话没有可用模型，请检查 App Server 上的模型选择。';
+      '当前 CoRAgent 会话没有可用模型，请检查 App Server 上的模型选择。';
 
   @override
   String get problemModelAuthMissing =>
-      '模型需要在 Pi App Server 上配置认证。手机与 TS Phone 的连接仍然有效。';
+      '模型需要在 Pi App Server 上配置认证。手机与 CoRHub 的连接仍然有效。';
 
   @override
   String get problemModelCheckFailed => 'Pi App Server 无法核验模型配置。';
@@ -213,11 +213,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemModelStorageUnavailable =>
-      'TSPi 无法访问模型认证或缓存，请检查 App Server 对 Pi 目录的读写权限。';
+      'CoRAgent 无法访问模型认证或缓存，请检查 App Server 对 Pi 目录的读写权限。';
 
   @override
   String get problemRuntimeExtensionError =>
-      'TSPi 会话中的扩展运行出错，请核对最新消息和 App Server 日志。';
+      'CoRAgent 会话中的扩展运行出错，请核对最新消息和 App Server 日志。';
 
   @override
   String get problemPromptRejected => 'Pi 在模型执行前拒绝了这条消息，草稿已保留。';
@@ -283,7 +283,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noWorkspacesTitle => '还没有项目';
 
   @override
-  String get noWorkspacesMessage => '新建项目后，即可在独立的 TSPi 研究工作区中开始研究。';
+  String get noWorkspacesMessage => '新建项目后，即可在独立的 CoRAgent 研究工作区中开始研究。';
 
   @override
   String get workspaces => '项目';
@@ -388,7 +388,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get problemPreflightUnavailable =>
-      'TSPi 暂时无法核验此操作，请检查 App Server 的 TSPi 配置后重试。';
+      'CoRAgent 暂时无法核验此操作，请检查 App Server 的 CoRAgent 配置后重试。';
 
   @override
   String get problemManagementUnsupported =>
@@ -500,10 +500,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loadSessionsFailed => '无法载入会话';
 
   @override
-  String get runtimeOffline => 'TSPi 未启动';
+  String get runtimeOffline => 'CoRAgent 未启动';
 
   @override
-  String get runtimeConnecting => '正在连接 TSPi';
+  String get runtimeConnecting => '正在连接 CoRAgent';
 
   @override
   String get runtimeIdle => '已连接 · 可发送';
@@ -648,7 +648,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get composerSynchronizing => '正在同步...';
 
   @override
-  String get composerOffline => 'TSPi 离线';
+  String get composerOffline => 'CoRAgent 离线';
 
   @override
   String get composerHistory => '只读历史';
@@ -691,26 +691,26 @@ class AppLocalizationsZh extends AppLocalizations {
       '生成过程中连接中断。请先在电脑端核对最后一条消息，系统不会自动重发。';
 
   @override
-  String get tspiDisconnectedBanner => 'TSPi 已断开，重新启动后将自动恢复。';
+  String get agentDisconnectedBanner => 'CoRAgent 已断开，重新启动后将自动恢复。';
 
   @override
   String get reconnect => '重新连接';
 
   @override
-  String get tspiNotStartedTitle => 'TSPi 尚未启动';
+  String get agentNotStartedTitle => 'CoRAgent 尚未启动';
 
   @override
-  String get tspiNotStartedDescription => '在电脑端运行以下命令后，本页会自动连接。';
+  String get agentNotStartedDescription => '在电脑端运行以下命令后，本页会自动连接。';
 
   @override
-  String get waitingForTspi => '正在等待 TSPi';
+  String get waitingForAgent => '正在等待 CoRAgent';
 
   @override
   String get generationDisconnectedTitle => '生成过程中连接中断';
 
   @override
   String get generationDisconnectedDescription =>
-      '系统不会自动重发最后一条提示。请先在电脑端核对 TSPi 会话。';
+      '系统不会自动重发最后一条提示。请先在电脑端核对 CoRAgent 会话。';
 
   @override
   String get waitingForRecovery => '正在等待会话恢复';
@@ -746,7 +746,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageSynchronizing => '正在等待实时同步';
 
   @override
-  String get tspiGenerating => 'TSPi · 正在生成';
+  String get agentName => 'CoRAgent';
+
+  @override
+  String get agentGenerating => 'CoRAgent · 正在生成';
 
   @override
   String get toolResult => '工具结果';
@@ -813,7 +816,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get problemAuthentication => '设备授权失败，请重新配对此手机';
 
   @override
-  String get problemSessionOffline => 'TSPi 会话已断开';
+  String get problemSessionOffline => 'CoRAgent 会话已断开';
 
   @override
   String get problemSessionChanged => '会话已变化，请重新同步';
@@ -956,7 +959,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activationInspectionFailed =>
-      'App Server 未能完成会话守卫检查，请检查 TSPi 安装诊断后重试。历史和草稿仍保留。';
+      'App Server 未能完成会话守卫检查，请检查 CoRAgent 安装诊断后重试。历史和草稿仍保留。';
 
   @override
   String get activationGuardInvalid =>

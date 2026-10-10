@@ -1,9 +1,9 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ts_phone/data/settings_store.dart';
-import 'package:ts_phone/models/app_theme_preference.dart';
-import 'package:ts_phone/models/app_locale_preference.dart';
-import 'package:ts_phone/models/connection_settings.dart';
+import 'package:corhub/data/settings_store.dart';
+import 'package:corhub/models/app_theme_preference.dart';
+import 'package:corhub/models/app_locale_preference.dart';
+import 'package:corhub/models/connection_settings.dart';
 
 void main() {
   const hostId = '123e4567-e89b-42d3-a456-426614174000';

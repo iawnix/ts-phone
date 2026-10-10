@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/connection_settings.dart';
 
-typedef TspiLinkPairingRedeemer =
+typedef LinkPairingRedeemer =
     Future<ConnectionSettings> Function({
       required String relayUrl,
       required String pairingCode,
@@ -15,8 +15,8 @@ typedef TspiLinkPairingRedeemer =
 const _maxPairingResponseBytes = 64 * 1024;
 const _pairingTimeout = Duration(seconds: 20);
 
-class TspiLinkPairingException implements Exception {
-  const TspiLinkPairingException(this.code, this.message);
+class LinkPairingException implements Exception {
+  const LinkPairingException(this.code, this.message);
 
   final String code;
   final String message;
@@ -25,8 +25,8 @@ class TspiLinkPairingException implements Exception {
   String toString() => message;
 }
 
-class TspiLinkPairingClient {
-  TspiLinkPairingClient({http.Client? client})
+class LinkPairingClient {
+  LinkPairingClient({http.Client? client})
     : _client = client ?? http.Client(),
       _ownsClient = client == null;
 
@@ -42,13 +42,13 @@ class TspiLinkPairingClient {
     final code = pairingCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
     final name = deviceName.trim();
     if (code.length != 8) {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_pairing_code',
         'Pairing code must contain eight characters',
       );
     }
     if (name.isEmpty || name.length > 80 || name.codeUnits.any((v) => v < 32)) {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_device_name',
         'Device name is invalid',
       );
@@ -71,43 +71,43 @@ class TspiLinkPairingClient {
             });
       response = await _client.send(request).timeout(_pairingTimeout);
       responseBody = await _readBoundedBody(response).timeout(_pairingTimeout);
-    } on TspiLinkPairingException {
+    } on LinkPairingException {
       rethrow;
     } on Object catch (error) {
-      throw TspiLinkPairingException(
+      throw LinkPairingException(
         'relay_unavailable',
-        'Could not reach TSPi Relay: $error',
+        'Could not reach CoRAgent Relay: $error',
       );
     }
     Object? decoded;
     try {
       decoded = jsonDecode(responseBody);
     } on FormatException {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_response',
-        'TSPi Relay returned an invalid response',
+        'CoRAgent Relay returned an invalid response',
       );
     }
     if (decoded is! Map) {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_response',
-        'TSPi Relay returned an invalid response',
+        'CoRAgent Relay returned an invalid response',
       );
     }
     final value = decoded.cast<Object?, Object?>();
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final message = value['message'];
-      throw TspiLinkPairingException(
+      throw LinkPairingException(
         value['error'] is String
             ? value['error']! as String
             : 'pairing_rejected',
-        message is String ? message : 'TSPi Relay rejected pairing',
+        message is String ? message : 'CoRAgent Relay rejected pairing',
       );
     }
     if (value['protocol'] != 'research-agent-link.v1') {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'unsupported_protocol',
-        'TSPi Relay uses an unsupported Link protocol',
+        'CoRAgent Relay uses an unsupported Link protocol',
       );
     }
     final returnedRelay = value['relayUrl'];
@@ -118,9 +118,9 @@ class TspiLinkPairingClient {
         hostId is! String ||
         deviceId is! String ||
         deviceToken is! String) {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_response',
-        'TSPi Relay returned incomplete credentials',
+        'CoRAgent Relay returned incomplete credentials',
       );
     }
     final settings = ConnectionSettings(
@@ -130,9 +130,9 @@ class TspiLinkPairingClient {
       token: deviceToken,
     );
     if (settings.serverUrl != origin) {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_response',
-        'TSPi Relay returned a different Relay origin',
+        'CoRAgent Relay returned a different Relay origin',
       );
     }
     return settings;
@@ -140,17 +140,17 @@ class TspiLinkPairingClient {
 
   Future<String> _readBoundedBody(http.StreamedResponse response) async {
     if ((response.contentLength ?? 0) > _maxPairingResponseBytes) {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_response',
-        'TSPi Relay response is too large',
+        'CoRAgent Relay response is too large',
       );
     }
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in response.stream) {
       if (bytes.length + chunk.length > _maxPairingResponseBytes) {
-        throw const TspiLinkPairingException(
+        throw const LinkPairingException(
           'invalid_response',
-          'TSPi Relay response is too large',
+          'CoRAgent Relay response is too large',
         );
       }
       bytes.add(chunk);
@@ -158,9 +158,9 @@ class TspiLinkPairingClient {
     try {
       return utf8.decode(bytes.takeBytes());
     } on FormatException {
-      throw const TspiLinkPairingException(
+      throw const LinkPairingException(
         'invalid_response',
-        'TSPi Relay returned an invalid response',
+        'CoRAgent Relay returned an invalid response',
       );
     }
   }
