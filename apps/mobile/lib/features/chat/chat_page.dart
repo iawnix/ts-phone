@@ -11,6 +11,12 @@ import '../../l10n/app_localizations_extensions.dart';
 import '../../models/chat_message.dart';
 import '../../models/connection_settings.dart';
 import '../../models/workspace.dart';
+import '../../models/host_monitor.dart';
+import '../../models/workspace_file.dart';
+import '../../models/file_reference.dart';
+import '../files/files_page.dart';
+import '../monitors/monitor_page.dart';
+import '../../navigation/adaptive_page_route.dart';
 import '../../theme/corhub_theme.dart';
 import '../../widgets/action_feedback.dart';
 import '../../widgets/chat_message_view.dart';
@@ -64,6 +70,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _aborting = false;
   bool _abortConfirmationOpen = false;
   bool _hasDraft = false;
+  bool _syncingDraft = false;
+  List<FileReference> _files = [];
+  String get _wireDraft => ReferencedDraft(_composer.text, _files).wire;
   @override
   void initState() {
     super.initState();
@@ -92,8 +101,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       outbox: _memory.outbox,
     )..addListener(_onControllerUpdate);
     _controller.streamingTextUpdates.addListener(_onStreamingTextUpdate);
-    _composer.text = _memory.draft;
-    _hasDraft = _composer.text.trim().isNotEmpty;
+    final draft = ReferencedDraft.parse(_memory.draft);
+    _files = draft.files;
+    _composer.text = draft.text;
+    _hasDraft = _wireDraft.trim().isNotEmpty;
     if (widget.memory?.preview?.revision == widget.session.sessionRevision &&
         widget.memory?.following == false) {
       _following = false;
@@ -107,7 +118,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _memory.removeListener(_onDraftChanged);
-    _memory.draft = _composer.text;
+    _memory.draft = _wireDraft;
     final preview = _controller.historyPreview;
     _memory.preview = preview.isBounded ? preview : null;
     _memory.following = _following;
@@ -299,6 +310,26 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               ),
             ),
             actions: [
+              if (_controller.api is HostMonitorGateway)
+                IconButton(
+                  key: const ValueKey('chat-monitor'),
+                  tooltip: context.l10n.monitorTitle,
+                  icon: const Icon(AppIcons.motion_photos_on_outlined),
+                  onPressed: () => pushCorHubPage<void>(
+                    context: context,
+                    builder: (_) => MonitorPage(
+                      workspace: widget.workspace,
+                      sessionId: widget.session.sessionId,
+                      sessionTitle: _navigationTitle,
+                      gateway: _controller.api as HostMonitorGateway,
+                      readOnly:
+                          _controller.accessMode == SessionAccessMode.observer,
+                      onOpenFiles: _controller.api is WorkspaceFileGateway
+                          ? _openFiles
+                          : null,
+                    ),
+                  ),
+                ),
               if (_controller.messages.length > 12)
                 IconButton(
                   key: const ValueKey('chat-jump-to-start'),
@@ -437,24 +468,30 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   void _onComposerChanged() {
-    _memory.draft = _composer.text;
-    final hasDraft = _composer.text.trim().isNotEmpty;
+    if (_syncingDraft) return;
+    _memory.draft = _wireDraft;
+    final hasDraft = _wireDraft.trim().isNotEmpty;
     if (hasDraft != _hasDraft && mounted) {
       setState(() => _hasDraft = hasDraft);
     }
   }
 
   void _onDraftChanged() {
-    if (_composer.text == _memory.draft) return;
+    if (_wireDraft == _memory.draft) return;
+    final draft = ReferencedDraft.parse(_memory.draft);
+    _syncingDraft = true;
+    _files = draft.files;
     _composer.value = TextEditingValue(
-      text: _memory.draft,
-      selection: TextSelection.collapsed(offset: _memory.draft.length),
+      text: draft.text,
+      selection: TextSelection.collapsed(offset: draft.text.length),
     );
+    _syncingDraft = false;
+    if (mounted) setState(() => _hasDraft = _wireDraft.trim().isNotEmpty);
   }
 
   Future<void> _send({String? retryText}) async {
     if (_sending) return;
-    final text = retryText ?? _composer.text;
+    final text = retryText ?? _wireDraft;
     final clearedRevision = retryText == null || _memory.draft.isEmpty
         ? _memory.takeDraft()
         : null;
@@ -666,6 +703,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       sending: _sending,
       maxLines: maxLines,
       onSend: _send,
+      files: _files,
+      onRemoveFile: (file) {
+        setState(() => _files.remove(file));
+        _onComposerChanged();
+      },
+      onOpenFiles: _controller.api is WorkspaceFileGateway ? _openFiles : null,
       hint: viewState.canCompose
           ? context.l10n.composerMessage
           : _composerHint(),
@@ -683,6 +726,32 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           : () => _showContextUsage(contextUsage),
       onAbort: viewState.canAbort ? _confirmAbort : null,
       aborting: _aborting,
+    );
+  }
+
+  void _openFiles() {
+    final gateway = _controller.api;
+    if (gateway is! WorkspaceFileGateway) return;
+    unawaited(
+      pushCorHubPage<void>(
+        context: context,
+        builder: (_) => FilesPage(
+          gateway: gateway as WorkspaceFileGateway,
+          workspaceId: widget.workspace.id,
+          onReference: SessionViewState.fromController(_controller).isHistorical
+              ? null
+              : (reference) {
+                  if (!mounted) return;
+                  setState(() => _files.add(reference));
+                  _onComposerChanged();
+                  final route = ModalRoute.of(context);
+                  Navigator.of(
+                    context,
+                  ).popUntil((candidate) => candidate == route);
+                  _composerFocus.requestFocus();
+                },
+        ),
+      ),
     );
   }
 

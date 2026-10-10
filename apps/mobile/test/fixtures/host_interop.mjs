@@ -3,9 +3,6 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-const execute = promisify(execFile);
 
 const source = process.env.CORAGENT_SOURCE;
 const root = resolve(process.argv[2]);
@@ -58,19 +55,7 @@ try {
   const initializer = create_workspace_initializer();
   await initializer.initialize_workspace({ workspace_root: join(workspaceRoot, 'ts_001'), workspace_id: 'ts_001', workspace_mode: 'research' });
   await initializer.admit_workspace(join(workspaceRoot, 'ts_001'));
-  const program = `import json,sys
-from pathlib import Path
-from research_agent.application.job_monitor import bind
-root=Path(sys.argv[1])
-bind(root, {'job_id':'job_fixture','node_id':None,'node_revision':None}, 'fixture_session')
-path=next((root/'operations/monitors').glob('*/binding.json'))
-row=json.loads(path.read_text());row['last_state']='failed';row['sequence']=1
-path.write_text(json.dumps(row))
-events=path.parent/'events';events.mkdir()
-(events/'event_fixture.json').write_text(json.dumps({'sequence':1,'observed_at':'2026-10-09T00:00:00Z','error':'fixture execution failed'}))
-deliveries=path.parent/'deliveries';deliveries.mkdir()
-(deliveries/'event_fixture.json').write_text(json.dumps({'schema_version':'coragent-job-monitor-delivery/2','event_id':'event_fixture','session_id':'fixture_session','request_id':'fixture-wake','delivered':False,'error':'fixture delivery paused'}))`;
-  await execute(process.env.CORAGENT_PYTHON, ['-c', program, join(workspaceRoot, 'ts_001')]);
+  await writeFile(join(workspaceRoot, 'ts_001', 'inputs', 'fixture.xyz'), '2\nfixture\nC 0 0 0\nO 1.2 0 0\n');
   backend = await createCoRAgentHarnessBackend({ sourceRoot: piRoot, packageRoot: source, workspaceRoot,
     serverDirectory: socketRoot, sessionDir: join(root, 'sessions'), stateRoot: join(root, 'state'),
     model: { provider: 'test', id: 'one' } });

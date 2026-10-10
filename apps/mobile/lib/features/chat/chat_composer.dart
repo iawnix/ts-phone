@@ -5,6 +5,8 @@ import '../../models/workspace.dart';
 import 'model_presentation.dart';
 import '../../theme/corhub_theme.dart';
 import 'model_provider_mark.dart';
+import '../../models/file_reference.dart';
+import '../../widgets/file_reference_chip.dart';
 
 class ChatComposer extends StatelessWidget {
   const ChatComposer({
@@ -18,6 +20,9 @@ class ChatComposer extends StatelessWidget {
     required this.hint,
     required this.onSend,
     this.status,
+    this.onOpenFiles,
+    this.files = const [],
+    this.onRemoveFile,
     this.modelLabel,
     this.modelProvider,
     this.modelHint,
@@ -38,6 +43,9 @@ class ChatComposer extends StatelessWidget {
   final String hint;
   final VoidCallback onSend;
   final String? status;
+  final VoidCallback? onOpenFiles;
+  final List<FileReference> files;
+  final ValueChanged<FileReference>? onRemoveFile;
   final String? modelLabel;
   final String? modelProvider;
   final String? modelHint;
@@ -64,6 +72,27 @@ class ChatComposer extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (files.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 112),
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final file in files)
+                          FileReferenceChip(
+                            reference: file,
+                            onRemove: canEdit
+                                ? () => onRemoveFile?.call(file)
+                                : null,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             if (status != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -106,6 +135,13 @@ class ChatComposer extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(8, 0, 6, 6),
               child: Row(
                 children: [
+                  if (onOpenFiles != null)
+                    IconButton(
+                      key: const ValueKey('composer-files'),
+                      tooltip: context.l10n.filesOpen,
+                      onPressed: onOpenFiles,
+                      icon: const Icon(AppIcons.add_rounded),
+                    ),
                   Expanded(
                     child: Align(
                       alignment: Alignment.centerLeft,
@@ -163,7 +199,8 @@ class ChatComposer extends StatelessWidget {
                     valueListenable: controller,
                     builder: (context, value, _) {
                       final canStop = onAbort != null || aborting;
-                      final stop = canStop && value.text.trim().isEmpty;
+                      final stop =
+                          canStop && value.text.trim().isEmpty && files.isEmpty;
                       return Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -184,7 +221,8 @@ class ChatComposer extends StatelessWidget {
                               onPressed: stop
                                   ? (aborting ? null : onAbort)
                                   : (canSend &&
-                                            value.text.trim().isNotEmpty &&
+                                            (value.text.trim().isNotEmpty ||
+                                                files.isNotEmpty) &&
                                             !sending
                                         ? onSend
                                         : null),

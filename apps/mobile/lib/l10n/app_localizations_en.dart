@@ -1249,4 +1249,282 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get toolCompleted => 'Completed';
+
+  @override
+  String get monitorTitle => 'Monitor';
+
+  @override
+  String get monitorTasks => 'Tasks';
+
+  @override
+  String get monitorJobs => 'Jobs';
+
+  @override
+  String get monitorFiles => 'Files';
+
+  @override
+  String get monitorDetails => 'Details';
+
+  @override
+  String get monitorRuns => 'Records';
+
+  @override
+  String get monitorHistory => 'History';
+
+  @override
+  String get monitorEmpty => 'No current task';
+
+  @override
+  String get monitorJobsEmpty => 'No jobs';
+
+  @override
+  String get monitorRecordsEmpty => 'No records';
+
+  @override
+  String get monitorPause => 'Pause task';
+
+  @override
+  String get monitorResume => 'Resume task';
+
+  @override
+  String get monitorCancel => 'Cancel task';
+
+  @override
+  String get monitorCancelJob => 'Cancel job';
+
+  @override
+  String get monitorPauseHint =>
+      'Automatic progress pauses. Current replies may finish; jobs keep running.';
+
+  @override
+  String get monitorKeepJobs => 'Keep jobs';
+
+  @override
+  String get monitorCancelJobs => 'Request job cancellation';
+
+  @override
+  String get monitorCancelHint =>
+      'End this task. What should happen to its jobs?';
+
+  @override
+  String get monitorJobCancelHint =>
+      'Request cancellation of this job only. Its status confirms whether it stopped.';
+
+  @override
+  String get monitorMore => 'More';
+
+  @override
+  String get monitorRefresh => 'Refresh';
+
+  @override
+  String get monitorRetry => 'Check / retry';
+
+  @override
+  String get monitorStale => 'Update failed · showing last snapshot';
+
+  @override
+  String get monitorUncertain => 'Result unconfirmed. Retry the same request.';
+
+  @override
+  String get monitorConflict => 'Task changed. Review the latest state.';
+
+  @override
+  String get monitorLoadMore => 'Load more';
+
+  @override
+  String get monitorGoal => 'Goal';
+
+  @override
+  String get monitorCriteria => 'Completion criteria';
+
+  @override
+  String get monitorProgress => 'Progress';
+
+  @override
+  String get monitorReason => 'Reason';
+
+  @override
+  String get monitorResearch => 'Research';
+
+  @override
+  String get monitorEvidence => 'Evidence';
+
+  @override
+  String get monitorHealth => 'Diagnostics';
+
+  @override
+  String get monitorCollection => 'Output collection';
+
+  @override
+  String get monitorAnalysis => 'Analysis not recorded';
+
+  @override
+  String get monitorOutsideSession => 'Outside this conversation';
+
+  @override
+  String get monitorReadOnly => 'Read only';
+
+  @override
+  String get monitorPausedHint => 'Jobs keep running';
+
+  @override
+  String get monitorExecution => 'Execution';
+
+  @override
+  String get monitorUnknown => 'Unknown';
+
+  @override
+  String get monitorActive => 'In progress';
+
+  @override
+  String get monitorWaiting => 'Waiting for jobs';
+
+  @override
+  String get monitorPaused => 'Paused';
+
+  @override
+  String get monitorBlocked => 'Needs attention';
+
+  @override
+  String get monitorCompleting => 'Delivering';
+
+  @override
+  String get monitorCompleted => 'Completed';
+
+  @override
+  String get monitorCancelled => 'Cancelled';
+
+  @override
+  String get monitorRunning => 'Running';
+
+  @override
+  String get monitorQueued => 'Queued';
+
+  @override
+  String get monitorFailed => 'Failed';
+
+  @override
+  String get monitorSucceeded => 'Succeeded';
+
+  @override
+  String get monitorCancelPending => 'Cancellation pending';
+
+  @override
+  String get monitorEnded => 'Ended';
+
+  @override
+  String get monitorUnavailable => 'Update CoRAgent to use this feature.';
+
+  @override
+  String get filesTitle => 'Files';
+
+  @override
+  String get filesEmpty => 'No files';
+
+  @override
+  String get filesOpen => 'Open files';
+
+  @override
+  String get filesPreview => 'Preview';
+
+  @override
+  String get filesTooLarge => 'File exceeds the preview limit.';
+
+  @override
+  String get filesUnsupported => 'Preview unavailable for this format.';
+
+  @override
+  String get filesChanged => 'File changed. Open its latest version.';
+
+  @override
+  String get filesRaw => 'Source';
+
+  @override
+  String get filesStructure => 'Structure';
+
+  @override
+  String get filesReset => 'Reset view';
+
+  @override
+  String get filesSelect => 'Select atoms';
+
+  @override
+  String get filesMeasure => 'Measure distance';
+
+  @override
+  String get filesRotateLeft => 'Rotate left';
+
+  @override
+  String get filesRotateRight => 'Rotate right';
+
+  @override
+  String get filesZoomIn => 'Zoom in';
+
+  @override
+  String get filesZoomOut => 'Zoom out';
+
+  @override
+  String get filesNoSelection => 'No atoms selected';
+
+  @override
+  String get filesSelectTwo => 'Select two atoms to measure.';
+
+  @override
+  String get filesAtomLimit => 'Structure exceeds the viewer limit.';
+
+  @override
+  String get filesAttach => 'Add to draft';
+
+  @override
+  String get filesReference => 'File reference';
+
+  @override
+  String get filesSelectSession => 'Choose a conversation';
+
+  @override
+  String get filesInvalid => 'Cannot parse this file. View the source instead.';
+
+  @override
+  String get filesDownload => 'Save a copy';
+
+  @override
+  String get filesSaved => 'Copy saved';
+
+  @override
+  String get filesLoading => 'Loading file…';
+
+  @override
+  String get filesInferredBonds =>
+      'Connectivity is inferred; bond orders are not assigned.';
+
+  @override
+  String get filesFirstModel => 'First model / record · alternate positions: A';
+
+  @override
+  String get filesRemove => 'Remove file';
+
+  @override
+  String get monitorResearchEmpty => 'No linked research';
+
+  @override
+  String get monitorFocus => 'Current focus';
+
+  @override
+  String get monitorPlan => 'Plan';
+
+  @override
+  String get monitorExcerpt =>
+      'Partial snapshot. Read the linked research in the conversation for more.';
+
+  @override
+  String get monitorPartOf => 'Part of';
+
+  @override
+  String get monitorRequires => 'Requires';
+
+  @override
+  String get monitorAlternative => 'Alternative to';
+
+  @override
+  String get monitorOpen => 'Open';
 }

@@ -12,6 +12,7 @@ import 'package:corhub/features/chat/chat_controller.dart';
 import 'package:corhub/models/chat_message.dart';
 import 'package:corhub/models/connection_settings.dart';
 import 'package:corhub/models/phone_model.dart';
+import 'package:corhub/models/workspace_file.dart';
 import 'package:corhub/models/workspace.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -73,6 +74,85 @@ Map<String, Object?> _event({
 };
 
 void main() {
+  test('file reads preserve range identity and stop between chunks', () async {
+    final server = _Server();
+    final gateway = HostGateway(_settings, client: server.client());
+    addTearDown(gateway.close);
+    final file = WorkspaceFile.fromJson({
+      'path': 'inputs/data.txt',
+      'name': 'data.txt',
+      'kind': 'file',
+      'size': 65539,
+      'version': 'v1',
+    });
+    var reads = 0;
+    var cancelled = false;
+    server.onRequest = (request) {
+      final params = request['params'] as Map;
+      expect(request['method'], 'files/read');
+      expect(params['workspace_id'], 'ts_001');
+      expect(params['expected_version'], 'v1');
+      final offset = params['offset'] as int;
+      final data = List.filled(offset == 0 ? 65536 : 3, 65);
+      reads++;
+      server.respond(request, {
+        'file': {'version': 'v1'},
+        'offset': offset,
+        'next_offset': offset + data.length,
+        'eof': offset > 0,
+        'data_base64': base64Encode(data),
+      });
+    };
+    expect(
+      (await gateway.readFile('ts_001', file, cancelled: () => false)).length,
+      65539,
+    );
+    expect(reads, 2);
+    reads = 0;
+    server.onRequest = (request) {
+      reads++;
+      cancelled = true;
+      server.respond(request, {
+        'file': {'version': 'v1'},
+        'offset': 0,
+        'next_offset': 65536,
+        'eof': false,
+        'data_base64': base64Encode(List.filled(65536, 65)),
+      });
+    };
+    await expectLater(
+      gateway.readFile('ts_001', file, cancelled: () => cancelled),
+      throwsA(isA<CorHubApiException>()),
+    );
+    expect(reads, 1);
+  });
+  test(
+    'file reads reject a changed version instead of combining bytes',
+    () async {
+      final server = _Server();
+      final gateway = HostGateway(_settings, client: server.client());
+      addTearDown(gateway.close);
+      final file = WorkspaceFile.fromJson({
+        'path': 'inputs/data.txt',
+        'name': 'data.txt',
+        'kind': 'file',
+        'size': 1,
+        'version': 'v1',
+      });
+      server.onRequest = (request) => server.respond(request, {
+        'file': {'version': 'v2'},
+        'offset': 0,
+        'next_offset': 1,
+        'eof': true,
+        'data_base64': 'QQ==',
+      });
+      await expectLater(
+        gateway.readFile('ts_001', file, cancelled: () => false),
+        throwsFormatException,
+      );
+    },
+  );
+
   test(
     'uses Host JSON RPC and accepts split UTF-8 and coalesced NDJSON',
     () async {
@@ -410,58 +490,37 @@ void main() {
     expect(selected.sessionId, 'session-1');
   });
 
-  test('reads the flat Monitor view after a mutation receipt', () async {
-    final server = _Server();
-    final gateway = HostGateway(_settings, client: server.client());
-    addTearDown(gateway.close);
-    server.onRequest = (request) {
-      if (request['method'] == 'monitor/disable') {
-        server.respond(request, {'workspace_id': 'ts_001', 'updated': 1});
-      } else {
-        expect(request['method'], 'monitor/status');
-        expect((request['params']! as Map)['monitor_id'], 'm-1');
-        server.respond(request, {
-          'workspace_id': 'ts_001',
-          'monitors': [
-            {
-              'monitor_id': 'm-1',
-              'node_id': 'node_calculation',
-              'enabled': false,
-              'last_state': 'failed',
-              'pending_count': 2,
-              'last_observed_at': '2026-10-09T00:00:00Z',
-              'last_error': 'Host offline',
-            },
-          ],
-        });
-      }
-    };
-    final monitor = await gateway.setMonitorEnabled('ts_001', 'm-1', false);
-    expect(monitor.enabled, isFalse);
-    expect(monitor.state, 'failed');
-    expect(monitor.pendingCount, 2);
-    expect(monitor.lastObservedAt, DateTime.utc(2026, 10, 9));
-    expect(monitor.lastError, 'Host offline');
-  });
-
   test(
-    'reports a missing Monitor instead of parsing an empty update receipt',
+    'Monitor control preserves session scope, request identity and revision',
     () async {
       final server = _Server();
       final gateway = HostGateway(_settings, client: server.client());
       addTearDown(gateway.close);
-      server.onRequest = (request) =>
-          server.respond(request, {'workspace_id': 'ts_001', 'updated': 0});
-      await expectLater(
-        gateway.setMonitorEnabled('ts_001', 'missing', false),
-        throwsA(
-          isA<CorHubApiException>().having(
-            (e) => e.code,
-            'code',
-            'monitor_not_found',
-          ),
-        ),
+      server.onRequest = (request) {
+        expect(request['method'], 'monitor/task/pause');
+        expect(request['params'], {
+          'workspace_id': 'ts_001',
+          'session_id': 'session-1',
+          'user_task_id': 'task-1',
+          'expected_revision': 7,
+          'request_id': 'control-1',
+        });
+        server.respond(request, {
+          'task': {'state': 'paused'},
+          'jobs_policy': null,
+        });
+      };
+      final result = await gateway.monitorRequest(
+        'ts_001',
+        'session-1',
+        'monitor/task/pause',
+        params: {
+          'user_task_id': 'task-1',
+          'expected_revision': 7,
+          'request_id': 'control-1',
+        },
       );
+      expect((result['task'] as Map)['state'], 'paused');
     },
   );
 
@@ -490,50 +549,35 @@ void main() {
     expect(selected.model, 'test/two');
   });
 
-  test('maps monitor management and structured Host failures', () async {
-    final server = _Server();
-    final gateway = HostGateway(_settings, client: server.client());
-    addTearDown(gateway.close);
-    server.onRequest = (request) {
-      if (request['method'] == 'monitor/list') {
-        server.respond(request, {
-          'monitors': [
-            {
-              'monitor_id': 'm-1',
-              'node_id': 'node_calculation',
-              'enabled': true,
-              'last_state': 'running',
-              'pending_count': 2,
-            },
-          ],
-        });
-      } else {
-        expect(request['method'], 'monitor/disable');
-        expect((request['params']! as Map)['monitor_id'], 'm-1');
+  test(
+    'Monitor errors remain structured and do not fall back to removed methods',
+    () async {
+      final server = _Server();
+      final gateway = HostGateway(_settings, client: server.client());
+      addTearDown(gateway.close);
+      server.onRequest = (request) {
+        expect(request['method'], 'monitor/overview');
         server.send({
           'id': request['id'],
           'error': {
             'code': 'workspace_not_found',
-            'message': 'Project is missing',
+            'message': 'Missing',
             'retryable': false,
           },
         });
-      }
-    };
-    final monitor = (await gateway.listMonitors('ts_001')).single;
-    expect(monitor.id, 'm-1');
-    expect(monitor.pendingCount, 2);
-    await expectLater(
-      gateway.setMonitorEnabled('ts_001', 'm-1', false),
-      throwsA(
-        isA<CorHubApiException>().having(
-          (error) => error.code,
-          'code',
-          'workspace_not_found',
+      };
+      await expectLater(
+        gateway.monitorRequest('ts_001', 'session-1', 'monitor/overview'),
+        throwsA(
+          isA<CorHubApiException>().having(
+            (e) => e.code,
+            'code',
+            'workspace_not_found',
+          ),
         ),
-      ),
-    );
-  });
+      );
+    },
+  );
 
   test('keeps cached workspaces while the relay reconnects', () async {
     final server = _Server();
